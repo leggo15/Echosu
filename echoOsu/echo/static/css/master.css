@@ -1,0 +1,111 @@
+.container {
+    width: 80%; /* Adjust as needed for the width of the container */
+    max-width: 1200px; /* Maximum width of the container */
+    margin: 20px auto;
+    padding: 20px;
+    background-color: #fff;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    border-radius: 10px;
+}
+
+.beatmap-form {
+    width: 100%;
+    margin-bottom: 20px;
+}
+
+.beatmap-form label,
+.beatmap-form input[type="text"],
+.beatmap-form button {
+    display: block;
+    width: 100%;
+    margin-bottom: 10px;
+}
+
+.beatmap-form input[type="text"],
+.beatmap-form button {
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    font-size: 16px;
+}
+
+.beatmap-form button {
+    background-color: #cc1177;
+    color: white;
+    border: none;
+    cursor: pointer;
+}
+
+.beatmap-form button:hover {
+    background-color: #a00e5f;
+}
+
+.beatmap-display {
+    display: grid;
+    grid-template-columns: 1fr 2fr;
+    gap: 20px;
+    align-items: center;
+}
+
+.beatmap-cover-container {
+    grid-row: 1 / -1; /* Make the image span all the rows */
+}
+
+.beatmap-cover {
+    width: 100%;
+    border-radius: 10px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.beatmap-details-container {
+    padding: 10px;
+}
+
+.beatmap-title-artist,
+.beatmap-stats {
+    margin-bottom: 20px;
+}
+
+.title {
+    font-size: 24px;
+    color: #333;
+}
+
+.artist, .mapper {
+    font-size: 18px;
+    color: #555;
+}
+
+.beatmap-stats span {
+    display: inline-block;
+    margin-right: 15px;
+    font-size: 16px;
+    color: #666;
+}
+
+.error {
+    color: red;
+    font-weight: bold;
+}
+
+.tags-display,
+.all-tags-display {
+    margin-top: 20px;
+}
+
+.tags-display h3,
+.all-tags-display h3 {
+    margin-bottom: 10px;
+}
+
+.tags-display p,
+.all-tags-display p {
+    font-size: 16px;
+    color: #333;
+}
+
+/* Scrollable div for all tags */
+.all-tags-display {
+    height: 100px; /* Set a fixed height */
+    overflow-y: auto; /* Make it scrollable */
+}

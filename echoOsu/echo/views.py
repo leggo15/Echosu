@@ -7,7 +7,14 @@ from django.views.decorators.csrf import csrf_exempt
 from django.db.models import Count
 from django.shortcuts import redirect
 import requests
-
+from django.http import HttpResponse
+from django.contrib.auth.models import User
+from django.contrib.auth import login
+from .models import UserProfile
+from django.conf import settings
+from django.db.models import Q, Count
+from django.contrib.auth.decorators import login_required
+from django.shortcuts import get_object_or_404
 
 client_id = 28773
 client_secret = 'dUzfRmogu3EkymvHr9Hh1lalZRIMyJVmV00U6rSd'
@@ -21,26 +28,80 @@ def osu_callback(request):
         # Exchange the code for an access token
         token_url = 'https://osu.ppy.sh/oauth/token'
         payload = {
-            'client_id': 'YOUR_CLIENT_ID',
-            'client_secret': 'YOUR_CLIENT_SECRET',
+            'client_id': client_id,
+            'client_secret': client_secret,
             'code': code,
             'grant_type': 'authorization_code',
             'redirect_uri': 'http://127.0.0.1:8000/callback',
         }
         response = requests.post(token_url, data=payload)
-        data = response.json()
 
-        # Here you can use the access token from data['access_token']
-        # to make API requests or create a user session
+        if response.status_code == 200:
+            data = response.json()
+            access_token = data.get('access_token')
 
-        # Redirect to a success page or home page after processing
-        return redirect('some_success_page')
+            # Call save_user_data function
+            if access_token:
+                save_user_data(access_token, request)
+                return redirect('beatmap_info')
+            else:
+                # Handle the case where access token is not present in the response
+                messages.error(request, "Failed to retrieve access token.")
+                return redirect('error_page')
+        else:
+            # Handle non-200 responses
+            messages.error(request, f"Error during token exchange: {response.status_code}")
+            return redirect('error_page')
     else:
-        # Handle the error or redirect to a different page
+        # Handle the case where 'code' is not in GET parameters
+        messages.error(request, "Authorization code not found in request.")
         return redirect('error_page')
+
 
 def home(request):
     return render(request, 'home.html')
+
+def get_user_data_from_api(access_token):
+    url = "https://osu.ppy.sh/api/v2/me"  # Adjust this URL to the appropriate osu! API endpoint for user data
+    headers = {
+        "Authorization": f"Bearer {access_token}"
+    }
+    response = requests.get(url, headers=headers)
+
+    if response.status_code == 200:
+        return response.json()
+    else:
+        response.raise_for_status()
+
+
+def save_user_data(access_token, request):
+    user_data = get_user_data_from_api(access_token)
+
+    # Assuming 'id' is the correct key for the user's Osu ID. Adjust if necessary.
+    osu_id = str(user_data['id'])
+
+    # Find or create the Django user based on the username from the Osu API response
+    user, created = User.objects.get_or_create(username=user_data['username'])
+
+    # Update the user's profile with additional details from the Osu API response
+    user_profile, profile_created = UserProfile.objects.get_or_create(user=user)
+    user_profile.osu_id = osu_id
+    user_profile.profile_pic_url = user_data['avatar_url']  # Replace key if different
+    user_profile.save()
+
+    # Grant superuser and staff status if the Osu ID is '4978940'
+    if osu_id == "4978940":
+        user.is_superuser = True
+        user.is_staff = True
+        user.save()
+
+    # Set the backend to the first in the list from settings
+    user.backend = settings.AUTHENTICATION_BACKENDS[0]
+
+    # Log in the user
+    login(request, user)
+    request.session['osu_id'] = user_data['id']
+
 
 def beatmap_info(request):
     context = {}
@@ -76,58 +137,59 @@ def beatmap_info(request):
 
             context['beatmap'] = beatmap
 
-        if 'tag' in request.POST and beatmap:
-            tag_name = request.POST.get('tag')
-            tag, created = Tag.objects.get_or_create(name=tag_name)
-            beatmap.tags.add(tag)
-            messages.success(request, f"Tag '{tag_name}' added to beatmap ID {beatmap_id_request}.")
-            return redirect('beatmap_info')
-
     if 'beatmap' in context:
         beatmap = context['beatmap']
-        context['top_tags'] = beatmap.tags.annotate(count=Count('name')).order_by('-count')[:5]
-        context['all_tags'] = beatmap.tags.all()
 
     return render(request, 'beatmap_info.html', context)
 
-def add_tag(request, beatmap_id):
+
+def search_tags(request):
+    search_query = request.GET.get('q', '')
+    tags = Tag.objects.filter(name__icontains=search_query).annotate(beatmap_count=Count('beatmaps')).values('name', 'beatmap_count')
+    return JsonResponse(list(tags), safe=False)
+
+
+@csrf_exempt
+def apply_tag(request):
     if request.method == 'POST':
         tag_name = request.POST.get('tag')
-        try:
-            beatmap = Beatmap.objects.get(beatmap_id=beatmap_id)
-            tag, created = Tag.objects.get_or_create(name=tag_name)
-            beatmap.tags.add(tag)
-            messages.success(request, f"Tag '{tag_name}' added to beatmap ID {beatmap_id}.")
-        except Beatmap.DoesNotExist:
-            messages.error(request, f"Beatmap ID {beatmap_id} does not exist.")
-        return redirect('echo:beatmap_info')
-
-    return redirect('echo:beatmap_info')
-
-def add_tag_to_beatmap(request):
-    if request.method == 'POST':
         beatmap_id = request.POST.get('beatmap_id')
+        tag, created = Tag.objects.get_or_create(name=tag_name)
+        beatmap = Beatmap.objects.get(beatmap_id=beatmap_id)
+        beatmap.tags.add(tag)
+        return JsonResponse({'status': 'success'})
+    return JsonResponse({'status': 'error'}, status=400)
+
+
+def search_tags(request):
+    # Get the search query from the request's GET parameters
+    search_query = request.GET.get('q', '')
+
+    # Filter tags based on the search query (case insensitive matching)
+    tags = Tag.objects.filter(name__icontains=search_query).annotate(beatmap_count=Count('beatmaps')).values('name', 'beatmap_count')
+
+    # Return the list of matching tags as JSON
+    return JsonResponse(list(tags), safe=False)
+
+
+@csrf_exempt  # Be cautious with this; it's better to include the CSRF token in the AJAX call.
+@login_required
+def apply_tag(request):
+    if request.method == 'POST':
         tag_name = request.POST.get('tag')
+        beatmap_id = request.POST.get('beatmap_id')
 
-        try:
-            beatmap = Beatmap.objects.get(beatmap_id=beatmap_id)
-            tag, created = Tag.objects.get_or_create(name=tag_name)
-            beatmap.tags.add(tag)
-            if created:
-                return JsonResponse({'status': 'tag_created'})
-            else:
-                return JsonResponse({'status': 'success'})
-        except Beatmap.DoesNotExist:
-            return JsonResponse({'status': 'error', 'message': 'Beatmap not found'})
+        # Get or create the tag
+        tag, created = Tag.objects.get_or_create(name=tag_name)
 
-    return JsonResponse({'status': 'error', 'message': 'Invalid request'})
+        # Get the Beatmap instance, 404 if not found
+        beatmap = get_object_or_404(Beatmap, beatmap_id=beatmap_id)
 
+        # Add the tag to the beatmap
+        beatmap.tags.add(tag)
 
-def tag_suggestions(request):
-    if 'term' in request.GET:
-        qs = Tag.objects.filter(name__icontains=request.GET.get('term'))
-        titles = list(qs.values_list('name', flat=True))
-        return JsonResponse(titles, safe=False)
-    
-    return JsonResponse([])
-    
+        # Return a success response
+        return JsonResponse({'status': 'success'})
+
+    # If the request method is not POST, return an error
+    return JsonResponse({'status': 'error', 'message': 'Invalid request method.'}, status=400)

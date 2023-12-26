@@ -16,8 +16,13 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import include, path
+from echo.views import home, osu_callback, search_tags, apply_tag
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('', home, name='echo.home'),
     path('beatmap_info/', include('echo.urls')),
+    path('callback', osu_callback, name='osu_callback'),
+    path('echo/search_tags/', search_tags, name='search_tags'),
+    path('echo/apply_tag/', apply_tag, name='apply_tag'),
 ]

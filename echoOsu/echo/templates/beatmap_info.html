@@ -6,11 +6,13 @@
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Beatmap Info</title>
         <link rel="stylesheet" href="{% static 'css/master.css' %}">
-        <script src="{% static 'js/master.js' %}"></script>
         <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+        <script src="{% static 'js/master.js' %}"></script>
     </head>
     <body>
-
+        {% if user_profile %}
+            <img src="{{ user_profile.profile_pic_url }}" alt="{{ user_profile.user.username }}'s profile picture">
+        {% endif %}
         <div class="container">
             <form method="post" class="beatmap-form">
                 {% csrf_token %}
@@ -51,27 +53,9 @@
                 <input type="hidden" id="current_beatmap_id" value="{{ beatmap.beatmap_id }}">
 
                 <!-- Tag input field and suggestions list -->
-                <input type="text" id="tag-input" placeholder="Enter tag">
+                <input type="text" id="tag-input" placeholder="Search tags..." autocomplete="off">
                 <ul id="tag-list"></ul>
-                
-                {% if top_tags %}
-                <div class="tags-display">
-                    <h3>Top Tags:</h3>
-                    {% for tag in top_tags %}
-                        <p>{{ tag.name }} ({{ tag.count }})</p>
-                    {% endfor %}
-                </div>
-                {% else %}
-                    <p>No tags applied yet.</p>
-                {% endif %}
-                
-                {% if all_tags %}
-                    <div style="height: 100px; overflow-y: scroll;">
-                        {% for tag in all_tags %}
-                            <p>{{ tag.name }}</p>
-                        {% endfor %}
-                    </div>
-                {% endif %}
+                <button type="button" id="apply-tag-button" class="apply-tag-btn">Apply Tag</button>   
             {% endif %}
         </div>
     </body>

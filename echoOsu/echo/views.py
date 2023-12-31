@@ -7,12 +7,11 @@ from django.views.decorators.csrf import csrf_exempt
 from django.db.models import Count
 from django.shortcuts import redirect
 import requests
-from django.http import HttpResponse
 from django.contrib.auth.models import User
 from django.contrib.auth import login
-from .models import UserProfile
+from .models import UserProfile, TagApplication
 from django.conf import settings
-from django.db.models import Q, Count
+from django.db.models import Count
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404
 
@@ -57,6 +56,9 @@ def osu_callback(request):
         messages.error(request, "Authorization code not found in request.")
         return redirect('error_page')
 
+
+def admin(request):
+    return redirect('/admin/')
 
 def home(request):
     return render(request, 'home.html')
@@ -137,16 +139,40 @@ def beatmap_info(request):
 
             context['beatmap'] = beatmap
 
+
     if 'beatmap' in context:
         beatmap = context['beatmap']
+        
+        # Query for user's tags for this beatmap
+        user_tag_applications = TagApplication.objects.filter(
+            beatmap=beatmap, user=request.user
+        )
+        user_tags = [tag_app.tag for tag_app in user_tag_applications]
+
+        # Prepare tags with counts and is_applied_by_user flag
+        tags_with_counts = []
+        for tag in beatmap.tags.all():
+            tag_count = TagApplication.objects.filter(tag=tag).count()
+            is_applied_by_user = tag in user_tags
+            tags_with_counts.append({
+                'name': tag.name,
+                'apply_count': tag_count,
+                'is_applied_by_user': is_applied_by_user
+            })
+
+        context['tags_with_counts'] = tags_with_counts
 
     return render(request, 'beatmap_info.html', context)
-
-
 def search_tags(request):
     search_query = request.GET.get('q', '')
     tags = Tag.objects.filter(name__icontains=search_query).annotate(beatmap_count=Count('beatmaps')).values('name', 'beatmap_count')
     return JsonResponse(list(tags), safe=False)
+
+def get_tags(request):
+    beatmap_id = request.GET.get('beatmap_id')
+    beatmap = get_object_or_404(Beatmap, beatmap_id=beatmap_id)
+    tags_with_counts = beatmap.tags.annotate(apply_count=Count('id')).values('name', 'apply_count')
+    return JsonResponse(list(tags_with_counts), safe=False)
 
 
 @csrf_exempt

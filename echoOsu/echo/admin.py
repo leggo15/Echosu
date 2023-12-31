@@ -1,6 +1,7 @@
 from django.contrib import admin
-from .models import Beatmap, UserProfile
+from .models import Beatmap, UserProfile, Tag, TagApplication
 
-# Register your models here.
 admin.site.register(Beatmap)
 admin.site.register(UserProfile)
+admin.site.register(Tag)
+admin.site.register(TagApplication)

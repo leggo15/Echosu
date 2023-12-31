@@ -1,3 +1,48 @@
+.tag {
+    display: inline-block;
+    padding: 5px 10px;
+    margin: 5px;
+    background-color: #e0e0e0;
+    color: #333;
+    border-radius: 15px;
+    font-size: 14px;
+    transition: background-color 0.3s;
+    background-color: lightblue; /* Color for tags applied by the user */
+}
+
+.tag[data-applied-by-user="false"]:hover {
+    background-color: lightgreen; /* Color indicating the tag can be applied */
+}
+
+.tag[data-applied-by-user="true"]:hover {
+    background-color: lightcoral; /* Color indicating the tag can be removed */
+}
+
+.tag:hover {
+    background-color: #d4d4d4;
+    cursor: pointer;
+}
+
+/* Style for the tag list (suggestions) */
+#tag-list {
+    list-style: none;
+    padding: 0;
+    margin-top: 10px;
+}
+
+#tag-list li {
+    padding: 5px 10px;
+    border: 1px solid #ccc;
+    border-radius: 15px;
+    margin-bottom: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+#tag-list li:hover {
+    background-color: #f0f0f0;
+}
+
 .container {
     width: 80%; /* Adjust as needed for the width of the container */
     max-width: 1200px; /* Maximum width of the container */

@@ -37,7 +37,6 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'social_django',
     'echo',
 ]
 
@@ -125,10 +124,6 @@ STATIC_URL = '/static/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# Login
-AUTHENTICATION_BACKENDS = (
-    'social_core.backends.osu.OsuOAuth2',
-)
 
 SOCIAL_AUTH_OSU_KEY = '28773'
 SOCIAL_AUTH_OSU_SECRET = 'dUzfRmogu3EkymvHr9Hh1lalZRIMyJVmV00U6rSd'

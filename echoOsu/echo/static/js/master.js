@@ -4,7 +4,7 @@ $(document).ready(function() {
     $('#tag-input').on('input', function() {
         var inputVal = $(this).val();
         console.log('Input value:', inputVal); // Diagnostic log
-        if(inputVal.length > 0){
+        if (inputVal.length > 0) {
             $.ajax({
                 url: '/echo/search_tags/',
                 data: { 'q': inputVal },
@@ -30,7 +30,6 @@ $(document).ready(function() {
     });
 
     $('.apply-tag-btn').on('click', function() {
-        console.log('Apply Tag button clicked'); // Diagnostic log
         var tagName = $('#tag-input').val();
         if (tagName) {
             applyTag(tagName);
@@ -38,12 +37,27 @@ $(document).ready(function() {
             alert('Please enter a tag name.');
         }
     });
+
+    // Handle clicking on a tag to toggle it
+    $('.applied-tags').on('click', '.tag', function() {
+        var $tag = $(this);
+        var tagName = $tag.data('tag-name');
+        var isAppliedByUser = $tag.data('applied-by-user') === 'true'; // Ensure to compare with string 'true'
+
+        // Toggle the tag based on whether it's applied by the user
+        if (isAppliedByUser) {
+            removeTag(tagName, $tag);
+        } else {
+            applyTag(tagName);
+        }
+    });
+
+    // Initial call to load the tags
+    refreshTags();
 });
 
 function applyTag(tagName) {
-    console.log('Applying tag:', tagName); // Diagnostic log
     var beatmapId = $('#current_beatmap_id').val();
-    console.log('Beatmap ID:', beatmapId); // Diagnostic log
     $.ajax({
         type: 'POST',
         url: '/echo/apply_tag/',
@@ -53,14 +67,51 @@ function applyTag(tagName) {
             'csrfmiddlewaretoken': $('input[name=csrfmiddlewaretoken]').val()
         },
         success: function(response) {
-            console.log('Response from server:', response); // Diagnostic log
             if (response.status === 'success') {
-                $('#tag-input').val('');
-                alert('Tag applied successfully!');
+                refreshTags();
             }
         },
         error: function(xhr, status, error) {
-            console.error('AJAX error:', status, error); // Diagnostic log
+            console.error('AJAX error:', status, error);
+        }
+    });
+}
+
+function removeTag(tagName, $tagElement) {
+    var beatmapId = $('#current_beatmap_id').val();
+    $.ajax({
+        type: 'POST',
+        url: '/echo/remove_tag/',
+        data: {
+            'tag': tagName,
+            'beatmap_id': beatmapId,
+            'csrfmiddlewaretoken': $('input[name=csrfmiddlewaretoken]').val()
+        },
+        success: function(response) {
+            if (response.status === 'success') {
+                refreshTags();
+            }
+        },
+        error: function(xhr, status, error) {
+            console.error('AJAX error:', status, error);
+        }
+    });
+}
+
+function refreshTags() {
+    var beatmapId = $('#current_beatmap_id').val();
+    $.ajax({
+        type: 'GET',
+        url: '/echo/get_tags/',
+        data: { 'beatmap_id': beatmapId },
+        success: function(tags) {
+            $('.applied-tags').empty().append('Tags: ');
+            tags.forEach(function(tag) {
+                $('.applied-tags').append(`<span class="tag" data-tag-name="${tag.name}" data-applied-by-user="${tag.is_applied_by_user}">${tag.name} (${tag.apply_count})</span>`);
+            });
+        },
+        error: function(xhr, status, error) {
+            console.error('AJAX error:', status, error);
         }
     });
 }

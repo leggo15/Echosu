@@ -53,9 +53,20 @@
                 <input type="hidden" id="current_beatmap_id" value="{{ beatmap.beatmap_id }}">
 
                 <!-- Tag input field and suggestions list -->
-                <input type="text" id="tag-input" placeholder="Search tags..." autocomplete="off">
+                <button type="button" class="apply-tag-btn">Apply Tag</button>
+                <input type="text" id="tag-input" placeholder="Enter tag"> 
                 <ul id="tag-list"></ul>
-                <button type="button" id="apply-tag-button" class="apply-tag-btn">Apply Tag</button>   
+
+                <div class="applied-tags">
+                    Tags:
+                    {% for tag in tags_with_counts %}
+                        <span class="tag" data-tag-name="{{ tag.name }}" data-applied-by-user="{{ tag.is_applied_by_user }}">
+                            {{ tag.name }} ({{ tag.apply_count }})
+                        </span>
+                    {% endfor %}
+                </div>
+                
+                
             {% endif %}
         </div>
     </body>

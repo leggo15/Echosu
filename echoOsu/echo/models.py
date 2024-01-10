@@ -19,13 +19,22 @@ class Beatmap(models.Model):
         return self.beatmap_id or "Unknown id"
 
 
+class UserProfile(models.Model):
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    osu_id = models.CharField(max_length=100, unique=True)
+    profile_pic_url = models.URLField(max_length=1000, null=True, blank=True)
+
+    def __str__(self):
+        return self.user.username or "Unknown User"
+
+
 class Tag(models.Model):
     name = models.CharField(max_length=100, unique=True)
     beatmaps = models.ManyToManyField(Beatmap, related_name='tags', blank=True, through='TagApplication')
 
     def __str__(self):
         return self.name
-
+    
 
 class TagApplication(models.Model):
     tag = models.ForeignKey(Tag, on_delete=models.CASCADE)
@@ -38,12 +47,3 @@ class TagApplication(models.Model):
 
     def __str__(self):
         return f"{self.user.username} applied tag '{self.tag.name}' on {self.beatmap.beatmap_id}"
-
-
-class UserProfile(models.Model):
-    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
-    osu_id = models.CharField(max_length=100, unique=True)
-    profile_pic_url = models.URLField(max_length=1000, null=True, blank=True)
-
-    def __str__(self):
-        return self.user.username or "Unknown User"

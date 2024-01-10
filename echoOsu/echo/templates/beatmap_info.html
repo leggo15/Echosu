@@ -59,9 +59,9 @@
 
                 <div class="applied-tags">
                     Tags:
-                    {% for tag in tags_with_counts %}
-                        <span class="tag" data-tag-name="{{ tag.name }}" data-applied-by-user="{{ tag.is_applied_by_user }}">
-                            {{ tag.name }} ({{ tag.apply_count }})
+                    {% for TagApplication in tags_with_counts %}
+                        <span class="tag" data-tag-name="{{ TagApplication.name }}" data-applied-by-user="{{ TagApplication.is_applied_by_user }}">
+                            {{ TagApplication.name }} ({{ TagApplication.apply_count }})
                         </span>
                     {% endfor %}
                 </div>

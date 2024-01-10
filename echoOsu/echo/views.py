@@ -64,7 +64,7 @@ def home(request):
     return render(request, 'home.html')
 
 def get_user_data_from_api(access_token):
-    url = "https://osu.ppy.sh/api/v2/me"  # Adjust this URL to the appropriate osu! API endpoint for user data
+    url = "https://osu.ppy.sh/api/v2/me"  #URL to osu API for user data
     headers = {
         "Authorization": f"Bearer {access_token}"
     }
@@ -163,6 +163,9 @@ def beatmap_info(request):
         context['tags_with_counts'] = tags_with_counts
 
     return render(request, 'beatmap_info.html', context)
+
+
+
 def search_tags(request):
     search_query = request.GET.get('q', '')
     tags = Tag.objects.filter(name__icontains=search_query).annotate(beatmap_count=Count('beatmaps')).values('name', 'beatmap_count')
@@ -173,18 +176,6 @@ def get_tags(request):
     beatmap = get_object_or_404(Beatmap, beatmap_id=beatmap_id)
     tags_with_counts = beatmap.tags.annotate(apply_count=Count('id')).values('name', 'apply_count')
     return JsonResponse(list(tags_with_counts), safe=False)
-
-
-@csrf_exempt
-def apply_tag(request):
-    if request.method == 'POST':
-        tag_name = request.POST.get('tag')
-        beatmap_id = request.POST.get('beatmap_id')
-        tag, created = Tag.objects.get_or_create(name=tag_name)
-        beatmap = Beatmap.objects.get(beatmap_id=beatmap_id)
-        beatmap.tags.add(tag)
-        return JsonResponse({'status': 'success'})
-    return JsonResponse({'status': 'error'}, status=400)
 
 
 def search_tags(request):
@@ -198,24 +189,23 @@ def search_tags(request):
     return JsonResponse(list(tags), safe=False)
 
 
-@csrf_exempt  # Be cautious with this; it's better to include the CSRF token in the AJAX call.
+@csrf_exempt
 @login_required
 def apply_tag(request):
     if request.method == 'POST':
         tag_name = request.POST.get('tag')
         beatmap_id = request.POST.get('beatmap_id')
 
-        # Get or create the tag
         tag, created = Tag.objects.get_or_create(name=tag_name)
-
-        # Get the Beatmap instance, 404 if not found
         beatmap = get_object_or_404(Beatmap, beatmap_id=beatmap_id)
 
-        # Add the tag to the beatmap
-        beatmap.tags.add(tag)
+        # Create a new TagApplication instance
+        tag_application = TagApplication.objects.create(
+            tag=tag, 
+            beatmap=beatmap, 
+            user=request.user  # Setting the user
+        )
 
-        # Return a success response
         return JsonResponse({'status': 'success'})
 
-    # If the request method is not POST, return an error
     return JsonResponse({'status': 'error', 'message': 'Invalid request method.'}, status=400)

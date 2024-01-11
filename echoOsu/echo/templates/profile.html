@@ -1,0 +1,38 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Beatmap Info</title>
+        <link rel="stylesheet" href="{% static 'css/master.css' %}">
+        <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+        <script src="{% static 'js/master.js' %}"></script>
+    </head>
+    <body>
+        {% include '_navbar.html' %}
+        {% block content %}
+        <div class="profile-page">
+            <h1>User Profile</h1>
+            <div class="tagged-maps">
+                {% for tag_app in user_tags %}
+                    <div class="map-entry">
+                        <a href="{% url 'beatmap_info' beatmap_id=tag_app.beatmap.beatmap_id %}">
+                            <div class="map-details">
+                                <span class="map-title">{{ tag_app.beatmap.title }}</span>
+                                <span class="map-tags">
+                                    {% for tag in tag_app.beatmap.tags.all %}
+                                        <span class="tag">{{ tag.name }}</span>
+                                    {% endfor %}
+                                </span>
+                            </div>
+                        </a>
+                    </div>
+                {% empty %}
+                    <p>No maps tagged yet.</p>
+                {% endfor %}
+            </div>
+        </div>
+        {% endblock %}
+    </body>
+</html>

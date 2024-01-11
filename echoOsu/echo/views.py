@@ -11,7 +11,7 @@ from django.contrib.auth.models import User
 from django.contrib.auth import login
 from .models import UserProfile, TagApplication
 from django.conf import settings
-from django.db.models import Count
+from django.db.models import Count, Q
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404
 
@@ -113,7 +113,7 @@ def beatmap_info(request):
         if beatmap_id_request:
             beatmap, created = Beatmap.objects.get_or_create(beatmap_id=beatmap_id_request)
 
-            if created or any(attr is None for attr in [beatmap.title, beatmap.version, beatmap.artist, beatmap.creator, beatmap.cover_image_url, beatmap.total_length, beatmap.bpm, beatmap.cs, beatmap.accuracy, beatmap.ar, beatmap.difficulty_rating]):
+            if created or any(attr is None for attr in [beatmap.title, beatmap.version, beatmap.artist, beatmap.creator, beatmap.cover_image_url, beatmap.total_length, beatmap.bpm, beatmap.cs, beatmap.drain, beatmap.accuracy, beatmap.ar, beatmap.difficulty_rating]):
                 try:
                     beatmap_data = api.beatmap(beatmap_id_request)
 
@@ -128,6 +128,7 @@ def beatmap_info(request):
                     beatmap.total_length = beatmap_data.total_length
                     beatmap.bpm = beatmap_data.bpm
                     beatmap.cs = beatmap_data.cs
+                    beatmap.drain = beatmap_data.drain
                     beatmap.accuracy = beatmap_data.accuracy
                     beatmap.ar = beatmap_data.ar
                     beatmap.difficulty_rating = beatmap_data.difficulty_rating
@@ -171,11 +172,20 @@ def search_tags(request):
     tags = Tag.objects.filter(name__icontains=search_query).annotate(beatmap_count=Count('beatmaps')).values('name', 'beatmap_count')
     return JsonResponse(list(tags), safe=False)
 
+
 def get_tags(request):
     beatmap_id = request.GET.get('beatmap_id')
     beatmap = get_object_or_404(Beatmap, beatmap_id=beatmap_id)
-    tags_with_counts = beatmap.tags.annotate(apply_count=Count('id')).values('name', 'apply_count')
-    return JsonResponse(list(tags_with_counts), safe=False)
+
+    # This query will get all tags for this beatmap along with a count of distinct users that applied each tag.
+    tags_with_user_counts = TagApplication.objects.filter(beatmap=beatmap).values('tag__name').annotate(apply_count=Count('user', distinct=True)).order_by('tag__name')
+
+    # Convert the query to a list of dictionaries
+    tags_with_counts_list = [
+        {'name': tag['tag__name'], 'apply_count': tag['apply_count']} for tag in tags_with_user_counts
+    ]
+    return JsonResponse(tags_with_counts_list, safe=False)
+
 
 
 def search_tags(request):
@@ -209,3 +219,13 @@ def apply_tag(request):
         return JsonResponse({'status': 'success'})
 
     return JsonResponse({'status': 'error', 'message': 'Invalid request method.'}, status=400)
+
+
+def profile(request):
+    # Ensure the user is logged in
+    if not request.user.is_authenticated:
+        # Redirect to login page or show an error
+        # Get all TagApplications for the current user
+        user_tags = TagApplication.objects.filter(user=request.user).select_related('beatmap')
+    # Pass the user_tags to the template
+    return render(request, 'profile.html', {'user_tags': user_tags})

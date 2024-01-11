@@ -105,7 +105,7 @@ function refreshTags() {
         url: '/echo/get_tags/',
         data: { 'beatmap_id': beatmapId },
         success: function(tags) {
-            $('.applied-tags').empty().append('Tags: ');
+            $('.applied-tags').empty().append('Genres: ');
             tags.forEach(function(tag) {
                 $('.applied-tags').append(`<span class="tag" data-tag-name="${tag.name}" data-applied-by-user="${tag.is_applied_by_user}">${tag.name} (${tag.apply_count})</span>`);
             });
@@ -115,3 +115,25 @@ function refreshTags() {
         }
     });
 }
+
+// For the nav bar
+
+// Vanilla JavaScript to toggle the dropdown menu
+document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('profileMenuButton').onclick = function() {
+        document.getElementById('profileDropdown').style.display = 'block';
+    };
+
+    // Close the dropdown if the user clicks outside of it
+    window.onclick = function(event) {
+        if (!event.target.matches('#profileMenuButton')) {
+            var dropdowns = document.getElementsByClassName('dropdown-content');
+            for (var i = 0; i < dropdowns.length; i++) {
+                var openDropdown = dropdowns[i];
+                if (openDropdown.style.display === 'block') {
+                    openDropdown.style.display = 'none';
+                }
+            }
+        }
+    };
+});

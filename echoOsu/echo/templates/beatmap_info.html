@@ -10,9 +10,8 @@
         <script src="{% static 'js/master.js' %}"></script>
     </head>
     <body>
-        {% if user_profile %}
-            <img src="{{ user_profile.profile_pic_url }}" alt="{{ user_profile.user.username }}'s profile picture">
-        {% endif %}
+        {% include '_navbar.html' %}
+
         <div class="container">
             <form method="post" class="beatmap-form">
                 {% csrf_token %}
@@ -42,7 +41,7 @@
                             <span>Length: {{ beatmap.total_length }} </span>
                             <span>BPM: {{ beatmap.bpm }} </span>
                             <span>CS: {{ beatmap.cs }} </span>
-                            <span>HP: {{ beatmap.hp_drain }}</span>
+                            <span>HP: {{ beatmap.drain }}</span>
                             <span>OD: {{ beatmap.accuracy }}</span>
                             <span>AR: {{ beatmap.ar }}</span>
                             <span>SR: {{ beatmap.difficulty_rating }}</span>
@@ -58,7 +57,7 @@
                 <ul id="tag-list"></ul>
 
                 <div class="applied-tags">
-                    Tags:
+                    Genres:
                     {% for TagApplication in tags_with_counts %}
                         <span class="tag" data-tag-name="{{ TagApplication.name }}" data-applied-by-user="{{ TagApplication.is_applied_by_user }}">
                             {{ TagApplication.name }} ({{ TagApplication.apply_count }})

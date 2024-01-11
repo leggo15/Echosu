@@ -11,6 +11,7 @@ class Beatmap(models.Model):
     total_length = models.IntegerField(null=True, blank=True)
     bpm = models.FloatField(null=True, blank=True)
     cs = models.FloatField(null=True, blank=True)
+    drain = models.FloatField(null=True, blank=True)
     accuracy = models.FloatField(null=True, blank=True)
     ar = models.FloatField(null=True, blank=True)
     difficulty_rating = models.FloatField(null=True, blank=True)

@@ -127,7 +127,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 SOCIAL_AUTH_OSU_KEY = '28773'
 SOCIAL_AUTH_OSU_SECRET = 'dUzfRmogu3EkymvHr9Hh1lalZRIMyJVmV00U6rSd'
-SOCIAL_AUTH_OSU_REDIRECT_URI = 'http://13.50.15.80:8000//callback'
+SOCIAL_AUTH_OSU_REDIRECT_URI = 'https://13.50.15.80:8000//callback'
 
 
 

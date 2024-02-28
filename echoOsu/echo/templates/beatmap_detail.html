@@ -1,0 +1,37 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ beatmap.title }} Details</title>
+    <link rel="stylesheet" href="{% static 'css/master.css' %}">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="{% static 'js/master.js' %}"></script>
+</head>
+<body>
+    {% include '_navbar.html' %}
+    <div class="container">
+        <div class="beatmap-header">
+            <h1>{{ beatmap.title }} by {{ beatmap.creator }}</h1>
+            <p class="beatmap-details">Length: {{ beatmap.total_length }} | BPM: {{ beatmap.bpm }} | Difficulty: {{ beatmap.difficulty_rating }}</p>
+            <a href="https://osu.ppy.sh/beatmapsets/{{ beatmap.beatmapset_id }}" class="beatmap-link">View on osu!</a>
+        </div>
+
+        <div class="tag-input-container">
+            <button type="button" class="apply-tag-btn">Apply Tag</button>
+            <input type="text" id="tag-input" placeholder="Enter tag"> 
+            <ul id="tag-list"></ul>
+        </div>
+
+        <div class="applied-tags">
+            <h3>Genres:</h3>
+            {% for TagApplication in tags_with_counts %}
+                <span class="tag" data-tag-name="{{ TagApplication.name }}" data-applied-by-user="{{ TagApplication.is_applied_by_user }}">
+                    {{ TagApplication.name }} ({{ TagApplication.apply_count }})
+                </span>
+            {% endfor %}
+        </div>
+    </div>
+</body>
+</html>

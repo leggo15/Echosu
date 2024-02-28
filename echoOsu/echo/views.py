@@ -105,9 +105,12 @@ def save_user_data(access_token, request):
     request.session['osu_id'] = user_data['id']
 
 
-def beatmap_info(request):
+def beatmap_info(request, beatmap_id=None):
     context = {}
-
+    if beatmap_id:
+        beatmap = get_object_or_404(Beatmap, pk=beatmap_id)
+    else:
+        beatmap = None
     if request.method == 'POST':
         beatmap_id_request = request.POST.get('beatmap_id')
         if beatmap_id_request:
@@ -163,7 +166,8 @@ def beatmap_info(request):
 
         context['tags_with_counts'] = tags_with_counts
 
-    return render(request, 'beatmap_info.html', context)
+    return render(request, 'beatmap_info.html', {'beatmap': beatmap})
+
 
 
 
@@ -229,3 +233,48 @@ def profile(request):
         user_tags = TagApplication.objects.filter(user=request.user).select_related('beatmap')
     # Pass the user_tags to the template
     return render(request, 'profile.html', {'user_tags': user_tags})
+
+
+def search_results(request):
+    # Get the search query from the request
+    query = request.GET.get('query', '').strip()
+
+    # Initialize an empty queryset
+    beatmaps = Beatmap.objects.none()
+
+    if query:
+        # First, try to match tags
+        tags = Tag.objects.filter(name__icontains=query)
+        if tags.exists():
+            beatmaps = Beatmap.objects.filter(tags__in=tags).distinct()
+        else:
+            # If no tags match, search other beatmap attributes
+            beatmaps = Beatmap.objects.filter(
+                Q(beatmap_id__icontains=query) |
+                Q(title__icontains=query) |
+                Q(creator__icontains=query) |
+                Q(artist__icontains=query)
+            ).distinct()
+
+        # Annotate the beatmaps with the number of users who have applied tags, if needed
+        beatmaps = beatmaps.annotate(num_users=Count('tags__tagapplication__user', distinct=True)).order_by('-num_users')
+    else:
+        # If there is no query, decide on the behavior. This example returns no results.
+        # If you want to return all beatmaps by default, you can use Beatmap.objects.all() instead
+        beatmaps = Beatmap.objects.none()
+
+    return render(request, 'search_results.html', {'beatmaps': beatmaps})
+
+
+def beatmap_detail(request, beatmap_id):
+    beatmap = get_object_or_404(Beatmap, beatmap_id=beatmap_id)
+
+    # If you have a model to track tag applications, you can query for tags applied to this beatmap
+    tags_with_counts = TagApplication.objects.filter(beatmap=beatmap).values('tag__name').annotate(apply_count=Count('id')).order_by('-apply_count')
+
+    # Example for handling tag addition (simplified, adjust according to your actual logic and models)
+    if request.method == 'POST' and 'tag_name' in request.POST:
+        tag_name = request.POST.get('tag_name')
+        # Here you would add logic to create a TagApplication for this beatmap and tag
+
+    return render(request, 'beatmap_detail.html', {'beatmap': beatmap, 'tags_with_counts': tags_with_counts})

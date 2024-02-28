@@ -17,7 +17,7 @@ Including another URLconf
 from django.contrib import admin
 from django.contrib.auth.views import LogoutView
 from django.urls import include, path
-from echo.views import home, osu_callback, search_tags, apply_tag, get_tags, profile
+from echo.views import home, osu_callback, search_tags, apply_tag, get_tags, profile, search_results, beatmap_info, beatmap_detail
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -29,6 +29,7 @@ urlpatterns = [
     path('echo/apply_tag/', apply_tag, name='apply_tag'),
     path('echo/get_tags/', get_tags, name='get_tags'),
     path('logout/', LogoutView.as_view(next_page='/beatmap_info/'), name='logout'),
-
-    
+    path('search_results/', search_results, name='search_results'),
+    path('beatmap_info/<int:beatmap_id>/', beatmap_info, name='beatmap_info'),
+    path('beatmap_detail/<int:beatmap_id>/', beatmap_detail, name='beatmap_detail'),
 ]

@@ -1,0 +1,63 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Search Results</title>
+    <link rel="stylesheet" href="{% static 'css/master.css' %}">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="{% static 'js/master.js' %}"></script>
+</head>
+<body>
+{% include '_navbar.html' %}
+<div class="container">
+    <h2>Search Results</h2>
+    <p>Here you can search for maps that already exist in our database.</p>
+    
+    <!-- Search form with tag input for auto-complete functionality -->
+    <form action="{% url 'search_results' %}" method="get">
+        <input type="text" name="query" placeholder="Search by Genre, name, ID, mapper, or artist" value="{{ request.GET.query }}">
+        <button type="submit">Search</button>
+    </form>
+    
+    
+    <div class="search-results">
+        {% for beatmap in beatmaps %}
+        <div class="beatmap-display">
+            {% if beatmap.cover_image_url %}
+            <div class="beatmap-cover-container">
+                <img class="beatmap-cover" src="{{ beatmap.cover_image_url }}" alt="Cover Image">
+            </div>
+            {% endif %}
+            <div class="beatmap-details-container">
+                <div class="beatmap-title-artist">
+                    <h2 class="title">{{ beatmap.title }} - [{{ beatmap.version }}]</h2>
+                    <h3 class="artist">Artist: {{ beatmap.artist }}</h3>
+                    <h3 class="mapper">Mapper: {{ beatmap.creator }}</h3>
+                </div>
+                <div class="beatmap-stats">
+                    <span>Length: {{ beatmap.total_length }} </span>
+                    <span>BPM: {{ beatmap.bpm }} </span>
+                    <span>CS: {{ beatmap.cs }} </span>
+                    <span>HP: {{ beatmap.drain }}</span>
+                    <span>OD: {{ beatmap.accuracy }}</span>
+                    <span>AR: {{ beatmap.ar }}</span>
+                    <span>SR: {{ beatmap.difficulty_rating }}</span>
+                </div>
+                <a href="{% url 'beatmap_detail' beatmap_id=beatmap.beatmap_id %}">View Beatmap</a>
+                <p>Tags applied by {{ beatmap.num_users }} users</p>
+            </div>
+        </div>
+        {% empty %}
+            <p>No results found.</p>
+        {% endfor %}
+    </div>
+</div>
+
+<script>
+// Ensure your existing JavaScript for tag auto-complete is included or referenced here
+// You may need to adjust the AJAX URL or other details based on your implementation
+</script>
+</body>
+</html>

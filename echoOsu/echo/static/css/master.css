@@ -265,3 +265,76 @@ nav {
         margin-top: 10px;
     }
 }
+
+
+/* ############# BEATMAP DETAIL ################## */
+/* Add to your master.css or within a <style> tag in the HTML head */
+.beatmap-header {
+    background-color: #f9f9f9;
+    padding: 20px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.beatmap-header h1 {
+    margin: 0;
+    color: #333;
+    font-size: 24px;
+}
+
+.beatmap-details {
+    margin-bottom: 15px;
+}
+
+.beatmap-link {
+    display: inline-block;
+    background-color: #007bff;
+    color: #ffffff;
+    padding: 10px 15px;
+    border-radius: 5px;
+    text-decoration: none;
+    margin-top: 10px;
+}
+
+.beatmap-link:hover {
+    background-color: #0056b3;
+}
+
+.tag-input-container {
+    margin-top: 20px;
+}
+
+.apply-tag-btn {
+    background-color: #28a745;
+    color: white;
+    border: none;
+    padding: 10px 15px;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+.apply-tag-btn:hover {
+    background-color: #218838;
+}
+
+#tag-input {
+    padding: 10px;
+    margin-right: 5px;
+    border-radius: 5px;
+    border: 1px solid #ccc;
+}
+
+.applied-tags {
+    margin-top: 20px;
+}
+
+.applied-tags span.tag {
+    display: inline-block;
+    background-color: #17a2b8;
+    color: white;
+    padding: 5px 10px;
+    border-radius: 15px;
+    margin: 5px;
+    font-size: 14px;
+}

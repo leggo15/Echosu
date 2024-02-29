@@ -236,31 +236,46 @@ def profile(request):
 
 
 def search_results(request):
-    # Get the search query from the request
     query = request.GET.get('query', '').strip()
 
-    # Initialize an empty queryset
-    beatmaps = Beatmap.objects.none()
-
     if query:
-        # First, try to match tags
-        tags = Tag.objects.filter(name__icontains=query)
+        # Split the query into individual search terms based on spaces
+        search_terms = query.split()
+
+        # Filter tags by each search term using OR logic
+        tags_query = Q(name__icontains=search_terms[0])
+        for term in search_terms[1:]:
+            tags_query |= Q(name__icontains=term)
+
+        tags = Tag.objects.filter(tags_query)
+
         if tags.exists():
-            beatmaps = Beatmap.objects.filter(tags__in=tags).distinct()
+            # Filter beatmaps to include all tags using AND logic
+            beatmaps = Beatmap.objects.all()
+            for tag in tags:
+                beatmaps = beatmaps.filter(tags=tag).distinct()
         else:
             # If no tags match, search other beatmap attributes
             beatmaps = Beatmap.objects.filter(
                 Q(beatmap_id__icontains=query) |
                 Q(title__icontains=query) |
+                Q(title__icontains=query) |
                 Q(creator__icontains=query) |
-                Q(artist__icontains=query)
+                Q(artist__icontains=query) |
+                Q(version__icontains=query) |
+                Q(total_length__icontains=query) |
+                Q(bpm__icontains=query) |
+                Q(cs__icontains=query) |
+                Q(drain__icontains=query) |
+                Q(accuracy__icontains=query) |
+                Q(ar__icontains=query) |
+                Q(difficulty_rating__icontains=query)
+
             ).distinct()
 
-        # Annotate the beatmaps with the number of users who have applied tags, if needed
+        # Annotate the beatmaps with the number of users who have applied tags
         beatmaps = beatmaps.annotate(num_users=Count('tags__tagapplication__user', distinct=True)).order_by('-num_users')
     else:
-        # If there is no query, decide on the behavior. This example returns no results.
-        # If you want to return all beatmaps by default, you can use Beatmap.objects.all() instead
         beatmaps = Beatmap.objects.none()
 
     return render(request, 'search_results.html', {'beatmaps': beatmaps})

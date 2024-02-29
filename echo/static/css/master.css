@@ -156,8 +156,9 @@
 }
 
 /* ########### NAVBAR ##########*/
+/* Navbar Styles */
 nav {
-    background-color: #6200EA; /* Match the color scheme of your site */
+    background-color: #6200EA;
     padding: 10px 20px;
     display: flex;
     justify-content: space-between;
@@ -178,9 +179,18 @@ nav {
     width: 40px;
     height: 40px;
     border-radius: 50%;
+    cursor: pointer;
 }
 
-/* ########### DROP DOWN MENU ##########*/
+.dropdown-content {
+    display: none;
+    position: absolute;
+    right: 0;
+    background-color: white;
+    box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+    z-index: 1;
+}
+
 .dropdown-content a, .dropdown-content form button {
     color: black;
     padding: 12px 16px;
@@ -192,9 +202,9 @@ nav {
     background-color: #ddd;
 }
 
-.dropdown-content form {
-    margin: 0;
-}
+
+/* ########### DROP DOWN MENU ##########*/
+
 /* ########### PROFILE PAGE ##########*/
 /* Add this to your master.css or an equivalent CSS file */
 .profile-page {

@@ -25,7 +25,7 @@ SECRET_KEY = 'django-insecure-!69nm56d)(h3q83rb7nzdsa0=6#jvip$q+1v37k@22joia=n-i
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['13.50.15.80', '127.0.0.1']
+ALLOWED_HOSTS = ['16.16.162.232', '127.0.0.1']
 
 
 # Application definition
@@ -127,7 +127,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 SOCIAL_AUTH_OSU_KEY = '28773'
 SOCIAL_AUTH_OSU_SECRET = 'dUzfRmogu3EkymvHr9Hh1lalZRIMyJVmV00U6rSd'
-SOCIAL_AUTH_OSU_REDIRECT_URI = 'https://13.50.15.80:8000//callback'
+SOCIAL_AUTH_OSU_REDIRECT_URI = 'http://16.16.162.232//callback' # 'https://13.50.15.80:8000//callback'
 
 
 

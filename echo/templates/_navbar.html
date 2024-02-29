@@ -1,28 +1,30 @@
 {% load static %}
 <!DOCTYPE html>
 <html lang="en">
-    <nav style="background-color: #6200EA; padding: 10px 20px; display: flex; justify-content: space-between; align-items: center;">
-        <div class="nav-links">
-            <a href="{% url 'search_results' %}" style="color: white; margin-right: 15px; text-decoration: none;">Search</a>
-            <a href="{% url 'beatmap_info' %}" style="color: white; margin-right: 15px; text-decoration: none;">Beatmaps</a>
-            <a href="{% url 'admin:index' %}" style="color: white; text-decoration: none;">Admin Dashboard</a>
-        </div>
-        <div class="user-section" style="position: relative;">
-            {% if user.is_authenticated %}
-                <img src="{{ user_profile.profile_pic_url }}" alt="Profile Picture" style="width: 40px; height: 40px; border-radius: 50%; cursor: pointer;" id="profileMenuButton">
-                <div id="profileDropdown" class="dropdown-content" style="display: none; position: absolute; right: 0; background-color: white; box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2); z-index: 1;">
-                    <a href="{% url 'profile' %}">Profile</a>
-                    <form method="post" action="{% url 'logout' %}">
-                        {% csrf_token %}
-                        <button type="submit">Logout</button>
-                    </form>
-                </div>
-            {% else %}
-                <img src="{% static 'default.png' %}" alt="Profile Picture" style="width: 40px; height: 40px; border-radius: 50%; cursor: pointer;" id="profileMenuButton">
-                <div id="profileDropdown" class="dropdown-content" style="display: none; position: absolute; right: 0; background-color: white; box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2); z-index: 1;">
-                    <a href="https://osu.ppy.sh/oauth/authorize?client_id=28773&redirect_uri=https://13.50.15.80:8000/callback&response_type=code&scope=identify">Login</a>
-                </div>
-            {% endif %}
-        </div>
-    </nav>
+<nav>
+    <div class="nav-links">
+        <a href="{% url 'search_results' %}">Search</a>
+        <a href="{% url 'beatmap_info' %}">Beatmaps</a>
+        {% if user.is_superuser %}
+            <a href="{% url 'admin:index' %}">Admin Dashboard</a>
+        {% endif %}
+    </div>
+    <div class="user-section">
+        {% if user.is_authenticated %}
+            <img src="{{ user_profile.profile_pic_url }}" alt="Profile Picture" id="profileMenuButton">
+            <div id="profileDropdown" class="dropdown-content">
+                <a href="{% url 'profile' %}">Profile</a>
+                <form method="post" action="{% url 'logout' %}">
+                    {% csrf_token %}
+                    <button type="submit">Logout</button>
+                </form>
+            </div>
+        {% else %}
+            <img src="{% static 'default.png' %}" alt="Profile Picture" id="profileMenuButton">
+            <div id="profileDropdown" class="dropdown-content">
+                <a href="https://osu.ppy.sh/oauth/authorize?client_id=28773&redirect_uri=http://16.16.162.232/callback&response_type=code&scope=identify">Login</a>
+            </div>
+        {% endif %}
+    </div>
+</nav>
 </html>

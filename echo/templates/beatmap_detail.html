@@ -12,26 +12,47 @@
 <body>
     {% include '_navbar.html' %}
     <div class="container">
-        <div class="beatmap-header">
-            <h1>{{ beatmap.title }} by {{ beatmap.creator }}</h1>
-            <p class="beatmap-details">Length: {{ beatmap.total_length }} | BPM: {{ beatmap.bpm }} | Difficulty: {{ beatmap.difficulty_rating }}</p>
-            <a href="https://osu.ppy.sh/beatmapsets/{{ beatmap.beatmapset_id }}" class="beatmap-link">View on osu!</a>
+        <div class="beatmap-display">
+            {% if beatmap.cover_image_url %}
+            <div class="beatmap-cover-container">
+                <img class="beatmap-cover" src="{{ beatmap.cover_image_url }}" alt="Cover Image">
+            </div>
+            {% endif %}
+            <div class="beatmap-details-container">
+                <div class="beatmap-title-artist">
+                    <h2 class="title">{{ beatmap.title }} - [{{ beatmap.version }}] | {{ beatmap.beatmap_id }}</h2>
+                    <h3 class="artist">Artist: {{ beatmap.artist }}</h3>
+                    <h3 class="mapper">Mapper: {{ beatmap.creator }}</h3>
+                </div>
+                <div class="beatmap-stats">
+                    <span>Length: {{ beatmap.total_length }} </span>
+                    <span>BPM: {{ beatmap.bpm }} </span>
+                    <span>CS: {{ beatmap.cs }} </span>
+                    <span>HP: {{ beatmap.drain }}</span>
+                    <span>OD: {{ beatmap.accuracy }}</span>
+                    <span>AR: {{ beatmap.ar }}</span>
+                    <span>SR: {{ beatmap.difficulty_rating }}</span>
+                </div>
+                <a href="https://osu.ppy.sh/beatmapsets/{{ beatmap.beatmapset_id }}" class="beatmap-link">View on osu!</a>
+            </div>
         </div>
 
-        <div class="tag-input-container">
-            <button type="button" class="apply-tag-btn">Apply Tag</button>
-            <input type="text" id="tag-input" placeholder="Enter tag"> 
-            <ul id="tag-list"></ul>
-        </div>
+        <!-- Hidden field to store the current beatmap's ID -->
+        <input type="hidden" id="current_beatmap_id" value="{{ beatmap.beatmap_id }}">
+
+        <!-- Tag input field and suggestions list -->
+        <button type="button" class="apply-tag-btn">Apply Tag</button>
+        <input type="text" id="tag-input" placeholder="Enter tag"> 
+        <ul id="tag-list"></ul>
 
         <div class="applied-tags">
-            <h3>Genres:</h3>
+            Genres:
             {% for TagApplication in tags_with_counts %}
                 <span class="tag" data-tag-name="{{ TagApplication.name }}" data-applied-by-user="{{ TagApplication.is_applied_by_user }}">
                     {{ TagApplication.name }} ({{ TagApplication.apply_count }})
                 </span>
             {% endfor %}
         </div>
-    </div>
+    </div>  
 </body>
 </html>

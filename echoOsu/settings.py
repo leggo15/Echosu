@@ -20,10 +20,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-!69nm56d)(h3q83rb7nzdsa0=6#jvip$q+1v37k@22joia=n-i'
+SECRET_KEY = os.getenv('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 
 ALLOWED_HOSTS = ['*']
 
@@ -38,6 +38,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'echo',
+    'storages',
 ]
 
 MIDDLEWARE = [
@@ -125,9 +126,9 @@ STATIC_URL = '/static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 
-SOCIAL_AUTH_OSU_KEY = '28773'
-SOCIAL_AUTH_OSU_SECRET = 'dUzfRmogu3EkymvHr9Hh1lalZRIMyJVmV00U6rSd'
-SOCIAL_AUTH_OSU_REDIRECT_URI = 'http://16.16.162.232//callback' # 'https://13.50.15.80:8000//callback'
+SOCIAL_AUTH_OSU_KEY = os.getenv('SOCIAL_AUTH_OSU_KEY')
+SOCIAL_AUTH_OSU_SECRET = os.getenv('SOCIAL_AUTH_OSU_SECRET')
+SOCIAL_AUTH_OSU_REDIRECT_URI = 'http://16.171.46.236/callback' # 'https://13.50.15.80:8000//callback'
 
 
 
@@ -135,3 +136,23 @@ SOCIAL_AUTH_OSU_REDIRECT_URI = 'http://16.16.162.232//callback' # 'https://13.50
 LOGIN_URL = 'login'
 LOGOUT_URL = 'logout'
 LOGIN_REDIRECT_URL = '/'
+
+
+# AWS config
+AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID')
+AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
+
+AWS_STORAGE_BUCKET_NAME = 'echosu-s3'
+AWS_S3_CUSTOM_DOMAIN = '%s.s3.amasonaws.com' % AWS_STORAGE_BUCKET_NAME
+AWS_s3_FILE_OVERWRITE = False
+
+STORAGES = {
+    # For media
+    "default": {
+        "BACKEND": "storages.backends.s3boto3.S3Boto3Storage"
+    },
+    # For CSS and js     
+    "staticfiles": {
+        "BACKEND": "storages.backends.s3boto3.S3Boto3Storage"
+    },
+}

@@ -31,7 +31,7 @@ def osu_callback(request):
             'client_secret': client_secret,
             'code': code,
             'grant_type': 'authorization_code',
-            'redirect_uri': 'http://127.0.0.1:8000/callback',
+            'redirect_uri': 'http://16.171.46.236/callback',
         }
         response = requests.post(token_url, data=payload)
 

@@ -1,0 +1,10 @@
+---
+
+services:
+  web:
+    container_name: echosu-web
+    build: .
+    volumes:
+      - .:/echosu
+    ports:
+      - "8080:8080"

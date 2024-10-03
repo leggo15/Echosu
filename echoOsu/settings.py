@@ -176,10 +176,3 @@ REST_FRAMEWORK = {
 
 
 
-
-
-
-
-# echoOsu/settings.py
-
-

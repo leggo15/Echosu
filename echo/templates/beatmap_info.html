@@ -5,7 +5,8 @@
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Beatmap Info</title>
-        <link rel="stylesheet" href="https://echosu-s3.s3.eu-central-1.amazonaws.com/css/master.css">
+        <link rel="stylesheet" href="{% static 'css/master.css' %}">
+        <!-- <link rel="stylesheet" href="https://echosu-s3.s3.eu-central-1.amazonaws.com/css/master.css"> -->
         <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
         <script src="https://echosu-s3.s3.eu-central-1.amazonaws.com/js/master.js"></script>
     </head>
@@ -15,12 +16,15 @@
         <div class="container">
             <form method="post" class="beatmap-form">
                 {% csrf_token %}
-                <p>Use beatmap ID from osu to enter new beatmaps into our database.</br> 
-                https://osu.ppy.sh/beatmapsets/1289690#osu/"2897724" <--- That ID.</p>
+                <p>Use the beatmap ID osu to look up beatmaps.<br> 
+                https://osu.ppy.sh/beatmapsets/1289690#osu/"2897724" &lt;--- That ID.</p>
                 <label for="beatmap_id">Enter Beatmap ID:</label>
-                <input type="text" id="beatmap_id" name="beatmap_id">
-                <button type="submit">Get Info</button>
+                <div class="input-group">
+                    <input type="text" id="beatmap_id" name="beatmap_id">
+                    <button type="submit">Get Info</button>
+                </div>
             </form>
+            
 
             {% if error %}
                 <p class="error">{{ error }}</p>
@@ -47,6 +51,7 @@
                             <span>OD: {{ beatmap.accuracy }}</span>
                             <span>AR: {{ beatmap.ar }}</span>
                             <span>SR: {{ beatmap.difficulty_rating }}</span>
+                            <span>Mode: {{ beatmap.mode }}</span>
                         </div>
                     </div>
                 </div>

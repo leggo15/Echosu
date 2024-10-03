@@ -1,0 +1,71 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Confirm Data Deletion</title>
+    <link rel="stylesheet" href="{% static 'css/master.css' %}">
+    <style>
+        /* Confirmation Page Styles */
+        .confirmation-page {
+            text-align: center;
+            padding: 50px;
+        }
+
+        .confirmation-page h1 {
+            color: #cc0000;
+            margin-bottom: 20px;
+        }
+
+        .confirmation-page p {
+            font-size: 18px;
+            margin-bottom: 30px;
+        }
+
+        .confirm-delete-btn {
+            background-color: #cc0000;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            font-size: 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-right: 10px;
+            transition: background-color 0.3s;
+        }
+
+        .confirm-delete-btn:hover {
+            background-color: #a30000;
+        }
+
+        .cancel-btn {
+            background-color: #cccccc;
+            color: #333;
+            border: none;
+            padding: 12px 20px;
+            font-size: 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            text-decoration: none;
+            transition: background-color 0.3s;
+        }
+
+        .cancel-btn:hover {
+            background-color: #999999;
+        }
+    </style>
+</head>
+<body>
+    {% include '_navbar.html' %}
+    <div class="container confirmation-page">
+        <h1>Are You Sure?</h1>
+        <p>You are about to delete all your contributions from our site. This action cannot be undone. Your account will remain active. Are you sure you want to proceed?</p>
+
+        <form method="post" action="{% url 'delete_user_data' %}">
+            {% csrf_token %}
+            <button type="submit" class="confirm-delete-btn">Yes, Delete My Data</button>
+            <a href="{% url 'settings' %}" class="cancel-btn">Cancel</a>
+        </form>
+    </div>
+</body>
+</html>

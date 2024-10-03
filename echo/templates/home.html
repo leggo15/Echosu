@@ -1,23 +1,75 @@
+<!-- templates/home.html -->
+
 {% load static %}
 <!DOCTYPE html>
 <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Beatmap Info</title>
-        <link rel="stylesheet" href="https://echosu-s3.s3.eu-central-1.amazonaws.com/css/master.css">
-        <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-        <script src="https://echosu-s3.s3.eu-central-1.amazonaws.com/js/master.js"></script>
-    </head>
-    <body>
-        {% include '_navbar.html' %}
-        {% block content %}
-            <div class="search-container">
-                <form action="{% url 'search_results' %}" method="get">
-                    <input type="text" name="query" placeholder="Enter tags, separated by commas">
-                    <button type="submit">Search</button>
-                </form>
+<head>
+    <meta charset="UTF-8">
+    <title>echosu Home</title>
+    <link rel="stylesheet" href="{% static 'css/master.css' %}">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://echosu-s3.s3.eu-central-1.amazonaws.com/js/master.js"></script>
+    <!-- Include any other necessary scripts -->
+</head>
+<body>
+    {% include '_navbar.html' %}
+    <div class="container">
+        <!-- Top Tags Section -->
+        <section class="tags-usage">
+            <h2>Top 50 Tags</h2>
+            <div class="applied-tags">
+                {% for tag in tags %}
+                    <a 
+                        href="{% url 'search_results' %}?query={{ '"'|add:tag.name|add:'"'|urlencode }}" 
+                        class="tag" 
+                        data-tag-name="{{ tag.name }}" 
+                        data-applied-by-user="{{ tag.is_applied_by_user }}"
+                    >
+                        {{ tag.name }} ({{ tag.total }})
+                    </a>
+                {% empty %}
+                    <p>No tags available.</p>
+                {% endfor %}
             </div>
-        {% endblock %}
-    </body>
+        </section>
+
+        <!-- Recommended Maps Section -->
+        <section class="recommended-maps">
+            <h2>Recommended Maps</h2>
+            <ul class="map-list">
+                {% for map in recommended_maps %}
+                    <li class="map-entry card">
+                        <div class="beatmap-display">
+                            {% if map.cover_image_url %}
+                                <div class="beatmap-cover-container">
+                                    <img class="beatmap-cover" src="{{ map.cover_image_url }}" alt="Cover Image">
+                                </div>
+                            {% endif %}
+                            <div class="beatmap-details-container">
+                                <div class="beatmap-title-artist">
+                                    <h2 class="title">{{ map.title }} - [{{ map.version }}] | {{ map.beatmap_id }}</h2>
+                                    <h3 class="artist">Artist: {{ map.artist }}</h3>
+                                    <h3 class="mapper">Mapper: {{ map.creator }}</h3>
+                                </div>
+                                <div class="beatmap-stats">
+                                    <span>Length: {{ map.total_length }} </span>
+                                    <span>BPM: {{ map.bpm }} </span>
+                                    <span>CS: {{ map.cs }} </span>
+                                    <span>HP: {{ map.drain }}</span>
+                                    <span>OD: {{ map.accuracy }}</span>
+                                    <span>AR: {{ map.ar }}</span>
+                                    <span>SR: {{ map.difficulty_rating }}</span>
+                                    <span>Mode: {{ map.mode }}</span>
+                                </div>
+                                <a href="{% url 'beatmap_detail' map.beatmap_id %}" class="beatmap-link">View Details</a>
+                            </div>
+                        </div>
+                    </li>
+                {% empty %}
+                    <p>No recommendations available at this time.</p>
+                {% endfor %}
+            </ul>
+        </section>
+    </div>
+</body>
 </html>

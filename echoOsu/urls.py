@@ -24,7 +24,7 @@ urlpatterns = [
     path('settings/', settings, name='settings'),
     path('search_results/', search_results, name='search_results'),
     path('beatmap/<str:beatmap_id>/', beatmap_info, name='beatmap_info'),
-        path('settings/confirm_data_deletion/', confirm_data_deletion, name='confirm_data_deletion'),
+    path('settings/confirm_data_deletion/', confirm_data_deletion, name='confirm_data_deletion'),
     path('settings/delete_user_data/', delete_user_data, name='delete_user_data'),
 
     # Commenting out API and beatmap-related URLs for now

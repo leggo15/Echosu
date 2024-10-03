@@ -648,10 +648,10 @@ def home(request):
     return render(request, 'home.html', context)
 
 
-
 # ------------------------------------------------------------------------ #
 
 # ----------------------------- API Views ----------------------------- #
+
 
 from rest_framework_api_key.permissions import HasAPIKey
 

@@ -14,7 +14,7 @@
         {% if user.is_authenticated %}
             <img src="{{ user_profile.profile_pic_url }}" alt="Profile Picture" id="profileMenuButton">
             <div id="profileDropdown" class="dropdown-content">
-                <a href="{% url 'profile' %}">Profile</a>
+                <!-- <a href="{% url 'profile' %}">Profile</a> -->
                 <a href="{% url 'settings' %}">Settings</a>
                 <form method="post" action="{% url 'logout' %}">
                     {% csrf_token %}

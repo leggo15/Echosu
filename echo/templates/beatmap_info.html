@@ -11,69 +11,74 @@
         <script src="https://echosu-s3.s3.eu-central-1.amazonaws.com/js/master.js"></script>
     </head>
     <body>
+
         {% include '_navbar.html' %}
+            <div class="container">
 
-        <div class="container">
-            <form method="post" class="beatmap-form">
-                {% csrf_token %}
-                <p>Use the beatmap ID osu to look up beatmaps.<br> 
-                https://osu.ppy.sh/beatmapsets/1289690#osu/"2897724" &lt;--- That ID.</p>
-                <label for="beatmap_id">Enter Beatmap ID:</label>
-                <div class="input-group">
-                    <input type="text" id="beatmap_id" name="beatmap_id">
-                    <button type="submit">Get Info</button>
-                </div>
-            </form>
-            
+                {% if user.is_authenticated %}
 
-            {% if error %}
-                <p class="error">{{ error }}</p>
-            {% endif %}
+                    <form method="post" class="beatmap-form">
+                        {% csrf_token %}
+                        <p>Use the beatmap ID osu to look up beatmaps.<br> 
+                        https://osu.ppy.sh/beatmapsets/1289690#osu/"2897724" &lt;--- That ID.</p>
+                        <label for="beatmap_id">Enter Beatmap ID:</label>
+                        <div class="input-group">
+                            <input type="text" id="beatmap_id" name="beatmap_id">
+                            <button type="submit">Get Info</button>
+                        </div>
+                    </form>
+                    
 
-            {% if beatmap %}
-                <div class="beatmap-display">
-                    {% if beatmap.cover_image_url %}
-                    <div class="beatmap-cover-container">
-                        <img class="beatmap-cover" src="{{ beatmap.cover_image_url }}" alt="Cover Image">
-                    </div>
+                    {% if error %}
+                        <p class="error">{{ error }}</p>
                     {% endif %}
-                    <div class="beatmap-details-container">
-                        <div class="beatmap-title-artist">
-                            <h2 class="title">{{ beatmap.title }} - [{{ beatmap.version }}] | {{ beatmap.beatmap_id }}</h2>
-                            <h3 class="artist">Artist: {{ beatmap.artist }}</h3>
-                            <h3 class="mapper">Mapper: {{ beatmap.creator }}</h3>
-                        </div>
-                        <div class="beatmap-stats">
-                            <span>Length: {{ beatmap.total_length }} </span>
-                            <span>BPM: {{ beatmap.bpm }} </span>
-                            <span>CS: {{ beatmap.cs }} </span>
-                            <span>HP: {{ beatmap.drain }}</span>
-                            <span>OD: {{ beatmap.accuracy }}</span>
-                            <span>AR: {{ beatmap.ar }}</span>
-                            <span>SR: {{ beatmap.difficulty_rating }}</span>
-                            <span>Mode: {{ beatmap.mode }}</span>
-                        </div>
-                    </div>
-                </div>
-                <!-- Hidden field to store the current beatmap's ID -->
-                <input type="hidden" id="current_beatmap_id" value="{{ beatmap.beatmap_id }}">
 
-                <!-- Tag input field and suggestions list -->
-                <button type="button" class="apply-tag-btn">Apply Tag</button>
-                <input type="text" id="tag-input" placeholder="Enter tag"> 
-                <ul id="tag-list"></ul>
+                    {% if beatmap %}
+                        <div class="beatmap-display">
+                            {% if beatmap.cover_image_url %}
+                            <div class="beatmap-cover-container">
+                                <img class="beatmap-cover" src="{{ beatmap.cover_image_url }}" alt="Cover Image">
+                            </div>
+                            {% endif %}
+                            <div class="beatmap-details-container">
+                                <div class="beatmap-title-artist">
+                                    <h2 class="title">{{ beatmap.title }} - [{{ beatmap.version }}] | {{ beatmap.beatmap_id }}</h2>
+                                    <h3 class="artist">Artist: {{ beatmap.artist }}</h3>
+                                    <h3 class="mapper">Mapper: {{ beatmap.creator }}</h3>
+                                </div>
+                                <div class="beatmap-stats">
+                                    <span>Length: {{ beatmap.total_length }} </span>
+                                    <span>BPM: {{ beatmap.bpm }} </span>
+                                    <span>CS: {{ beatmap.cs }} </span>
+                                    <span>HP: {{ beatmap.drain }}</span>
+                                    <span>OD: {{ beatmap.accuracy }}</span>
+                                    <span>AR: {{ beatmap.ar }}</span>
+                                    <span>SR: {{ beatmap.difficulty_rating }}</span>
+                                    <span>Mode: {{ beatmap.mode }}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Hidden field to store the current beatmap's ID -->
+                        <input type="hidden" id="current_beatmap_id" value="{{ beatmap.beatmap_id }}">
 
-                <div class="applied-tags">
-                    Genres:
-                    {% for TagApplication in tags_with_counts %}
-                        <span class="tag" data-tag-name="{{ TagApplication.name }}" data-applied-by-user="{{ TagApplication.is_applied_by_user }}">
-                            {{ TagApplication.name }} ({{ TagApplication.apply_count }})
-                        </span>
-                    {% endfor %}
-                </div>
-                
-                
-            {% endif %}
-        </div>
+                        <!-- Tag input field and suggestions list -->
+                        <button type="button" class="apply-tag-btn">Apply Tag</button>
+                        <input type="text" id="tag-input" placeholder="Enter tag"> 
+                        <ul id="tag-list"></ul>
+
+                        <div class="applied-tags">
+                            Genres:
+                            {% for TagApplication in tags_with_counts %}
+                                <span class="tag" data-tag-name="{{ TagApplication.name }}" data-applied-by-user="{{ TagApplication.is_applied_by_user }}">
+                                    {{ TagApplication.name }} ({{ TagApplication.apply_count }})
+                                </span>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+
+                {% else %}
+                    <p>You have to be logged in to use this. ( click the little oranges in the top right c: )</p>
+                {% endif %}
+            </div>
     </body>
 </html>

@@ -17,9 +17,8 @@ RUN export PATH="$PATH:/root/.cargo/bin"
 #RUN ln -s /root/.cargo/bin/cargo /bin
 #RUN ln -s /root/.cargo/bin/rustc /bin
 
-COPY requirements.txt .
-RUN pip3 install -r requirements.txt
-#RUN rm requirements.txt
+RUN --mount=type=bind,dst=./requirements.txt,src=./requirements.txt \
+	pip3 install -r requirements.txt
 
 #USER echosu
 

@@ -10,7 +10,7 @@
     <script src="https://echosu-s3.s3.eu-central-1.amazonaws.com/js/master.js"></script>
 </head>
 <body>
-    {% include '_navbar.html' %}
+    {% include '_navbar.html' %}    
     <div class="container">
         <div class="beatmap-display">
             {% if beatmap.cover_image_url %}
@@ -45,7 +45,7 @@
         <input type="text" id="tag-input" placeholder="Enter tag"> 
         <ul id="tag-list"></ul>
 
-        <div class="applied-tags">
+        <div class="applied-tags"> 
             Genres:
             {% for TagApplication in tags_with_counts %}
                 <span class="tag" data-tag-name="{{ TagApplication.name }}" data-applied-by-user="{{ TagApplication.is_applied_by_user }}">

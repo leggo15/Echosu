@@ -13,14 +13,15 @@
 {% include '_navbar.html' %}
 <div class="container">
     <h2>Search Results</h2>
-    <p>Here you can search for maps that already exist in our database.</p>
-    
+    <h4>Here you can search for maps that already exist in our database.</h4>
+    <i> How to use</i> </br>
+    <i class="search_description">You can search for spesific genres like Aim, Tech and such by typing them in. If you're looking for a genre with spaces in the name you need to encapsulate it using quotes like so; "Spaced Streams". You can also search for spesific map characteristics such as AR=8 or an artist- or mapper's name. These rules can be combined into a very spesific search. An example could look like: "Aim awkward "No Bursts" AR=9 Od>8 cs<6 Monstrata".</i>
     <!-- Search form with tag input for auto-complete functionality -->
-    <form action="{% url 'search_results' %}" method="get">
-        <input type="text" name="query" placeholder="Search by Genre, name, ID, mapper, or artist" value="{{ request.GET.query }}">
-        <button type="submit">Search</button>
+    <form action="{% url 'search_results' %}" method="get" class="beatmap-form">
+        <input type="text" name="query" id="tag-input" placeholder="Search by Genre, name, ID, mapper, or artist" value="{{ request.GET.query }}">
+        <button type="submit" class="generic_btn">Search</button>
     </form>
-    
+
     
     <div class="search-results">
         {% for beatmap in beatmaps %}
@@ -54,10 +55,5 @@
         {% endfor %}
     </div>
 </div>
-
-<script>
-// Ensure your existing JavaScript for tag auto-complete is included or referenced here
-// You may need to adjust the AJAX URL or other details based on your implementation
-</script>
 </body>
 </html>

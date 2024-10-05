@@ -1,38 +1,98 @@
 {% load static %}
+
 <!DOCTYPE html>
 <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Beatmap Info</title>
-        <link rel="stylesheet" href="{% static 'css/master.css' %}">
-        <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-        <script src="{% static 'js/master.js' %}"></script>
-    </head>
-    <body>
-        {% include '_navbar.html' %}
-        {% block content %}
-        <div class="profile-page">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Profile</title>
+    <link rel="stylesheet" href="https://echosu-s3.s3.eu-central-1.amazonaws.com/css/master.css">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://echosu-s3.s3.eu-central-1.amazonaws.com/js/master.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    {% include '_navbar.html' %}
+    <div class="profile-container">
+        <div class="profile-maps">
             <h1>User Profile</h1>
-            <div class="tagged-maps">
-                {% for tag_app in user_tags %}
-                    <div class="map-entry">
-                        <a href="{% url 'beatmap_info' beatmap_id=tag_app.beatmap.beatmap_id %}">
-                            <div class="map-details">
-                                <span class="map-title">{{ tag_app.beatmap.title }}</span>
-                                <span class="map-tags">
-                                    {% for tag in tag_app.beatmap.tags.all %}
-                                        <span class="tag">{{ tag.name }}</span>
-                                    {% endfor %}
-                                </span>
-                            </div>
-                        </a>
+            {% for tag_app in user_tags %}
+            <div class="map-entry">
+                <a href="{% url 'beatmap_detail' beatmap_id=tag_app.beatmap.beatmap_id %}">
+                    <div class="map-details">
+                        <span class="map-title">{{ tag_app.beatmap.title }}</span>
+                        <span class="map-tags">
+                            {% for tag in tag_app.beatmap.tags.all %}
+                                <span class="tag">{{ tag.name }}</span>
+                            {% endfor %}
+                        </span>
                     </div>
-                {% empty %}
-                    <p>No maps tagged yet.</p>
-                {% endfor %}
+                </a>
             </div>
+            {% empty %}
+            <p>No maps tagged yet.</p>
+            {% endfor %}
         </div>
-        {% endblock %}
-    </body>
+        <div class="profile-stats">
+            <div class="accuracy-details">
+                <h2>Accuracy: {{ accuracy }}%</h2>
+                <p class="accuracy-info">
+                    Your accuracy score reflects how closely your tagged genres align with the broader community consensus. 
+                    Maintaining an accuracy score of 60% or higher grants you the privilege to edit and add descriptions to genres. 
+                    This system encourages careful and thoughtful tagging, ensuring the highest quality and relevance of information. 
+                    As you contribute and align with the community consensus, your accuracy will increase, unlocking new capabilities and 
+                    allowing you to contribute even more to our rich database.
+                </p>
+            </div>
+            <div class="chart-container">
+                <canvas id="tagsChart" width="400" height="400"></canvas>
+            </div>
+            <!-- Add other charts below as needed -->
+            
+        </div>
+    </div>
+
+    <script>
+            var ctx = document.getElementById('tagsChart').getContext('2d');
+            var tagsChart = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: {{ tag_labels | safe }},
+                    datasets: [{
+                        label: 'Most Used Tags',
+                        data: {{ tag_data | safe }},
+                        backgroundColor: [
+                            'rgba(255, 99, 132, 0.2)',
+                            'rgba(54, 162, 235, 0.2)',
+                            'rgba(255, 206, 86, 0.2)',
+                            'rgba(75, 192, 192, 0.2)',
+                            'rgba(153, 102, 255, 0.2)',
+                            'rgba(255, 159, 64, 0.2)'
+                        ],
+                        borderColor: [
+                            'rgba(255, 99, 132, 1)',
+                            'rgba(54, 162, 235, 1)',
+                            'rgba(255, 206, 86, 1)',
+                            'rgba(75, 192, 192, 1)',
+                            'rgba(153, 102, 255, 1)',
+                            'rgba(255, 159, 64, 1)'
+                        ],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    legend: {
+                        position: 'top',
+                    },
+                    animation: {
+                        animateScale: true,
+                        animateRotate: true
+                    }
+                }
+            });
+            </script>
+        </div>
+    </div>
+</body>
 </html>

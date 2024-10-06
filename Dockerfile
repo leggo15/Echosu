@@ -4,6 +4,7 @@ WORKDIR /echosu
 
 RUN apt update
 RUN apt install -y \
+	curl \
 	python3 \
 	python3-pip
 
@@ -11,12 +12,10 @@ RUN apt install -y \
 RUN rm /usr/lib/python3.11/EXTERNALLY-MANAGED
 
 # apt's cargo version is too old
-RUN apt install curl -y
 RUN curl https://sh.rustup.rs -sSf > install_rust.sh && sh install_rust.sh -y
 RUN export PATH="$PATH:/root/.cargo/bin"
-#RUN ln -s /root/.cargo/bin/cargo /bin
-#RUN ln -s /root/.cargo/bin/rustc /bin
 
+# pip requirements
 RUN --mount=type=bind,dst=./requirements.txt,src=./requirements.txt \
 	pip3 install -r requirements.txt
 

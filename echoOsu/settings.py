@@ -14,9 +14,9 @@ load_dotenv(dotenv_path)
 SECRET_KEY = os.getenv('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 
-ALLOWED_HOSTS = ['*', '18.232.71.193']
+ALLOWED_HOSTS = ['18.232.71.193']
 
 
 # Application definition
@@ -128,7 +128,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # Osu API Credentials
 SOCIAL_AUTH_OSU_KEY = os.getenv('SOCIAL_AUTH_OSU_KEY')
 SOCIAL_AUTH_OSU_SECRET = os.getenv('SOCIAL_AUTH_OSU_SECRET')
-SOCIAL_AUTH_OSU_REDIRECT_URI = 'http://127.0.0.1:8000/callback'
+SOCIAL_AUTH_OSU_REDIRECT_URI = 'http://18.232.71.193/callback'
 
 
 # AWS Credentials

@@ -317,13 +317,14 @@ def search_tags(request):
 
 from better_profanity import profanity
 
-# Define a regex pattern for allowed tag characters
-ALLOWED_TAG_PATTERN = re.compile(r'^[a-z0-9 _-]{1,25}$')
+# Define the allowed tag pattern if not already defined
+ALLOWED_TAG_PATTERN = re.compile(r'^[A-Za-z0-9 _-]{1,100}$')
 
 @login_required
 def modify_tag(request):
     """
     Apply or remove a tag for a beatmap by the current user.
+    Additionally, remove the tag from the database if it's no longer used.
     """
     if request.method == 'POST':
         tag_name = request.POST.get('tag', '')
@@ -336,38 +337,49 @@ def modify_tag(request):
         # Convert to lowercase
         processed_tag = processed_tag.lower()
 
-        # Dissalow spesific char and set max length
+        # Disallow specific chars and set max length
         if not ALLOWED_TAG_PATTERN.match(processed_tag):
             error_message = 'Tag must be 1-100 characters long and can only contain letters, numbers, spaces, hyphens, and underscores.'
             return JsonResponse({'status': 'error', 'message': error_message}, status=400)
 
-        # profanity filtering
+        # Profanity filtering
         if profanity.contains_profanity(processed_tag):
             error_message = 'Tag contains inappropriate language.'
             return JsonResponse({'status': 'error', 'message': error_message}, status=400)
 
-        # create or get the tag
+        # Wrap the following operations in an atomic transaction to ensure data integrity
         try:
-            # Create the tag if it doesn't exist
-            tag, created_tag = Tag.objects.get_or_create(name=processed_tag)
-            beatmap = get_object_or_404(Beatmap, beatmap_id=beatmap_id)
+            with transaction.atomic():
+                # Create the tag if it doesn't exist
+                tag, created_tag = Tag.objects.get_or_create(name=processed_tag)
+                beatmap = get_object_or_404(Beatmap, beatmap_id=beatmap_id)
+
+                # Check if the tag application already exists
+                tag_application, created = TagApplication.objects.get_or_create(
+                    tag=tag,
+                    beatmap=beatmap,
+                    user=user
+                )
+
+                # If not created, it means the tag application already existed, so we remove it
+                if not created:
+                    tag_application.delete()
+
+                    # After deletion, check if the tag has any remaining applications
+                    remaining_applications = TagApplication.objects.filter(tag=tag).exists()
+                    if not remaining_applications:
+                        # If no remaining applications, delete the tag
+                        tag.delete()
+
+                    return JsonResponse({'status': 'success', 'action': 'removed'})
+                else:
+                    # If created, a new tag application was made
+                    return JsonResponse({'status': 'success', 'action': 'applied'})
+
         except Exception as e:
+            # Log the exception as needed (optional)
+            # logger.error(f"Error modifying tag: {e}")
             return JsonResponse({'status': 'error', 'message': 'Internal server error.'}, status=500)
-
-        # Check if the tag application already exists
-        tag_application, created = TagApplication.objects.get_or_create(
-            tag=tag,
-            beatmap=beatmap,
-            user=user
-        )
-
-        # If not created, it means the tag application already existed, so we remove it
-        if not created:
-            tag_application.delete()
-            return JsonResponse({'status': 'success', 'action': 'removed'})
-
-        # If created, a new tag application was made
-        return JsonResponse({'status': 'success', 'action': 'applied'})
 
     # If the request method is not POST, return an error
     return JsonResponse({'status': 'error', 'message': 'Invalid request method'}, status=400)

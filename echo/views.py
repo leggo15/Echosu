@@ -1,5 +1,3 @@
-# echo/views.py
-
 # ----------------------------- Imports ----------------------------- #
 
 # Standard library imports
@@ -81,7 +79,7 @@ def osu_callback(request):
             # Save user data and login
             if access_token:
                 save_user_data(access_token, request)
-                return redirect('beatmap_info')  # Redirect to your app page after login
+                return redirect('home')  # Redirect to your app page after logina
             else:
                 messages.error(request, "Failed to retrieve access token.")
                 return redirect('error_page')
@@ -157,58 +155,75 @@ def admin(request):
 
 # ----------------------------- Beatmap Views ----------------------------- #
 
+
 def beatmap_info(request, beatmap_id=None):
     """
     View to display beatmap information and handle beatmap searches.
     """
     context = {}
+    
+    # If a beatmap_id is provided in the URL, fetch it from the database
     if beatmap_id:
         beatmap = get_object_or_404(Beatmap, pk=beatmap_id)
-    else:
-        beatmap = None
+        context['beatmap'] = beatmap
 
     if request.method == 'POST':
         beatmap_id_request = request.POST.get('beatmap_id')
         if beatmap_id_request:
-            # Get or create the beatmap object
-            beatmap, created = Beatmap.objects.get_or_create(beatmap_id=beatmap_id_request)
+            try:
+                # Attempt to fetch beatmap data from the osu! API
+                beatmap_data = api.beatmap(beatmap_id_request)
+                
+                if not beatmap_data:
+                    # If no data is returned, the beatmap ID is invalid
+                    raise ValueError(f"{beatmap_id_request} isn't a valid beatmap ID.")
 
-            # Check if beatmap data needs to be fetched from API
-            if created or any(
-                attr is None for attr in [
-                    beatmap.title, beatmap.version, beatmap.artist, beatmap.creator,
-                    beatmap.cover_image_url, beatmap.total_length, beatmap.bpm,
-                    beatmap.cs, beatmap.drain, beatmap.accuracy, beatmap.ar,
-                    beatmap.difficulty_rating, beatmap.mode
-                ]
-            ):
-                try:
-                    beatmap_data = api.beatmap(beatmap_id_request)
+                # Get or create the beatmap object in the database
+                beatmap, created = Beatmap.objects.get_or_create(beatmap_id=beatmap_id_request)
 
+                # Check if beatmap data needs to be fetched from API
+                if created or any(
+                    attr is None for attr in [
+                        beatmap.title, beatmap.version, beatmap.artist, beatmap.creator,
+                        beatmap.cover_image_url, beatmap.total_length, beatmap.bpm,
+                        beatmap.cs, beatmap.drain, beatmap.accuracy, beatmap.ar,
+                        beatmap.difficulty_rating, beatmap.mode, beatmap.beatmapset_id
+                    ]
+                ):
+                    # Update beatmap attributes from the API data
                     if hasattr(beatmap_data, '_beatmapset'):
                         beatmapset = beatmap_data._beatmapset
-                        beatmap.title = getattr(beatmapset, 'title', None)
-                        beatmap.artist = getattr(beatmapset, 'artist', None)
-                        beatmap.creator = getattr(beatmapset, 'creator', None)
-                        beatmap.cover_image_url = beatmapset.covers.cover_2x if hasattr(beatmapset, 'covers') else None
+                        beatmap.beatmapset_id = getattr(beatmapset, 'id', beatmap.beatmapset_id)
+                        beatmap.title = getattr(beatmapset, 'title', beatmap.title)
+                        beatmap.artist = getattr(beatmapset, 'artist', beatmap.artist)
+                        beatmap.creator = getattr(beatmapset, 'creator', beatmap.creator)
+                        beatmap.cover_image_url = getattr(
+                            getattr(beatmapset, 'covers', {}),
+                            'cover_2x',
+                            beatmap.cover_image_url
+                        )
 
-                    # Update beatmap attributes
-                    beatmap.version = beatmap_data.version
-                    beatmap.total_length = beatmap_data.total_length
-                    beatmap.bpm = beatmap_data.bpm
-                    beatmap.cs = beatmap_data.cs
-                    beatmap.drain = beatmap_data.drain
-                    beatmap.accuracy = beatmap_data.accuracy
-                    beatmap.ar = beatmap_data.ar
-                    beatmap.difficulty_rating = beatmap_data.difficulty_rating
-                    beatmap.mode = beatmap_data.mode
+                    # Update other beatmap attributes
+                    beatmap.version = getattr(beatmap_data, 'version', beatmap.version)
+                    beatmap.total_length = getattr(beatmap_data, 'total_length', beatmap.total_length)
+                    beatmap.bpm = getattr(beatmap_data, 'bpm', beatmap.bpm)
+                    beatmap.cs = getattr(beatmap_data, 'cs', beatmap.cs)
+                    beatmap.drain = getattr(beatmap_data, 'drain', beatmap.drain)
+                    beatmap.accuracy = getattr(beatmap_data, 'accuracy', beatmap.accuracy)
+                    beatmap.ar = getattr(beatmap_data, 'ar', beatmap.ar)
+                    beatmap.difficulty_rating = getattr(beatmap_data, 'difficulty_rating', beatmap.difficulty_rating)
+                    beatmap.mode = getattr(beatmap_data, 'mode', beatmap.mode)
 
+                    # Save the updated beatmap to the database
                     beatmap.save()
-                    messages.success(request, f"Beatmap {beatmap_id_request} updated.")
-                except Exception as e:
-                    messages.error(request, f"An error occurred while fetching the beatmap information: {e}")
 
-            context['beatmap'] = beatmap
+                # Add the beatmap to the context to display its information
+                context['beatmap'] = beatmap
+
+            except Exception as e:
+                context['error'] = f'{beatmap_id_request} is not a valid beatmap ID.'
+                print(context)
+                return render(request, 'beatmap_info.html', context)
 
     if 'beatmap' in context:
         beatmap = context['beatmap']
@@ -232,7 +247,8 @@ def beatmap_info(request, beatmap_id=None):
 
         context['tags_with_counts'] = tags_with_counts
 
-    return render(request, 'beatmap_info.html', {'beatmap': beatmap})
+    return render(request, 'beatmap_info.html', context)
+
 
 def beatmap_detail(request, beatmap_id):
     """
@@ -258,7 +274,7 @@ def beatmap_detail(request, beatmap_id):
 
 def get_tags(request):
     """
-    Retrieve tags for a specific beatmap.
+    Retrieve tags for a specific beatmap
     """
     beatmap_id = request.GET.get('beatmap_id')
     user = request.user
@@ -299,19 +315,44 @@ def search_tags(request):
     return JsonResponse(list(tags), safe=False)
 
 
+from better_profanity import profanity
+
+# Define a regex pattern for allowed tag characters
+ALLOWED_TAG_PATTERN = re.compile(r'^[a-z0-9 _-]{1,25}$')
+
 @login_required
 def modify_tag(request):
     """
     Apply or remove a tag for a beatmap by the current user.
     """
     if request.method == 'POST':
-        tag_name = request.POST.get('tag')
+        tag_name = request.POST.get('tag', '')
         beatmap_id = request.POST.get('beatmap_id')
         user = request.user
 
-        # Create the tag if it doesn't exist
-        tag, _ = Tag.objects.get_or_create(name=tag_name)
-        beatmap = get_object_or_404(Beatmap, beatmap_id=beatmap_id)
+        # Trim leading and trailing spaces
+        processed_tag = tag_name.strip()
+
+        # Convert to lowercase
+        processed_tag = processed_tag.lower()
+
+        # Dissalow spesific char and set max length
+        if not ALLOWED_TAG_PATTERN.match(processed_tag):
+            error_message = 'Tag must be 1-100 characters long and can only contain letters, numbers, spaces, hyphens, and underscores.'
+            return JsonResponse({'status': 'error', 'message': error_message}, status=400)
+
+        # profanity filtering
+        if profanity.contains_profanity(processed_tag):
+            error_message = 'Tag contains inappropriate language.'
+            return JsonResponse({'status': 'error', 'message': error_message}, status=400)
+
+        # create or get the tag
+        try:
+            # Create the tag if it doesn't exist
+            tag, created_tag = Tag.objects.get_or_create(name=processed_tag)
+            beatmap = get_object_or_404(Beatmap, beatmap_id=beatmap_id)
+        except Exception as e:
+            return JsonResponse({'status': 'error', 'message': 'Internal server error.'}, status=500)
 
         # Check if the tag application already exists
         tag_application, created = TagApplication.objects.get_or_create(
@@ -328,6 +369,7 @@ def modify_tag(request):
         # If created, a new tag application was made
         return JsonResponse({'status': 'success', 'action': 'applied'})
 
+    # If the request method is not POST, return an error
     return JsonResponse({'status': 'error', 'message': 'Invalid request method'}, status=400)
 
 # ------------------------------------------------------------------------------ #
@@ -367,9 +409,23 @@ def profile(request):
 
 # ----------------------------- Search Views ----------------------------- #
 
+# views.py
+
+import re
+from django.shortcuts import render
+from django.db.models import Q, Count, Prefetch, BooleanField, Case, When, Value
+from django.core.paginator import Paginator
+from nltk.stem import PorterStemmer
+
+# Initialize the Porter Stemmer
+stemmer = PorterStemmer()
+
+def stem_word(word):
+    return stemmer.stem(word)
+
 def search_results(request):
     """
-    Handle beatmap search queries and display results.
+    Handle beatmap search queries and display results focused on tag searches with pagination and sorted tags.
     """
     query = request.GET.get('query', '').strip()
     selected_mode = request.GET.get('mode', '').strip()
@@ -377,97 +433,159 @@ def search_results(request):
     # If query is empty, return an empty context or a message
     if not query:
         context = {
-            'beatmaps': Beatmap.objects.none(),  # No results if no query
+            'beatmaps': Paginator(Beatmap.objects.none(), 10).page(1),  # Empty page
             'query': query,
             'message': 'Please enter a search term.',
         }
         return render(request, 'search_results.html', context)
 
-    # Initialize the beatmaps queryset and filter by mode if selected
+    # Initialize the beatmaps queryset and filter by mode if selected (case-insensitive)
     beatmaps = Beatmap.objects.all()
     if selected_mode:
-        beatmaps = beatmaps.filter(mode=selected_mode)
+        beatmaps = beatmaps.filter(mode__iexact=selected_mode)
 
-    if query:
-        # Use regular expression to split the query into terms, treating quoted strings as single terms
-        search_terms = re.findall(r'"[^"]+"|[^"\s]+', query)
-
-        for term in search_terms:
-            if '=' in term:
-                # Handle attribute=value queries
-                attribute, value = term.split('=', 1)
-                attribute = attribute.upper().strip()
-                value = value.strip()
-
-                if attribute == 'AR':
-                    beatmaps = beatmaps.filter(Q(ar__exact=value))
-                elif attribute == 'CS':
-                    beatmaps = beatmaps.filter(Q(cs__exact=value))
-                elif attribute == 'BPM':
-                    beatmaps = beatmaps.filter(Q(bpm__exact=value))
-                elif attribute == 'OD':
-                    beatmaps = beatmaps.filter(Q(accuracy__exact=value))
-
-            elif '>' in term or '<' in term:
-                # Handle attribute>value or attribute<value queries
-                attribute, value = re.split(r'[><=]', term)
-                attribute = attribute.upper().strip()
-                value = value.strip()
-
-                if '>' in term:
-                    if term.startswith('>='):
-                        lookup = 'gte'
-                    else:
-                        lookup = 'gt'
-                elif '<' in term:
-                    if term.startswith('<='):
-                        lookup = 'lte'
-                    else:
-                        lookup = 'lt'
-
-                if attribute == 'AR':
-                    beatmaps = beatmaps.filter(**{f'ar__{lookup}': value})
-                elif attribute == 'CS':
-                    beatmaps = beatmaps.filter(**{f'cs__{lookup}': value})
-                elif attribute == 'BPM':
-                    beatmaps = beatmaps.filter(**{f'bpm__{lookup}': value})
-                elif attribute == 'OD':
-                    beatmaps = beatmaps.filter(**{f'accuracy__{lookup}': value})
-
-            elif term.startswith('-"') and term.endswith('"') or term.startswith('-'):
-                # Handle exclusion terms
-                exclude_term = term.strip('-"')
-                beatmaps = beatmaps.exclude(
-                    Q(tags__name__iexact=exclude_term) |
-                    Q(title__icontains=exclude_term) |
-                    Q(creator__icontains=exclude_term) |
-                    Q(artist__icontains=exclude_term) |
-                    Q(version__icontains=exclude_term)
+    # Prefetch TagApplications and Tags, annotate Tags with apply_count per beatmap
+    # Also annotate is_applied_by_user based on the current user
+    if request.user.is_authenticated:
+        tag_apps_prefetch = Prefetch(
+            'tagapplication_set',
+            queryset=TagApplication.objects.select_related('tag').annotate(
+                apply_count=Count('id'),
+                is_applied_by_user=Case(
+                    When(user=request.user, then=Value(True)),
+                    default=Value(False),
+                    output_field=BooleanField()
                 )
-            else:
-                # Handle inclusion terms
-                include_term = term.strip('"')
-                beatmaps = beatmaps.filter(
-                    Q(tags__name__iexact=include_term) |
-                    Q(title__icontains=include_term) |
-                    Q(creator__icontains=include_term) |
-                    Q(artist__icontains=include_term) |
-                    Q(version__icontains=include_term) |
-                    Q(total_length__icontains=include_term) |
-                    Q(drain__icontains=include_term) |
-                    Q(accuracy__icontains=include_term) |
-                    Q(difficulty_rating__icontains=include_term) |
-                    Q(mode__iexact=selected_mode)
-                )
-
-        # Annotate and order by the number of tags
-        beatmaps = beatmaps.annotate(
-            num_tags=Count('tags__tagapplication', distinct=True)
-        ).order_by('-num_tags')
+            ).order_by('-apply_count'),
+            to_attr='prefetched_tag_apps'
+        )
     else:
-        beatmaps = Beatmap.objects.none()
+        # For anonymous users, is_applied_by_user is always False
+        tag_apps_prefetch = Prefetch(
+            'tagapplication_set',
+            queryset=TagApplication.objects.select_related('tag').annotate(
+                apply_count=Count('id'),
+                is_applied_by_user=Value(False, output_field=BooleanField())
+            ).order_by('-apply_count'),
+            to_attr='prefetched_tag_apps'
+        )
 
-    return render(request, 'search_results.html', {'beatmaps': beatmaps})
+    beatmaps = beatmaps.prefetch_related(tag_apps_prefetch)
+
+    # Use regular expression to split the query into terms, treating quoted strings as single terms
+    search_terms = re.findall(r'"[^"]+"|[^"\s]+', query)
+
+    # Initialize Q objects for inclusion and exclusion
+    include_q = Q()
+    exclude_q = Q()
+
+    for term in search_terms:
+        if '=' in term:
+            # Handle attribute=value queries
+            attribute, value = term.split('=', 1)
+            attribute = attribute.upper().strip()
+            value = value.strip()
+
+            if attribute == 'AR':
+                try:
+                    ar_value = float(value)
+                    beatmaps = beatmaps.filter(ar=ar_value)
+                except ValueError:
+                    pass  # Handle invalid float conversion if necessary
+            elif attribute == 'CS':
+                try:
+                    cs_value = float(value)
+                    beatmaps = beatmaps.filter(cs=cs_value)
+                except ValueError:
+                    pass
+            elif attribute == 'BPM':
+                try:
+                    bpm_value = float(value)
+                    beatmaps = beatmaps.filter(bpm=bpm_value)
+                except ValueError:
+                    pass
+            elif attribute == 'OD':
+                try:
+                    od_value = float(value)
+                    beatmaps = beatmaps.filter(accuracy=od_value)
+                except ValueError:
+                    pass
+
+        elif any(op in term for op in ['>=', '<=', '>', '<']):
+            # Handle attribute>value or attribute<value queries
+            match = re.match(r'(AR|CS|BPM|OD)(>=|<=|>|<)(\d+(\.\d+)?)', term, re.IGNORECASE)
+            if match:
+                attribute, operator, value, _ = match.groups()
+                attribute = attribute.upper().strip()
+                lookup_map = {
+                    '>': 'gt',
+                    '<': 'lt',
+                    '>=': 'gte',
+                    '<=': 'lte',
+                }
+                lookup = lookup_map.get(operator)
+                if lookup:
+                    try:
+                        numeric_value = float(value)
+                        filter_key = f'{attribute.lower()}__{lookup}'
+                        beatmaps = beatmaps.filter(**{filter_key: numeric_value})
+                    except ValueError:
+                        pass  # Handle invalid float conversion if necessary
+
+        elif term.startswith('-"') and term.endswith('"') or term.startswith('-'):
+            # Handle exclusion terms
+            exclude_term = term.lstrip('-"').rstrip('"')
+            # Apply stemming to the exclude term
+            stem_exclude_term = stem_word(exclude_term.lower())
+            exclude_q &= Q(
+                Q(tags__name__iexact=exclude_term) |
+                Q(title__icontains=exclude_term) |
+                Q(creator__icontains=exclude_term) |
+                Q(artist__icontains=exclude_term) |
+                Q(version__icontains=exclude_term)
+            )
+        else:
+            # Handle inclusion terms
+            include_term = term.strip('"')
+            # Apply stemming to the include term
+            stem_include_term = stem_word(include_term.lower())
+            include_q &= Q(
+                Q(tags__name__iexact=include_term) |
+                Q(title__icontains=include_term) |
+                Q(creator__icontains=include_term) |
+                Q(artist__icontains=include_term) |
+                Q(version__icontains=include_term) |
+                Q(total_length__icontains=include_term) |
+                Q(drain__icontains=include_term) |
+                Q(accuracy__icontains=include_term) |
+                Q(difficulty_rating__icontains=include_term) |
+                Q(mode__iexact=selected_mode)
+            )
+
+    # Apply inclusion and exclusion filters
+    beatmaps = beatmaps.filter(include_q).exclude(exclude_q)
+
+    # Annotate and order by the number of tags
+    beatmaps = beatmaps.annotate(
+        num_tags=Count('tags__tagapplication', distinct=True)
+    ).order_by('-num_tags')
+
+    # Implement pagination
+    paginator = Paginator(beatmaps, 10)  # Show 10 beatmaps per page
+    page_number = request.GET.get('page')
+    try:
+        page_obj = paginator.get_page(page_number)
+    except:
+        page_obj = paginator.get_page(1)  # Default to page 1 if invalid
+
+    context = {
+        'beatmaps': page_obj,
+        'query': query,
+    }
+
+    return render(request, 'search_results.html', context)
+
+
 
 # ------------------------------------------------------------------------ #
 
@@ -648,10 +766,10 @@ def home(request):
     return render(request, 'home.html', context)
 
 
+
 # ------------------------------------------------------------------------ #
 
 # ----------------------------- API Views ----------------------------- #
-
 
 from rest_framework_api_key.permissions import HasAPIKey
 

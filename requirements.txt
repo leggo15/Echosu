@@ -60,6 +60,7 @@ packaging==23.2
 platformdirs==4.2.0
 PyYAML==6.0.1
 typing-utils==0.1.0
+nltk==3.8.1
 
 # Data Parsing and Validation
 jsonschema==4.21.1

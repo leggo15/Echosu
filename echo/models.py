@@ -5,6 +5,7 @@ from django.db.models.functions import Coalesce
 
 class Beatmap(models.Model):
     beatmap_id = models.CharField(max_length=255, unique=True, db_index=True)
+    beatmapset_id = models.CharField(max_length=100, blank=True, null=True)
     title = models.CharField(max_length=1000, null=False, blank=True)
     version = models.CharField(max_length=1000, null=False, blank=True)
     artist = models.CharField(max_length=1000, null=False, blank=True)
@@ -43,6 +44,11 @@ class Tag(models.Model):
     name = models.CharField(max_length=100, null=False, unique=True)
     description = models.CharField(max_length=255, unique=False, null=False, blank=True)
     beatmaps = models.ManyToManyField(Beatmap, related_name='tags', blank=True, through='TagApplication')
+
+    def save(self, *args, **kwargs):
+        self.name = self.name.strip().lower()
+        super(Tag, self).save(*args, **kwargs)
+
 
     def __str__(self):
         return self.name

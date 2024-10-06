@@ -12,6 +12,7 @@
 <body>
     {% include '_navbar.html' %}    
     <div class="container">
+        {% if beatmap %}
         <div class="beatmap-display">
             {% if beatmap.cover_image_url %}
             <div class="beatmap-cover-container">
@@ -33,7 +34,12 @@
                     <span>AR: {{ beatmap.ar }}</span>
                     <span>SR: {{ beatmap.difficulty_rating }}</span>
                 </div>
-                <a href="https://osu.ppy.sh/beatmapsets/{{ beatmap.beatmapset_id }}" class="beatmap-link">View on osu!</a>
+                {% if beatmap.beatmapset_id %}
+                    <a href="https://osu.ppy.sh/beatmapsets/{{ beatmap.beatmapset_id }}" class="beatmap-link">View on osu!</a>
+                {% else %}
+                    <span class="no-link">Beatmap set not available on osu!</span>
+                {% endif %}
+
             </div>
         </div>
 
@@ -53,6 +59,11 @@
                 </span>
             {% endfor %}
         </div>
+
+            {% if error %}
+                <p class="error">{{ error }}</p>
+            {% endif %}
+        {% endif %}
     </div>  
 </body>
 </html>

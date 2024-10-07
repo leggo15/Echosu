@@ -1,24 +1,10 @@
-FROM debian:12.5-slim
-
-WORKDIR /echosu
-
-RUN apt update
-RUN apt install -y \
-	curl \
-	python3 \
-	python3-pip
-
-# normally not a good idea, but we are in a container, so we dont need to worry about breaking anything:
-RUN rm /usr/lib/python3.11/EXTERNALLY-MANAGED
-
-# apt's cargo version is too old
-RUN curl https://sh.rustup.rs -sSf > install_rust.sh && sh install_rust.sh -y
-RUN export PATH="$PATH:/root/.cargo/bin"
+FROM python:3.12-slim AS web
 
 # pip requirements
-RUN --mount=type=bind,dst=./requirements.txt,src=./requirements.txt \
-	pip3 install -r requirements.txt
+RUN --mount=type=bind,dst=/tmp/requirements.txt,src=./requirements.txt \
+    --mount=type=cache,mode=0755,target=/root/.cache/pip \
+    pip3 install -r /tmp/requirements.txt
 
-#USER echosu
 
+WORKDIR /echosu
 ENTRYPOINT [ "python3", "./manage.py", "runserver", "0.0.0.0:8080" ]

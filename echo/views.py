@@ -462,7 +462,7 @@ def search_results(request):
         tag_apps_prefetch = Prefetch(
             'tagapplication_set',
             queryset=TagApplication.objects.select_related('tag').annotate(
-                apply_count=Count('id'),
+                apply_count=Count('user', distinct=True),
                 is_applied_by_user=Case(
                     When(user=request.user, then=Value(True)),
                     default=Value(False),
@@ -476,7 +476,7 @@ def search_results(request):
         tag_apps_prefetch = Prefetch(
             'tagapplication_set',
             queryset=TagApplication.objects.select_related('tag').annotate(
-                apply_count=Count('id'),
+                apply_count=Count('user', distinct=True),
                 is_applied_by_user=Value(False, output_field=BooleanField())
             ).order_by('-apply_count'),
             to_attr='prefetched_tag_apps'

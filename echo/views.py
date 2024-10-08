@@ -285,7 +285,7 @@ def get_tags(request):
         beatmap=beatmap
     ).values('tag__name').annotate(
         apply_count=Count('user', distinct=True)
-    ).order_by('tag__name')
+    ).order_by('-apply_count')
 
     # Fetch all TagApplication instances for the current user and this beatmap
     user_tag_names = set(TagApplication.objects.filter(

@@ -52,12 +52,16 @@
         <ul id="tag-list"></ul>
 
         <div class="applied-tags"> 
-            Genres:
+            Tags:
             {% for TagApplication in tags_with_counts %}
-                <span class="tag" data-tag-name="{{ TagApplication.name }}" data-applied-by-user="{{ TagApplication.is_applied_by_user }}">
-                    {{ TagApplication.name }} ({{ TagApplication.apply_count }})
+            {% if TagApplication.tag__name %}
+                <span class="tag" data-tag-name="{{ TagApplication.tag__name }}" data-applied-by-user="false">
+                    {{ TagApplication.tag__name }} ({{ TagApplication.apply_count }})
                 </span>
-            {% endfor %}
+            {% else %}
+                <span class="tag">(Unnamed Tag) ({{ TagApplication.apply_count }})</span>
+            {% endif %}
+        {% endfor %}
         </div>
 
             {% if error %}

@@ -311,7 +311,7 @@ def search_tags(request):
     search_query = request.GET.get('q', '')
     tags = Tag.objects.filter(name__icontains=search_query).annotate(
         beatmap_count=Count('beatmaps')
-    ).values('name', 'beatmap_count')
+    ).values('name', 'beatmap_count').order_by('-beatmap_count')
     return JsonResponse(list(tags), safe=False)
 
 

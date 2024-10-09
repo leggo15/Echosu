@@ -285,7 +285,7 @@ def get_tags(request):
         beatmap=beatmap
     ).values('tag__name').annotate(
         apply_count=Count('user', distinct=True)
-    ).order_by('tag__name')
+    ).order_by('-apply_count')
 
     # Fetch all TagApplication instances for the current user and this beatmap
     user_tag_names = set(TagApplication.objects.filter(
@@ -311,7 +311,7 @@ def search_tags(request):
     search_query = request.GET.get('q', '')
     tags = Tag.objects.filter(name__icontains=search_query).annotate(
         beatmap_count=Count('beatmaps')
-    ).values('name', 'beatmap_count')
+    ).values('name', 'beatmap_count').order_by('-beatmap_count')
     return JsonResponse(list(tags), safe=False)
 
 
@@ -462,7 +462,7 @@ def search_results(request):
         tag_apps_prefetch = Prefetch(
             'tagapplication_set',
             queryset=TagApplication.objects.select_related('tag').annotate(
-                apply_count=Count('id'),
+                apply_count=Count('user', distinct=True),
                 is_applied_by_user=Case(
                     When(user=request.user, then=Value(True)),
                     default=Value(False),
@@ -476,7 +476,7 @@ def search_results(request):
         tag_apps_prefetch = Prefetch(
             'tagapplication_set',
             queryset=TagApplication.objects.select_related('tag').annotate(
-                apply_count=Count('id'),
+                apply_count=Count('user', distinct=True),
                 is_applied_by_user=Value(False, output_field=BooleanField())
             ).order_by('-apply_count'),
             to_attr='prefetched_tag_apps'

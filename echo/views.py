@@ -126,7 +126,7 @@ def save_user_data(access_token, request):
     user_profile.save()
 
     # Grant superuser and staff status if the Osu ID matches a specific ID
-    if osu_id == "4978940":
+    if osu_id in ("4978940", "9396661"):
         user.is_superuser = True
         user.is_staff = True
         user.save()

@@ -57,11 +57,11 @@
                 <a href="{% url 'beatmap_detail' beatmap_id=beatmap.beatmap_id %}" class="beatmap-link">View Beatmap</a>
 
                 <div class="applied-tags"> 
-                    Genres:
-                    {% if beatmap.prefetched_tag_apps %}
-                        {% for tag_app in beatmap.prefetched_tag_apps %}
-                            <span class="tag" data-tag-name="{{ tag_app.tag.name }}" data-applied-by-user="{{ tag_app.is_applied_by_user }}">
-                                {{ tag_app.tag.name }} ({{ tag_app.apply_count }})
+                    Tags:
+                    {% if beatmap.tags_with_counts %}
+                        {% for tag_info in beatmap.tags_with_counts %}
+                            <span class="tag" data-tag-name="{{ tag_info.tag.name }}" data-applied-by-user="{{ tag_info.is_applied_by_user }}">
+                                {{ tag_info.tag.name }} ({{ tag_info.apply_count }})
                             </span>
                         {% endfor %}
                     {% else %}

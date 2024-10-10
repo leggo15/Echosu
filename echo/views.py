@@ -421,15 +421,14 @@ def profile(request):
 
 # ----------------------------- Search Views ----------------------------- #
 
-# views.py
-
-import re
 from django.shortcuts import render
-from django.db.models import Q, Count, Prefetch, BooleanField, Case, When, Value
+from django.db.models import Q, Count, Case, When, Value, BooleanField
+from django.db.models import Prefetch
 from django.core.paginator import Paginator
+from django.contrib.auth.models import User
+import re
 from nltk.stem import PorterStemmer
 
-# Initialize the Porter Stemmer
 stemmer = PorterStemmer()
 
 def stem_word(word):
@@ -456,123 +455,11 @@ def search_results(request):
     if selected_mode:
         beatmaps = beatmaps.filter(mode__iexact=selected_mode)
 
-    # Prefetch TagApplications and Tags, annotate Tags with apply_count per beatmap
-    # Also annotate is_applied_by_user based on the current user
-    if request.user.is_authenticated:
-        tag_apps_prefetch = Prefetch(
-            'tagapplication_set',
-            queryset=TagApplication.objects.select_related('tag').annotate(
-                apply_count=Count('user', distinct=True),
-                is_applied_by_user=Case(
-                    When(user=request.user, then=Value(True)),
-                    default=Value(False),
-                    output_field=BooleanField()
-                )
-            ).order_by('-apply_count'),
-            to_attr='prefetched_tag_apps'
-        )
-    else:
-        # For anonymous users, is_applied_by_user is always False
-        tag_apps_prefetch = Prefetch(
-            'tagapplication_set',
-            queryset=TagApplication.objects.select_related('tag').annotate(
-                apply_count=Count('user', distinct=True),
-                is_applied_by_user=Value(False, output_field=BooleanField())
-            ).order_by('-apply_count'),
-            to_attr='prefetched_tag_apps'
-        )
+    # Parse the query into search terms
+    search_terms = parse_search_terms(query)
 
-    beatmaps = beatmaps.prefetch_related(tag_apps_prefetch)
-
-    # Use regular expression to split the query into terms, treating quoted strings as single terms
-    search_terms = re.findall(r'"[^"]+"|[^"\s]+', query)
-
-    # Initialize Q objects for inclusion and exclusion
-    include_q = Q()
-    exclude_q = Q()
-
-    for term in search_terms:
-        if '=' in term:
-            # Handle attribute=value queries
-            attribute, value = term.split('=', 1)
-            attribute = attribute.upper().strip()
-            value = value.strip()
-
-            if attribute == 'AR':
-                try:
-                    ar_value = float(value)
-                    beatmaps = beatmaps.filter(ar=ar_value)
-                except ValueError:
-                    pass  # Handle invalid float conversion if necessary
-            elif attribute == 'CS':
-                try:
-                    cs_value = float(value)
-                    beatmaps = beatmaps.filter(cs=cs_value)
-                except ValueError:
-                    pass
-            elif attribute == 'BPM':
-                try:
-                    bpm_value = float(value)
-                    beatmaps = beatmaps.filter(bpm=bpm_value)
-                except ValueError:
-                    pass
-            elif attribute == 'OD':
-                try:
-                    od_value = float(value)
-                    beatmaps = beatmaps.filter(accuracy=od_value)
-                except ValueError:
-                    pass
-
-        elif any(op in term for op in ['>=', '<=', '>', '<']):
-            # Handle attribute>value or attribute<value queries
-            match = re.match(r'(AR|CS|BPM|OD)(>=|<=|>|<)(\d+(\.\d+)?)', term, re.IGNORECASE)
-            if match:
-                attribute, operator, value, _ = match.groups()
-                attribute = attribute.upper().strip()
-                lookup_map = {
-                    '>': 'gt',
-                    '<': 'lt',
-                    '>=': 'gte',
-                    '<=': 'lte',
-                }
-                lookup = lookup_map.get(operator)
-                if lookup:
-                    try:
-                        numeric_value = float(value)
-                        filter_key = f'{attribute.lower()}__{lookup}'
-                        beatmaps = beatmaps.filter(**{filter_key: numeric_value})
-                    except ValueError:
-                        pass  # Handle invalid float conversion if necessary
-
-        elif term.startswith('-"') and term.endswith('"') or term.startswith('-'):
-            # Handle exclusion terms
-            exclude_term = term.lstrip('-"').rstrip('"')
-            # Apply stemming to the exclude term
-            stem_exclude_term = stem_word(exclude_term.lower())
-            exclude_q &= Q(
-                Q(tags__name__iexact=exclude_term) |
-                Q(title__icontains=exclude_term) |
-                Q(creator__icontains=exclude_term) |
-                Q(artist__icontains=exclude_term) |
-                Q(version__icontains=exclude_term)
-            )
-        else:
-            # Handle inclusion terms
-            include_term = term.strip('"')
-            # Apply stemming to the include term
-            stem_include_term = stem_word(include_term.lower())
-            include_q &= Q(
-                Q(tags__name__iexact=include_term) |
-                Q(title__icontains=include_term) |
-                Q(creator__icontains=include_term) |
-                Q(artist__icontains=include_term) |
-                Q(version__icontains=include_term) |
-                Q(total_length__icontains=include_term) |
-                Q(drain__icontains=include_term) |
-                Q(accuracy__icontains=include_term) |
-                Q(difficulty_rating__icontains=include_term) |
-                Q(mode__iexact=selected_mode)
-            )
+    # Build inclusion and exclusion Q objects
+    include_q, exclude_q, beatmaps = build_query_conditions(beatmaps, search_terms)
 
     # Apply inclusion and exclusion filters
     beatmaps = beatmaps.filter(include_q).exclude(exclude_q)
@@ -590,12 +477,187 @@ def search_results(request):
     except:
         page_obj = paginator.get_page(1)  # Default to page 1 if invalid
 
+    # Annotate beatmaps on the current page
+    annotate_beatmaps_with_tags(page_obj.object_list, request.user)
+
     context = {
         'beatmaps': page_obj,
         'query': query,
     }
 
     return render(request, 'search_results.html', context)
+
+
+#######################################################################################
+
+from collections import defaultdict
+
+def annotate_beatmaps_with_tags(beatmaps, user):
+    beatmap_ids = beatmaps.values_list('id', flat=True)
+    # Fetch all TagApplications related to the beatmaps
+    tag_apps = TagApplication.objects.filter(beatmap_id__in=beatmap_ids).select_related('tag')
+    # Mapping from beatmap_id to a dictionary of tags and counts
+    beatmap_tag_counts = defaultdict(lambda: defaultdict(int))
+    user_applied_tags = defaultdict(set)
+
+    for tag_app in tag_apps:
+        beatmap_id = tag_app.beatmap_id
+        tag = tag_app.tag
+        beatmap_tag_counts[beatmap_id][tag] += 1
+        if user.is_authenticated and tag_app.user_id == user.id:
+            user_applied_tags[beatmap_id].add(tag)
+
+    # Attach the tags and counts to the beatmaps
+    for beatmap in beatmaps:
+        tags_with_counts = []
+        beatmap_tags = beatmap_tag_counts.get(beatmap.id, {})
+        for tag, count in beatmap_tags.items():
+            is_applied_by_user = tag in user_applied_tags.get(beatmap.id, set())
+            tags_with_counts.append({
+                'tag': tag,
+                'apply_count': count,
+                'is_applied_by_user': is_applied_by_user,
+            })
+        beatmap.tags_with_counts = sorted(tags_with_counts, key=lambda x: -x['apply_count'])
+
+    return beatmaps
+
+
+#######################################################################################
+
+def parse_search_terms(query):
+    """
+    Use regular expression to split the query into terms, treating quoted strings as single terms.
+    """
+    return re.findall(r'"[^"]+"|[^"\s]+', query)
+
+#######################################################################################
+
+def is_exclusion_term(term):
+    return term.startswith('-')
+
+#######################################################################################
+
+def build_query_conditions(beatmaps, search_terms):
+    """
+    Build inclusion and exclusion Q objects based on the search terms.
+    """
+    include_q = Q()
+    exclude_q = Q()
+
+    for term in search_terms:
+        term = term.strip()
+        # Handle attribute=value queries
+        if is_attribute_equal_query(term):
+            beatmaps = handle_attribute_equal_query(beatmaps, term)
+        elif is_attribute_comparison_query(term):
+            beatmaps = handle_attribute_comparison_query(beatmaps, term)
+        elif is_exclusion_term(term):
+            exclude_q &= build_exclusion_q(term)
+        else:
+            include_q &= build_inclusion_q(term)
+
+    return include_q, exclude_q, beatmaps
+
+#######################################################################################
+
+def is_attribute_equal_query(term):
+    return '=' in term and not any(op in term for op in ['>=', '<=', '>', '<'])
+
+#######################################################################################
+
+def is_attribute_comparison_query(term):
+    return any(op in term for op in ['>=', '<=', '>', '<'])
+
+#######################################################################################
+
+def handle_attribute_equal_query(beatmaps, term):
+    attribute, value = term.split('=', 1)
+    attribute = attribute.upper().strip()
+    value = value.strip()
+
+    # Map attribute to field name
+    field_map = {
+        'AR': 'ar',
+        'CS': 'cs',
+        'BPM': 'bpm',
+        'OD': 'accuracy',
+    }
+
+    field_name = field_map.get(attribute)
+    if field_name:
+        try:
+            numeric_value = float(value)
+            filter_key = f'{field_name}'
+            beatmaps = beatmaps.filter(**{filter_key: numeric_value})
+        except ValueError:
+            pass  # Handle invalid float conversion if necessary
+    return beatmaps
+
+#######################################################################################
+
+def handle_attribute_comparison_query(beatmaps, term):
+    # Handle attribute comparison queries
+    match = re.match(r'(AR|CS|BPM|OD)(>=|<=|>|<)(\d+(\.\d+)?)', term, re.IGNORECASE)
+    if match:
+        attribute, operator, value, _ = match.groups()
+        attribute = attribute.upper().strip()
+        lookup_map = {
+            '>': 'gt',
+            '<': 'lt',
+            '>=': 'gte',
+            '<=': 'lte',
+        }
+        lookup = lookup_map.get(operator)
+        field_map = {
+            'AR': 'ar',
+            'CS': 'cs',
+            'BPM': 'bpm',
+            'OD': 'accuracy',
+        }
+        field_name = field_map.get(attribute)
+        if lookup and field_name:
+            try:
+                numeric_value = float(value)
+                filter_key = f'{field_name}__{lookup}'
+                beatmaps = beatmaps.filter(**{filter_key: numeric_value})
+            except ValueError:
+                pass  # Handle invalid float conversion if necessary
+    return beatmaps
+
+#######################################################################################
+
+def build_exclusion_q(term):
+    # Handle exclusion terms
+    exclude_term = term.lstrip('-').strip('"').strip()
+    # Apply stemming to the exclude term
+    stem_exclude_term = stem_word(exclude_term.lower())
+    return Q(
+        Q(tags__name__iexact=exclude_term) |
+        Q(title__icontains=exclude_term) |
+        Q(creator__icontains=exclude_term) |
+        Q(artist__icontains=exclude_term) |
+        Q(version__icontains=exclude_term)
+    )
+
+#######################################################################################
+
+def build_inclusion_q(term):
+    # Handle inclusion terms
+    include_term = term.strip('"').strip()
+    # Apply stemming to the include term
+    stem_include_term = stem_word(include_term.lower())
+    return Q(
+        Q(tags__name__iexact=include_term) |
+        Q(title__icontains=include_term) |
+        Q(creator__icontains=include_term) |
+        Q(artist__icontains=include_term) |
+        Q(version__icontains=include_term) |
+        Q(total_length__icontains=include_term) |
+        Q(drain__icontains=include_term) |
+        Q(accuracy__icontains=include_term) |
+        Q(difficulty_rating__icontains=include_term)
+    )
 
 
 

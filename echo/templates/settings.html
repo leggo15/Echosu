@@ -362,53 +362,18 @@
                 </ul>
             {% endif %}
 
-            {% if full_key %}
-                <div class="api-key-notice">
-                    <p><strong>New API Key:</strong> <span class="api-key">{{ full_key }}</span></p>
-                    <p class="important-note">Make sure to copy your API key now. You won't be able to see it again.</p>
-                </div>
-            {% endif %}
+            <!-- API Token Section -->
+            <div class="api-token-section">
+                <h2>Your API Token</h2>
+                <p>Use this token to authenticate your API requests:</p>
+                <pre>{{ token }}</pre>
+                <p><strong>Keep this token secure and do not share it with others.</strong></p>
 
-            <!-- API Keys Section -->
-            <div class="api-keys-section">
-                <!-- Collapsible Header -->
-                <button class="collapsible-header" aria-expanded="false" aria-controls="api-keys-content">
-                    API Keys
-                    <span class="arrow">&#9660;</span> <!-- Down arrow -->
-                </button>
-
-                <!-- Collapsible Content -->
-                <div class="collapsible-content" id="api-keys-content" aria-hidden="true">
-                    <br>
-                    <!-- Form to generate a new API key -->
-                    <form method="POST" class="api-key-form">
-                        {% csrf_token %}
-                        <button type="submit" name="generate_key" class="btn">Generate New API Key</button>
-                    </form>
-                    {% if api_keys %}
-                        {% for api_key in api_keys %}
-                            <div class="api-key-container">
-                                <div class="api-key-details">
-                                    <h3>
-                                        <span class="api-key-name" data-api-key-id="{{ api_key.id }}">
-                                            {{ api_key.key_name|default:"API Key" }}
-                                        </span>
-                                    </h3>
-                                    <p><strong>Prefix:</strong> {{ api_key.prefix }}</p>
-                                    <p><strong>Creation Date:</strong> {{ api_key.created }}</p>
-                                </div>
-                                <div class="api-key-actions">
-                                    <!-- Delete Button -->
-                                    <button type="button" class="delete-button" data-api-key-id="{{ api_key.id }}" data-api-key-name="{{ api_key.key_name|default:"API Key" }}">
-                                        Delete
-                                    </button>
-                                </div>
-                            </div>
-                        {% endfor %}
-                    {% else %}
-                        <p>You do not have any API keys yet.</p>
-                    {% endif %}
-                </div>
+                <!-- Button to regenerate the token -->
+                <form method="post" onsubmit="return confirm('Are you sure you want to regenerate your API token? This will invalidate the current token.')">
+                    {% csrf_token %}
+                    <button type="submit" name="regenerate_token" class="btn">Regenerate Token</button>
+                </form>
             </div>
 
             <!-- Data Deletion Section -->

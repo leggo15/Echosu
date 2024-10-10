@@ -13,9 +13,11 @@ class TagSerializer(serializers.ModelSerializer):
         fields = ['id', 'name']
 
 class BeatmapSerializer(serializers.ModelSerializer):
+    tags = TagSerializer(many=True, read_only=True)
+
     class Meta:
         model = Beatmap
-        fields = ['id', 'beatmap_id', 'title', 'artist']
+        fields = ['id', 'beatmap_id', 'title', 'artist', 'tags']
 
 class TagApplicationSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)

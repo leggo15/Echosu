@@ -78,7 +78,7 @@ $(document).ready(function() {
             url: '/echo/get_tags/',
             data: { 'beatmap_id': beatmapId },
             success: function(tags) {
-                $('.applied-tags').empty().append('Genres: ');
+                $('.applied-tags').empty().append('Tags: ');
                 tags.forEach(function(tag) {
                     var tagClass = tag.is_applied_by_user === 'true' ? 'tag-applied' : 'tag-unapplied';
                     $('.applied-tags').append(`<span class="tag ${tagClass}" data-tag-name="${tag.name}" data-applied-by-user="${tag.is_applied_by_user}">${tag.name} (${tag.apply_count})</span>`);

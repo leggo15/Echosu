@@ -25,11 +25,9 @@ from django.shortcuts import get_object_or_404, redirect, render  # Used in mult
 from rest_framework import viewsets  # Used in API viewsets
 from rest_framework.decorators import action, api_view, permission_classes  # Used in API views
 from rest_framework.response import Response  # Used in API views
-from rest_framework_api_key.models import APIKey  # Used in settings view
-from rest_framework_api_key.permissions import HasAPIKey  # Used in API views
 
 # Local application imports
-from .models import Beatmap, Tag, TagApplication, UserProfile, CustomAPIKey  # Used in multiple views
+from .models import Beatmap, Tag, TagApplication, UserProfile  # Used in multiple views
 from .serializers import (
     BeatmapSerializer, TagSerializer,
     TagApplicationSerializer, UserProfileSerializer
@@ -107,6 +105,8 @@ def get_user_data_from_api(access_token):
         response.raise_for_status()
 
 
+from rest_framework.authtoken.models import Token
+
 def save_user_data(access_token, request):
     """
     Save user data retrieved from osu API and authenticate the user.
@@ -138,6 +138,27 @@ def save_user_data(access_token, request):
     # Store osu_id in session for future use
     request.session['osu_id'] = osu_id
 
+    # Generate or retrieve the token for the user
+    token, _ = Token.objects.get_or_create(user=user)
+    # Optionally, you can store the token key in the session or display it to the user
+
+    # views.py
+
+from django.contrib.auth.decorators import login_required
+from django.shortcuts import render
+from rest_framework.authtoken.models import Token
+
+@login_required
+def api_token(request):
+    user = request.user
+    token, _ = Token.objects.get_or_create(user=user)
+    context = {
+        'token': token.key,
+    }
+    return render(request, 'api_token.html', context)
+
+
+
 # ------------------------------------------------------------------------------- #
 
 # ----------------------------- Home and Admin Views ----------------------------- #
@@ -153,102 +174,7 @@ def admin(request):
 
 # ------------------------------------------------------------------------ #
 
-# ----------------------------- Beatmap Views ----------------------------- #
-
-
-def beatmap_info(request, beatmap_id=None):
-    """
-    View to display beatmap information and handle beatmap searches.
-    """
-    context = {}
-    
-    # If a beatmap_id is provided in the URL, fetch it from the database
-    if beatmap_id:
-        beatmap = get_object_or_404(Beatmap, pk=beatmap_id)
-        context['beatmap'] = beatmap
-
-    if request.method == 'POST':
-        beatmap_id_request = request.POST.get('beatmap_id')
-        if beatmap_id_request:
-            try:
-                # Attempt to fetch beatmap data from the osu! API
-                beatmap_data = api.beatmap(beatmap_id_request)
-                
-                if not beatmap_data:
-                    # If no data is returned, the beatmap ID is invalid
-                    raise ValueError(f"{beatmap_id_request} isn't a valid beatmap ID.")
-
-                # Get or create the beatmap object in the database
-                beatmap, created = Beatmap.objects.get_or_create(beatmap_id=beatmap_id_request)
-
-                # Check if beatmap data needs to be fetched from API
-                if created or any(
-                    attr is None for attr in [
-                        beatmap.title, beatmap.version, beatmap.artist, beatmap.creator,
-                        beatmap.cover_image_url, beatmap.total_length, beatmap.bpm,
-                        beatmap.cs, beatmap.drain, beatmap.accuracy, beatmap.ar,
-                        beatmap.difficulty_rating, beatmap.mode, beatmap.beatmapset_id
-                    ]
-                ):
-                    # Update beatmap attributes from the API data
-                    if hasattr(beatmap_data, '_beatmapset'):
-                        beatmapset = beatmap_data._beatmapset
-                        beatmap.beatmapset_id = getattr(beatmapset, 'id', beatmap.beatmapset_id)
-                        beatmap.title = getattr(beatmapset, 'title', beatmap.title)
-                        beatmap.artist = getattr(beatmapset, 'artist', beatmap.artist)
-                        beatmap.creator = getattr(beatmapset, 'creator', beatmap.creator)
-                        beatmap.cover_image_url = getattr(
-                            getattr(beatmapset, 'covers', {}),
-                            'cover_2x',
-                            beatmap.cover_image_url
-                        )
-
-                    # Update other beatmap attributes
-                    beatmap.version = getattr(beatmap_data, 'version', beatmap.version)
-                    beatmap.total_length = getattr(beatmap_data, 'total_length', beatmap.total_length)
-                    beatmap.bpm = getattr(beatmap_data, 'bpm', beatmap.bpm)
-                    beatmap.cs = getattr(beatmap_data, 'cs', beatmap.cs)
-                    beatmap.drain = getattr(beatmap_data, 'drain', beatmap.drain)
-                    beatmap.accuracy = getattr(beatmap_data, 'accuracy', beatmap.accuracy)
-                    beatmap.ar = getattr(beatmap_data, 'ar', beatmap.ar)
-                    beatmap.difficulty_rating = getattr(beatmap_data, 'difficulty_rating', beatmap.difficulty_rating)
-                    beatmap.mode = getattr(beatmap_data, 'mode', beatmap.mode)
-
-                    # Save the updated beatmap to the database
-                    beatmap.save()
-
-                # Add the beatmap to the context to display its information
-                context['beatmap'] = beatmap
-
-            except Exception as e:
-                context['error'] = f'{beatmap_id_request} is not a valid beatmap ID.'
-                print(context)
-                return render(request, 'beatmap_info.html', context)
-
-    if 'beatmap' in context:
-        beatmap = context['beatmap']
-
-        # Query for user's tags for this beatmap
-        user_tag_applications = TagApplication.objects.filter(
-            beatmap=beatmap, user=request.user
-        )
-        user_tags = [tag_app.tag for tag_app in user_tag_applications]
-
-        # Prepare tags with counts and is_applied_by_user flag
-        tags_with_counts = []
-        for tag in beatmap.tags.all():
-            tag_count = TagApplication.objects.filter(tag=tag).count()
-            is_applied_by_user = tag in user_tags
-            tags_with_counts.append({
-                'name': tag.name,
-                'apply_count': tag_count,
-                'is_applied_by_user': is_applied_by_user
-            })
-
-        context['tags_with_counts'] = tags_with_counts
-
-    return render(request, 'beatmap_info.html', context)
-
+# ----------------------------- Beatmap Detail Views ----------------------------- #
 
 def beatmap_detail(request, beatmap_id):
     """
@@ -459,10 +385,7 @@ def search_results(request):
     search_terms = parse_search_terms(query)
 
     # Build inclusion and exclusion Q objects
-    include_q, exclude_q, beatmaps = build_query_conditions(beatmaps, search_terms)
-
-    # Apply inclusion and exclusion filters
-    beatmaps = beatmaps.filter(include_q).exclude(exclude_q)
+    beatmaps = build_query_conditions(beatmaps, search_terms)
 
     # Annotate and order by the number of tags
     beatmaps = beatmaps.annotate(
@@ -544,6 +467,8 @@ def build_query_conditions(beatmaps, search_terms):
     """
     include_q = Q()
     exclude_q = Q()
+    include_tag_terms = []
+    exclude_tag_terms = []
 
     for term in search_terms:
         term = term.strip()
@@ -553,11 +478,41 @@ def build_query_conditions(beatmaps, search_terms):
         elif is_attribute_comparison_query(term):
             beatmaps = handle_attribute_comparison_query(beatmaps, term)
         elif is_exclusion_term(term):
-            exclude_q &= build_exclusion_q(term)
+            exclude_term = term.lstrip('-').strip('"').strip()
+            exclude_term_lower = exclude_term.lower()
+            if Tag.objects.filter(name__iexact=exclude_term).exists():
+                exclude_tag_terms.append(exclude_term_lower)
+            else:
+                exclude_q |= build_exclusion_q(exclude_term)
         else:
-            include_q &= build_inclusion_q(term)
+            include_term = term.strip('"').strip()
+            include_term_lower = include_term.lower()
+            if Tag.objects.filter(name__iexact=include_term).exists():
+                include_tag_terms.append(include_term_lower)
+            else:
+                include_q &= build_inclusion_q(include_term)
 
-    return include_q, exclude_q, beatmaps
+    # Apply inclusion and exclusion filters
+    if include_q:
+        beatmaps = beatmaps.filter(include_q)
+    if exclude_q:
+        beatmaps = beatmaps.exclude(exclude_q)
+
+    # Apply tag inclusion filters
+    if include_tag_terms:
+        for tag_name in include_tag_terms:
+            beatmaps = beatmaps.filter(tags__name__iexact=tag_name)
+
+    # Apply tag exclusion filters
+    if exclude_tag_terms:
+        exclude_tags_q = Q()
+        for tag_name in exclude_tag_terms:
+            exclude_tags_q |= Q(tags__name__iexact=tag_name)
+        beatmaps = beatmaps.exclude(exclude_tags_q)
+
+    return beatmaps
+
+
 
 #######################################################################################
 
@@ -667,70 +622,32 @@ def build_inclusion_q(term):
 
 @login_required
 def settings(request):
-    """User settings view for managing API keys."""
-    # Fetch all API keys associated with the current user
-    api_keys = CustomAPIKey.objects.filter(user=request.user)
+    user = request.user
 
-    full_key = None
+    # Retrieve or create the token for the user
+    token, _ = Token.objects.get_or_create(user=user)
 
-    if request.method == "POST":
-        if 'generate_key' in request.POST:
-            try:
-                # Generate a new API key
-                print(f'{request.user.username}')  # This does print the username so it isn't empty
-                api_key, key = CustomAPIKey.objects.create_key(name=request.user.username, user=request.user)
-                full_key = key  # Store the full key to display it once
-                messages.success(request, 'API Key generated successfully.')
-            except IntegrityError:
-                messages.error(request, 'Failed to generate API Key. Please try again.')
-        elif 'key_name' in request.POST:
-            # Handle renaming of API key
-            api_key_id = request.POST.get('api_key_id')
-            new_name = request.POST.get('key_name', '').strip()
-            if not api_key_id:
-                messages.error(request, 'API Key ID is missing.')
-            elif not new_name:
-                messages.error(request, 'API Key name cannot be empty.')
-            else:
-                try:
-                    api_key = CustomAPIKey.objects.get(id=api_key_id, user=request.user)
-                    api_key.key_name = new_name
-                    api_key.save()
-                    messages.success(request, 'API Key name updated successfully.')
-                except CustomAPIKey.DoesNotExist:
-                    messages.error(request, 'API Key not found.')
-                except IntegrityError:
-                    messages.error(request, 'Failed to update API Key name. Please try again.')
-            return redirect('settings')  # Redirect to prevent form resubmission
-        elif 'delete_key' in request.POST:
-            # Handle deletion of API key
-            api_key_id = request.POST.get('api_key_id')
-            if not api_key_id:
-                messages.error(request, 'API Key ID is missing.')
-            else:
-                try:
-                    api_key = CustomAPIKey.objects.get(id=api_key_id, user=request.user)
-                    api_key.delete()
-                    messages.success(request, 'API Key deleted successfully.')
-                except CustomAPIKey.DoesNotExist:
-                    messages.error(request, 'API Key not found.')
-                except IntegrityError:
-                    messages.error(request, 'Failed to delete API Key. Please try again.')
-            return redirect('settings')  # Redirect to prevent form resubmission
+    # Handle POST requests for regenerating the token
+    if request.method == 'POST':
+        if 'regenerate_token' in request.POST:
+            # Delete the old token and create a new one
+            token.delete()
+            token = Token.objects.create(user=user)
+            messages.success(request, 'Your API token has been regenerated.')
 
-    return render(request, 'settings.html', {
-        'api_keys': api_keys,
-        'full_key': full_key,
-    })
+    context = {
+        'token': token.key,
+        # Include any other context variables you need
+        # For example, API keys, messages, etc.
+    }
 
+    return render(request, 'settings.html', context)
 
 from django.shortcuts import render, redirect
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.db import transaction
 
-# Import your models
-# from .models import TagApplication, APIKey, UserProfile, etc.
 
 @login_required
 def confirm_data_deletion(request):
@@ -825,7 +742,6 @@ def get_recommendations(user=None):
     return recommended_maps
 
 
-
 def home(request):
     user = request.user if request.user.is_authenticated else None
 
@@ -837,7 +753,94 @@ def home(request):
         'tags': tags,
         'recommended_maps': recommended_maps,
     }
+
+    # Handle beatmap info form submission (POST request)
+    if request.method == 'POST':
+        beatmap_id_request = request.POST.get('beatmap_id')
+        if beatmap_id_request:
+            try:
+                # Attempt to fetch beatmap data from the osu! API
+                beatmap_data = api.beatmap(beatmap_id_request)
+                
+                if not beatmap_data:
+                    # If no data is returned, the beatmap ID is invalid
+                    raise ValueError(f"{beatmap_id_request} isn't a valid beatmap ID.")
+
+                # Get or create the beatmap object in the database
+                beatmap, created = Beatmap.objects.get_or_create(beatmap_id=beatmap_id_request)
+
+                # Check if beatmap data needs to be updated
+                if created or any(
+                    attr is None for attr in [
+                        beatmap.title, beatmap.version, beatmap.artist, beatmap.creator,
+                        beatmap.cover_image_url, beatmap.total_length, beatmap.bpm,
+                        beatmap.cs, beatmap.drain, beatmap.accuracy, beatmap.ar,
+                        beatmap.difficulty_rating, beatmap.mode, beatmap.beatmapset_id
+                    ]
+                ):
+                    # Update beatmap attributes from the API data
+                    if hasattr(beatmap_data, '_beatmapset'):
+                        beatmapset = beatmap_data._beatmapset
+                        beatmap.beatmapset_id = getattr(beatmapset, 'id', beatmap.beatmapset_id)
+                        beatmap.title = getattr(beatmapset, 'title', beatmap.title)
+                        beatmap.artist = getattr(beatmapset, 'artist', beatmap.artist)
+                        beatmap.creator = getattr(beatmapset, 'creator', beatmap.creator)
+                        beatmap.cover_image_url = getattr(
+                            getattr(beatmapset, 'covers', {}),
+                            'cover_2x',
+                            beatmap.cover_image_url
+                        )
+
+                    # Update other beatmap attributes
+                    beatmap.version = getattr(beatmap_data, 'version', beatmap.version)
+                    beatmap.total_length = getattr(beatmap_data, 'total_length', beatmap.total_length)
+                    beatmap.bpm = getattr(beatmap_data, 'bpm', beatmap.bpm)
+                    beatmap.cs = getattr(beatmap_data, 'cs', beatmap.cs)
+                    beatmap.drain = getattr(beatmap_data, 'drain', beatmap.drain)
+                    beatmap.accuracy = getattr(beatmap_data, 'accuracy', beatmap.accuracy)
+                    beatmap.ar = getattr(beatmap_data, 'ar', beatmap.ar)
+                    beatmap.difficulty_rating = getattr(beatmap_data, 'difficulty_rating', beatmap.difficulty_rating)
+                    beatmap.mode = getattr(beatmap_data, 'mode', beatmap.mode)
+
+                    # Save the updated beatmap to the database
+                    beatmap.save()
+
+                # Add the beatmap to the context to display its information
+                context['beatmap'] = beatmap
+
+            except Exception as e:
+                context['error'] = f'{beatmap_id_request} is not a valid beatmap ID.'
+    else:
+        beatmap_id = request.GET.get('beatmap_id')
+        if beatmap_id:
+            beatmap = get_object_or_404(Beatmap, beatmap_id=beatmap_id)
+            context['beatmap'] = beatmap
+
+    # If a beatmap is in context, prepare tags
+    if 'beatmap' in context:
+        beatmap = context['beatmap']
+
+        # Query for user's tags for this beatmap
+        user_tag_applications = TagApplication.objects.filter(
+            beatmap=beatmap, user=request.user
+        )
+        user_tags = [tag_app.tag for tag_app in user_tag_applications]
+
+        # Prepare tags with counts and is_applied_by_user flag
+        beatmap_tags_with_counts = []
+        for tag in beatmap.tags.all():
+            tag_count = TagApplication.objects.filter(tag=tag, beatmap=beatmap).count()
+            is_applied_by_user = tag in user_tags
+            beatmap_tags_with_counts.append({
+                'name': tag.name,
+                'apply_count': tag_count,
+                'is_applied_by_user': is_applied_by_user
+            })
+
+        context['beatmap_tags_with_counts'] = beatmap_tags_with_counts
+
     return render(request, 'home.html', context)
+
 
 
 
@@ -845,10 +848,18 @@ def home(request):
 
 # ----------------------------- API Views ----------------------------- #
 
-from rest_framework_api_key.permissions import HasAPIKey
+from rest_framework import viewsets
+from rest_framework.decorators import api_view, authentication_classes, permission_classes, action
+from rest_framework.authentication import TokenAuthentication
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from django.db.models import Count
+from .models import Beatmap, Tag, TagApplication, UserProfile
+from .serializers import BeatmapSerializer, TagSerializer, TagApplicationSerializer, UserProfileSerializer
 
 @api_view(['GET'])
-@permission_classes([HasAPIKey])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
 def tags_for_beatmaps(request, beatmap_id=None):
     if beatmap_id:
         beatmaps = Beatmap.objects.filter(beatmap_id=beatmap_id)
@@ -883,19 +894,15 @@ def tags_for_beatmaps(request, beatmap_id=None):
 
 # ----------------------------- API ViewSets ----------------------------- #
 
+
 class BeatmapViewSet(viewsets.ReadOnlyModelViewSet):
-    """
-    API endpoint for Beatmap model.
-    """
     queryset = Beatmap.objects.all()
     serializer_class = BeatmapSerializer
-    permission_classes = [HasAPIKey]  # Require only API key
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [IsAuthenticated]
 
     @action(detail=False, methods=['get'])
     def filtered(self, request):
-        """
-        Custom action to filter beatmaps by title.
-        """
         query = request.GET.get('query', '')
         beatmaps = Beatmap.objects.filter(title__icontains=query)
         serializer = self.get_serializer(beatmaps, many=True)
@@ -903,29 +910,23 @@ class BeatmapViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 class TagViewSet(viewsets.ReadOnlyModelViewSet):
-    """
-    API endpoint for Tag model.
-    """
     queryset = Tag.objects.all()
     serializer_class = TagSerializer
-    permission_classes = [HasAPIKey]  # Require only API key
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [IsAuthenticated]
 
 
 class TagApplicationViewSet(viewsets.ReadOnlyModelViewSet):
-    """
-    API endpoint for TagApplication model.
-    """
     queryset = TagApplication.objects.all()
     serializer_class = TagApplicationSerializer
-    permission_classes = [HasAPIKey]  # Require only API key
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [IsAuthenticated]
 
 
 class UserProfileViewSet(viewsets.ReadOnlyModelViewSet):
-    """
-    API endpoint for UserProfile model.
-    """
     queryset = UserProfile.objects.all()
     serializer_class = UserProfileSerializer
-    permission_classes = [HasAPIKey]  # Require only API key
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [IsAuthenticated]
 
 # ------------------------------------------------------------------------ #

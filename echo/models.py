@@ -1,7 +1,6 @@
 from django.db import models
 from django.conf import settings
-from django.db.models import Count, F, FloatField
-from django.db.models.functions import Coalesce
+from django.db.models import Count
 
 class Beatmap(models.Model):
     beatmap_id = models.CharField(max_length=255, unique=True, db_index=True)
@@ -75,14 +74,3 @@ class TagApplication(models.Model):
         return f"{self.user.username} applied tag '{self.tag.name}' on {self.beatmap.beatmap_id}"
 
 
-from django.db import models
-from rest_framework_api_key.models import AbstractAPIKey
-from django.contrib.auth.models import User
-
-class CustomAPIKey(AbstractAPIKey):
-    key_name = models.CharField(max_length=255, blank=True, null=True)
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='api_keys')
-
-    class Meta(AbstractAPIKey.Meta):
-        verbose_name = "API Key"
-        verbose_name_plural = "API Keys"

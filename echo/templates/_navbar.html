@@ -5,7 +5,6 @@
     <div class="nav-links">
         <a href="{% url 'home' %}">Home</a>
         <a href="{% url 'search_results' %}">Search</a>
-        <a href="{% url 'beatmap_info' %}">Find map</a>
         {% if user.is_superuser %}
             <a href="{% url 'admin:index' %}">Admin Dashboard</a>
         {% endif %}

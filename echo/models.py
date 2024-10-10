@@ -74,3 +74,43 @@ class TagApplication(models.Model):
         return f"{self.user.username} applied tag '{self.tag.name}' on {self.beatmap.beatmap_id}"
 
 
+################ API ##################
+
+from django.contrib.auth.models import User
+from django.utils.crypto import get_random_string
+import hashlib
+
+class CustomToken(models.Model):
+    key = models.CharField(max_length=128, primary_key=True)
+    user = models.ForeignKey(User, related_name='auth_tokens', on_delete=models.CASCADE)
+    created = models.DateTimeField(auto_now_add=True)
+
+    @classmethod
+    def generate_key(cls):
+        random_key = get_random_string(64)
+        print(f"generate_key output: {random_key}")
+        return random_key
+
+
+    @classmethod
+    def create_token(cls, user):
+        raw_key = cls.generate_key()
+        hashed_key = hashlib.sha256(raw_key.encode()).hexdigest()
+
+        # Debugging statements
+        print(f"Generated raw_key: {raw_key}")
+        print(f"Generated hashed_key: {hashed_key}")
+
+        token = cls(key=hashed_key, user=user)
+        token.save()
+        return token, raw_key
+
+
+class APIRequestLog(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    timestamp = models.DateTimeField(auto_now_add=True)
+    method = models.CharField(max_length=10)
+    path = models.CharField(max_length=255)
+
+    def __str__(self):
+        return f"{self.user.username} - {self.method} {self.path} at {self.timestamp}"

@@ -622,26 +622,16 @@ def build_inclusion_q(term):
 
 @login_required
 def settings(request):
-    user = request.user
+    if request.method == 'POST' and 'generate_token' in request.POST:
+        CustomToken.objects.filter(user=request.user).delete()
+        token, raw_key = CustomToken.create_token(request.user)
+        print(f"raw_key passed to template from view: {raw_key}")
+        return render(request, 'settings.html', {'full_key': raw_key, 'user': request.user})
+    else:
+        return render(request, 'settings.html', {'user': request.user})
 
-    # Retrieve or create the token for the user
-    token, _ = Token.objects.get_or_create(user=user)
 
-    # Handle POST requests for regenerating the token
-    if request.method == 'POST':
-        if 'regenerate_token' in request.POST:
-            # Delete the old token and create a new one
-            token.delete()
-            token = Token.objects.create(user=user)
-            messages.success(request, 'Your API token has been regenerated.')
 
-    context = {
-        'token': token.key,
-        # Include any other context variables you need
-        # For example, API keys, messages, etc.
-    }
-
-    return render(request, 'settings.html', context)
 
 from django.shortcuts import render, redirect
 from django.contrib.auth.decorators import login_required
@@ -850,15 +840,15 @@ def home(request):
 
 from rest_framework import viewsets
 from rest_framework.decorators import api_view, authentication_classes, permission_classes, action
-from rest_framework.authentication import TokenAuthentication
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django.db.models import Count
 from .models import Beatmap, Tag, TagApplication, UserProfile
 from .serializers import BeatmapSerializer, TagSerializer, TagApplicationSerializer, UserProfileSerializer
+from echo.authentication import CustomTokenAuthentication
 
 @api_view(['GET'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([CustomTokenAuthentication])
 @permission_classes([IsAuthenticated])
 def tags_for_beatmaps(request, beatmap_id=None):
     if beatmap_id:
@@ -890,6 +880,22 @@ def tags_for_beatmaps(request, beatmap_id=None):
     return Response(result)
 
 
+from .models import CustomToken
+
+@login_required
+def generate_token(request):
+    if request.method == 'POST':
+        # Delete existing tokens
+        CustomToken.objects.filter(user=request.user).delete()
+        # Create new token
+        token = CustomToken.objects.create(user=request.user)
+        # Store the token key temporarily to display to the user
+        token_key = token.key
+        messages.success(request, 'Your API token has been generated.')
+        return render(request, 'settings.html', {'token_key': token_key})
+    else:
+        return redirect('settings')
+
 # ------------------------------------------------------------------------ #
 
 # ----------------------------- API ViewSets ----------------------------- #
@@ -898,7 +904,7 @@ def tags_for_beatmaps(request, beatmap_id=None):
 class BeatmapViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Beatmap.objects.all()
     serializer_class = BeatmapSerializer
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [CustomTokenAuthentication]
     permission_classes = [IsAuthenticated]
 
     @action(detail=False, methods=['get'])
@@ -912,21 +918,21 @@ class BeatmapViewSet(viewsets.ReadOnlyModelViewSet):
 class TagViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Tag.objects.all()
     serializer_class = TagSerializer
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [CustomTokenAuthentication]
     permission_classes = [IsAuthenticated]
 
 
 class TagApplicationViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = TagApplication.objects.all()
     serializer_class = TagApplicationSerializer
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [CustomTokenAuthentication]
     permission_classes = [IsAuthenticated]
 
 
 class UserProfileViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = UserProfile.objects.all()
     serializer_class = UserProfileSerializer
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [CustomTokenAuthentication]
     permission_classes = [IsAuthenticated]
 
 # ------------------------------------------------------------------------ #

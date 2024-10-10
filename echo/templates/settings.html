@@ -362,18 +362,36 @@
                 </ul>
             {% endif %}
 
-            <!-- API Token Section -->
-            <div class="api-token-section">
-                <h2>Your API Token</h2>
-                <p>Use this token to authenticate your API requests:</p>
-                <pre>{{ token }}</pre>
-                <p><strong>Keep this token secure and do not share it with others.</strong></p>
+            {% if full_key %}
+                <div class="api-key-notice">
+                    <p><strong>New API Key:</strong> <span class="api-key">{{ full_key }}</span></p>
+                    <p class="important-note">Make sure to copy your API key now. You won't be able to see it again.</p>
+                </div>
+            {% endif %}
 
-                <!-- Button to regenerate the token -->
-                <form method="post" onsubmit="return confirm('Are you sure you want to regenerate your API token? This will invalidate the current token.')">
-                    {% csrf_token %}
-                    <button type="submit" name="regenerate_token" class="btn">Regenerate Token</button>
-                </form>
+            <!-- API Keys Section -->
+            <div class="api-keys-section">
+                <!-- Collapsible Header -->
+                <button class="collapsible-header" aria-expanded="false" aria-controls="api-keys-content">
+                    Your API Token
+                    <span class="arrow">&#9660;</span> <!-- Down arrow -->
+                </button>
+
+                <!-- Collapsible Content -->
+                <div class="collapsible-content" id="api-keys-content" aria-hidden="true">
+                    <!-- API Token Section -->
+                    <div class="api-token-section">
+                        <p>Use this token to authenticate your API requests:</p>
+                        <pre>{{ token }}</pre>
+                        <p><strong>Keep this token secure and do not share it with others.</strong></p>
+
+                        <!-- Button to regenerate the token -->
+                        <form method="post" onsubmit="return confirm('Are you sure you want to regenerate your API token? This will invalidate the current token.')">
+                            {% csrf_token %}
+                            <button type="submit" name="regenerate_token" class="btn">Regenerate Token</button>
+                        </form>
+                    </div>
+                </div>
             </div>
 
             <!-- Data Deletion Section -->

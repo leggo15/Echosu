@@ -14,9 +14,12 @@ load_dotenv(dotenv_path)
 SECRET_KEY = os.getenv('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv("DEBUG") == "True"
 
-ALLOWED_HOSTS = ['127.0.0.1', 'echosu.com', 'www.echosu.com']
+DEBUG_PORT = 8080
+BASE_URL = f"127.0.0.1" if DEBUG else "echosu.com"
+
+ALLOWED_HOSTS = [BASE_URL, f"www.{BASE_URL}"]
 
 
 # Application definition
@@ -116,10 +119,6 @@ USE_I18N = True
 USE_TZ = True
 
 
-# Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/5.0/howto/static-files/
-
-STATIC_URL = '/static/'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
@@ -130,27 +129,24 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # Osu API Credentials
 SOCIAL_AUTH_OSU_KEY = os.getenv('SOCIAL_AUTH_OSU_KEY')
 SOCIAL_AUTH_OSU_SECRET = os.getenv('SOCIAL_AUTH_OSU_SECRET')
-SOCIAL_AUTH_OSU_REDIRECT_URI = 'http://www.echosu.com/callback'
+SOCIAL_AUTH_OSU_REDIRECT_URI = f"http://{BASE_URL}:{DEBUG_PORT}/callback" if DEBUG \
+        else f"https://www.{BASE_URL}/callback"
 
 
-# AWS Credentials
-AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID')
-AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
+if not DEBUG:
+    # AWS Credentials
+    AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID')
+    AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
 
-# AWS S3 Configuration
-AWS_STORAGE_BUCKET_NAME = 'echosu-s3'
-AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com'
-AWS_s3_FILE_OVERWRITE = False
+# Static files (CSS, JavaScript, Images)
+# https://docs.djangoproject.com/en/5.0/howto/static-files/
 
-STORAGES = {
-    "default": {
-        "BACKEND": "storages.backends.s3boto3.S3Boto3Storage"
-    },
-    "staticfiles": {
-        "BACKEND": "storages.backends.s3boto3.S3Boto3Storage"
-    },
-}
+STATIC_URL = '/static/'
+#STATICFILES_DIRS = [os.path.join(BASE_DIR, "static")]
+#STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
 
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 # Authentication
 LOGIN_URL = 'login'

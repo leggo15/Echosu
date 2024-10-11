@@ -14,9 +14,9 @@ load_dotenv(dotenv_path)
 SECRET_KEY = os.getenv('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = False
+DEBUG = True
 
-ALLOWED_HOSTS = ['18.232.71.193']
+ALLOWED_HOSTS = ['127.0.0.1', 'echosu.com', 'www.echosu.com']
 
 
 # Application definition
@@ -31,7 +31,8 @@ INSTALLED_APPS = [
     'echo',
     'storages',
     'rest_framework',
-    'rest_framework_api_key',
+    'rest_framework.authtoken',
+    
 ]
 
 MIDDLEWARE = [
@@ -42,6 +43,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'echo.middleware.APILoggingMiddleware',
 ]
 
 AUTHENTICATION_BACKENDS = [
@@ -128,7 +130,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # Osu API Credentials
 SOCIAL_AUTH_OSU_KEY = os.getenv('SOCIAL_AUTH_OSU_KEY')
 SOCIAL_AUTH_OSU_SECRET = os.getenv('SOCIAL_AUTH_OSU_SECRET')
-SOCIAL_AUTH_OSU_REDIRECT_URI = 'http://18.232.71.193/callback'
+SOCIAL_AUTH_OSU_REDIRECT_URI = 'http://www.echosu.com/callback'
 
 
 # AWS Credentials
@@ -160,6 +162,7 @@ LOGIN_REDIRECT_URL = '/'
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
+        'echo.authentication.CustomTokenAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
@@ -168,7 +171,3 @@ REST_FRAMEWORK = {
         'rest_framework.renderers.JSONRenderer',
     ],
 }
-
-
-
-

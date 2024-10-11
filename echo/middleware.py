@@ -8,26 +8,27 @@ import hashlib
 
 class APILoggingMiddleware(MiddlewareMixin):
     def process_view(self, request, view_func, view_args, view_kwargs):
+        # Check if the request is to an API endpoint
         if request.path.startswith('/api/'):
+            # Get the user from the token
             auth_header = request.headers.get('Authorization', '')
-            user = AnonymousUser()
+            user = None
             if auth_header.startswith('Token '):
-                raw_token = auth_header.split(' ')[1]
-                hashed_token = hashlib.sha256(raw_token.encode()).hexdigest()
-                try:
-                    token = CustomToken.objects.get(key=hashed_token)
-                    user = token.user
-                except CustomToken.DoesNotExist:
-                    pass  # Keep user as AnonymousUser
+                    raw_token = auth_header.split(' ')[1]
+                    hashed_token = hashlib.sha256(raw_token.encode()).hexdigest()
+                    try:
+                        token = CustomToken.objects.get(key=hashed_token)
+                        user = token.user
+                    except CustomToken.DoesNotExist:
+                        user = AnonymousUser()
+            else:
+                user = AnonymousUser()
 
-            if isinstance(user, AnonymousUser):
-                return None  # Ignore unauthorized requests
 
-            # Log the API request
+            # Log detailed request
             APIRequestLog.objects.create(
                 user=user,
                 method=request.method,
                 path=request.path,
-                # Exclude remote_addr if not needed
             )
         return None

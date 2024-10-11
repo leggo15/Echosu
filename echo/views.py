@@ -384,13 +384,19 @@ def search_results(request):
     # Parse the query into search terms
     search_terms = parse_search_terms(query)
 
-    # Build inclusion and exclusion Q objects
-    beatmaps = build_query_conditions(beatmaps, search_terms)
+    # Build inclusion and exclusion Q objects and get include_tag_names
+    beatmaps, include_tag_names = build_query_conditions(beatmaps, search_terms)
 
-    # Annotate and order by the number of tags
-    beatmaps = beatmaps.annotate(
-        num_tags=Count('tags__tagapplication', distinct=True)
-    ).order_by('-num_tags')
+    # Annotate beatmaps with the sum of counts of TagApplications for the searched tags
+    if include_tag_names:
+        beatmaps = beatmaps.annotate(
+            priority=Count('tagapplication', filter=Q(tagapplication__tag__name__in=include_tag_names))
+        ).order_by('-priority')
+    else:
+        # Default ordering if no specific tags are searched
+        beatmaps = beatmaps.annotate(
+            priority=Value(0, IntegerField())
+        ).order_by('-priority')
 
     # Implement pagination
     paginator = Paginator(beatmaps, 10)  # Show 10 beatmaps per page
@@ -409,6 +415,7 @@ def search_results(request):
     }
 
     return render(request, 'search_results.html', context)
+
 
 
 #######################################################################################
@@ -479,16 +486,14 @@ def build_query_conditions(beatmaps, search_terms):
             beatmaps = handle_attribute_comparison_query(beatmaps, term)
         elif is_exclusion_term(term):
             exclude_term = term.lstrip('-').strip('"').strip()
-            exclude_term_lower = exclude_term.lower()
             if Tag.objects.filter(name__iexact=exclude_term).exists():
-                exclude_tag_terms.append(exclude_term_lower)
+                exclude_tag_terms.append(exclude_term)
             else:
                 exclude_q |= build_exclusion_q(exclude_term)
         else:
             include_term = term.strip('"').strip()
-            include_term_lower = include_term.lower()
             if Tag.objects.filter(name__iexact=include_term).exists():
-                include_tag_terms.append(include_term_lower)
+                include_tag_terms.append(include_term)
             else:
                 include_q &= build_inclusion_q(include_term)
 
@@ -498,19 +503,20 @@ def build_query_conditions(beatmaps, search_terms):
     if exclude_q:
         beatmaps = beatmaps.exclude(exclude_q)
 
+    # Convert tag terms to lowercase to match the stored lowercase tag names
+    include_tag_names = [tag_name.lower() for tag_name in include_tag_terms]
+    exclude_tag_names = [tag_name.lower() for tag_name in exclude_tag_terms]
+
     # Apply tag inclusion filters
-    if include_tag_terms:
-        for tag_name in include_tag_terms:
-            beatmaps = beatmaps.filter(tags__name__iexact=tag_name)
+    if include_tag_names:
+        beatmaps = beatmaps.filter(tags__name__in=include_tag_names)
 
     # Apply tag exclusion filters
-    if exclude_tag_terms:
-        exclude_tags_q = Q()
-        for tag_name in exclude_tag_terms:
-            exclude_tags_q |= Q(tags__name__iexact=tag_name)
-        beatmaps = beatmaps.exclude(exclude_tags_q)
+    if exclude_tag_names:
+        beatmaps = beatmaps.exclude(tags__name__in=exclude_tag_names)
 
-    return beatmaps
+    return beatmaps, include_tag_names
+
 
 
 

@@ -348,11 +348,12 @@ def profile(request):
 # ----------------------------- Search Views ----------------------------- #
 
 from django.shortcuts import render
-from django.db.models import Q, Count, Case, When, Value, BooleanField
+from django.db.models import Q, Count, Case, When, Value, BooleanField, IntegerField
 from django.db.models import Prefetch
 from django.core.paginator import Paginator
 from django.contrib.auth.models import User
 import re
+from collections import defaultdict
 from nltk.stem import PorterStemmer
 
 stemmer = PorterStemmer()
@@ -459,7 +460,7 @@ def parse_search_terms(query):
     """
     Use regular expression to split the query into terms, treating quoted strings as single terms.
     """
-    return re.findall(r'"[^"]+"|[^"\s]+', query)
+    return re.findall(r'-?"[^"]+"|-?[^"\s]+', query)
 
 #######################################################################################
 
@@ -474,8 +475,8 @@ def build_query_conditions(beatmaps, search_terms):
     """
     include_q = Q()
     exclude_q = Q()
-    include_tag_terms = []
-    exclude_tag_terms = []
+    include_tag_names = set()
+    exclude_tag_names = set()
 
     for term in search_terms:
         term = term.strip()
@@ -486,37 +487,40 @@ def build_query_conditions(beatmaps, search_terms):
             beatmaps = handle_attribute_comparison_query(beatmaps, term)
         elif is_exclusion_term(term):
             exclude_term = term.lstrip('-').strip('"').strip()
-            if Tag.objects.filter(name__iexact=exclude_term).exists():
-                exclude_tag_terms.append(exclude_term)
+            # Fuzzy match tags
+            matching_tags = Tag.objects.filter(name__icontains=exclude_term)
+            if matching_tags.exists():
+                exclude_tag_names.update([tag.name for tag in matching_tags])
             else:
                 exclude_q |= build_exclusion_q(exclude_term)
         else:
             include_term = term.strip('"').strip()
-            if Tag.objects.filter(name__iexact=include_term).exists():
-                include_tag_terms.append(include_term)
+            # Fuzzy match tags
+            matching_tags = Tag.objects.filter(name__icontains=include_term)
+            if matching_tags.exists():
+                include_tag_names.update([tag.name for tag in matching_tags])
             else:
                 include_q &= build_inclusion_q(include_term)
 
-    # Apply inclusion and exclusion filters
+    # Apply inclusion filters
     if include_q:
         beatmaps = beatmaps.filter(include_q)
+
+    # Apply exclusion filters
     if exclude_q:
         beatmaps = beatmaps.exclude(exclude_q)
-
-    # Convert tag terms to lowercase to match the stored lowercase tag names
-    include_tag_names = [tag_name.lower() for tag_name in include_tag_terms]
-    exclude_tag_names = [tag_name.lower() for tag_name in exclude_tag_terms]
-
-    # Apply tag inclusion filters
-    if include_tag_names:
-        beatmaps = beatmaps.filter(tags__name__in=include_tag_names)
 
     # Apply tag exclusion filters
     if exclude_tag_names:
         beatmaps = beatmaps.exclude(tags__name__in=exclude_tag_names)
 
-    return beatmaps, include_tag_names
+    # Apply tag inclusion filters
+    # Fetch all beatmaps with at least one of the matching tags
+    # but only for the tags part of the search
+    if include_tag_names:
+        beatmaps = beatmaps.filter(tags__name__in=include_tag_names).distinct()
 
+    return beatmaps, include_tag_names
 
 
 

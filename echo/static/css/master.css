@@ -738,6 +738,20 @@ nav {
     font-size: 14px;
 }
 
+.tooltip {
+    position: absolute;
+    background-color: rgba(60, 60, 60, 0.9);
+    color: #fff;
+    padding: 6px 8px;
+    border-radius: 4px;
+    white-space: nowrap;
+    z-index: 1000;
+    font-size: 14px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s ease-in-out;
+}
+
 
 /* ####################### Pagination Styles ####################### */
 .pagination {

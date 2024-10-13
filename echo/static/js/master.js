@@ -75,7 +75,7 @@ $(document).ready(function() {
         var beatmapId = $('#current_beatmap_id').val();
         $.ajax({
             type: 'GET',
-            url: '/echo/get_tags/',
+            url: 'get_tags/',
             data: { 'beatmap_id': beatmapId },
             success: function(tags) {
                 $('.applied-tags').empty().append('Tags: ');
@@ -136,3 +136,117 @@ $(document).ready(function() {
     initializeCollapsiblePanels();
 
 });
+
+// Tag description
+document.addEventListener('DOMContentLoaded', function () {
+    const tags = document.querySelectorAll('.tag');
+
+    tags.forEach(function(tag) {
+        let timeout;
+        tag.addEventListener('mouseenter', function() {
+            timeout = setTimeout(function() {
+                // Create tooltip element
+                let tooltip = document.createElement('div');
+                tooltip.className = 'tooltip';
+                tooltip.innerText = tag.getAttribute('data-description');
+                document.body.appendChild(tooltip);
+
+                // Position tooltip above the tag
+                let rect = tag.getBoundingClientRect();
+                let tooltipRect = tooltip.getBoundingClientRect();
+                tooltip.style.left = rect.left + window.pageXOffset + (rect.width / 2) - (tooltipRect.width / 2) + 'px';
+                tooltip.style.top = rect.top + window.pageYOffset - tooltipRect.height - 8 + 'px'; // 8px gap
+
+                // Attach tooltip to tag element
+                tag._tooltip = tooltip;
+
+                // Fade-in effect
+                setTimeout(function() {
+                    tooltip.style.opacity = '1';
+                }, 10);
+            }, 500); // 500ms delay
+        });
+        tag.addEventListener('mouseleave', function() {
+            clearTimeout(timeout);
+            if (tag._tooltip) {
+                document.body.removeChild(tag._tooltip);
+                tag._tooltip = null;
+            }
+        });
+    });
+});
+
+// Function to apply a tag
+function applyTag(tagName) {
+    // Check if the tag exists
+    $.ajax({
+        url: '/check-tag/',
+        method: 'GET',
+        data: { tag_name: tagName },
+        success: function(data) {
+            if (data.exists) {
+                // Tag exists, proceed to apply it
+                submitTag(tagName);
+            } else {
+                // Tag doesn't exist, prompt for description
+                promptForTagDescription(tagName);
+            }
+        }
+    });
+}
+
+
+function modifyTag(tagName) {
+    const beatmapId = $('#current_beatmap_id').val();
+    const csrfToken = '{{ csrf_token }}';
+
+    $.ajax({
+        url: '/echo/modify_tag/',
+        method: 'POST',
+        data: {
+            tag: tagName,
+            beatmap_id: beatmapId,
+            csrfmiddlewaretoken: csrfToken
+        },
+        success: function(response) {
+            if (response.status === 'needs_description') {
+                // Prompt the user for a description
+                const description = prompt(`The tag "${tagName}" is new. Please provide a description:`);
+                if (description !== null) {
+                    // Resend the request with the description
+                    $.ajax({
+                        url: '/echo/modify_tag/',
+                        method: 'POST',
+                        data: {
+                            tag: tagName,
+                            beatmap_id: beatmapId,
+                            description: description,
+                            csrfmiddlewaretoken: csrfToken
+                        },
+                        success: function(res) {
+                            if (res.status === 'success') {
+                                // Update the UI accordingly
+                                // For example, refresh the tag list
+                                loadTags();
+                            } else {
+                                alert(res.message);
+                            }
+                        },
+                        error: function(err) {
+                            alert('An error occurred. Please try again.');
+                        }
+                    });
+                }
+            } else if (response.status === 'success') {
+                // Update the UI accordingly
+                // For example, refresh the tag list
+                loadTags();
+            } else {
+                alert(response.message);
+            }
+        },
+        error: function(err) {
+            alert('An error occurred. Please try again.');
+        }
+    });
+}

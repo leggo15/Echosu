@@ -73,7 +73,6 @@ class TagApplication(models.Model):
     def __str__(self):
         return f"{self.user.username} applied tag '{self.tag.name}' on {self.beatmap.beatmap_id}"
 
-
 ################ API ##################
 
 from django.contrib.auth.models import User

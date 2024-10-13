@@ -24,6 +24,16 @@
     </i>
     <!-- Search form with tag input for auto-complete functionality -->
     <form action="{% url 'search_results' %}" method="get" class="beatmap-form">
+        <!-- Add Game Mode Selection -->
+         <div class="container">
+            <select name="mode">
+                <option value="" {% if not request.GET.mode %}selected{% endif %}>All Modes</option>
+                <option value="osu" {% if request.GET.mode == 'osu' %}selected{% endif %}>Standard</option>
+                <option value="taiko" {% if request.GET.mode == 'taiko' %}selected{% endif %}>Taiko</option>
+                <option value="catch" {% if request.GET.mode == 'catch' %}selected{% endif %}>Catch the Beat</option>
+                <option value="mania" {% if request.GET.mode == 'mania' %}selected{% endif %}>Mania</option>
+            </select>
+        </div>
         <input type="text" name="query" id="tag-input" placeholder="Search by Genre, name, ID, mapper, or artist" value="{{ request.GET.query }}">
         <button type="submit" class="generic_btn">Search</button>
     </form>
@@ -82,8 +92,8 @@
     <div class="pagination">
         <span class="step-links">
             {% if beatmaps.has_previous %}
-                <a href="?query={{ query }}&page=1">&laquo; first</a>
-                <a href="?query={{ query }}&page={{ beatmaps.previous_page_number }}">previous</a>
+                <a href="?query={{ query }}&mode={{ request.GET.mode }}&page=1">&laquo; first</a>
+                <a href="?query={{ query }}&mode={{ request.GET.mode }}&page={{ beatmaps.previous_page_number }}">previous</a>
             {% endif %}
 
             <span class="current">
@@ -91,11 +101,12 @@
             </span>
 
             {% if beatmaps.has_next %}
-                <a href="?query={{ query }}&page={{ beatmaps.next_page_number }}">next</a>
-                <a href="?query={{ query }}&page={{ beatmaps.paginator.num_pages }}">last &raquo;</a>
+                <a href="?query={{ query }}&mode={{ request.GET.mode }}&page={{ beatmaps.next_page_number }}">next</a>
+                <a href="?query={{ query }}&mode={{ request.GET.mode }}&page={{ beatmaps.paginator.num_pages }}">last &raquo;</a>
             {% endif %}
         </span>
     </div>
+
 
 </div>
 </body>

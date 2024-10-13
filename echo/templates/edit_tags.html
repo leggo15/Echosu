@@ -1,0 +1,131 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Beatmap Info</title>
+        <link rel="stylesheet" href="https://echosu-s3.s3.eu-central-1.amazonaws.com/css/master.css">
+        <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+        <script src="https://echosu-s3.s3.eu-central-1.amazonaws.com/js/master.js"></script>
+        <meta name="csrf-token" content="{{ csrf_token }}">
+        <style>
+            /* Optional: Add styles for success and error messages */
+            .success {
+                color: green;
+            }
+            .error {
+                color: red;
+            }
+            table {
+                width: 100%;
+                border-collapse: collapse;
+            }
+            th, td {
+                padding: 12px;
+                border: 1px solid #ddd;
+                text-align: left;
+            }
+            textarea {
+                width: 100%;
+                resize: vertical;
+            }
+        </style>
+    </head>
+    <body>
+        {% include '_navbar.html' %}
+        <div class="container">
+            {% load static %}
+            {% load custom_tags %}
+            {% block content %}
+            <h1>Edit Tags</h1>
+            
+            {% if messages %}
+                {% for message in messages %}
+                    <p class="message {{ message.tags }}">{{ message }}</p>
+                {% endfor %}
+            {% endif %}
+            
+            <table>
+                <thead>
+                    <tr>
+                        <th>Tag Name</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for tag in tags %}
+                    <tr>
+                        <td>{{ tag.name }}</td>
+                        <td>
+                            <input type="hidden" class="tag-id" value="{{ tag.id }}">
+                            <textarea class="tag-description" data-tag-id="{{ tag.id }}" rows="2" cols="50">{{ tag.description }}</textarea>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            
+            <!-- Optional: Add a message area for feedback -->
+            <div id="message-area"></div>
+            
+            {% endblock %}
+            
+        </div>
+    </body>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const descriptionFields = document.querySelectorAll('.tag-description');
+        
+            descriptionFields.forEach(function(field) {
+                let timeoutId;
+        
+                field.addEventListener('input', function() {
+                    clearTimeout(timeoutId);
+                    timeoutId = setTimeout(function() {
+                        const newDescription = field.value.trim();
+                        const tagId = field.getAttribute('data-tag-id');
+        
+                        // AJAX request to update the tag description
+                        fetch("{% url 'update_tag_description' %}", {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/x-www-form-urlencoded',
+                                'X-CSRFToken': '{{ csrf_token }}',
+                                'X-Requested-With': 'XMLHttpRequest' // Added header
+                            },
+                            body: new URLSearchParams({
+                                'tag_id': tagId,
+                                'description': newDescription
+                            })
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            const messageArea = document.getElementById('message-area');
+                            if (data.status === 'success') {
+                                messageArea.innerHTML = `<p class="success">${data.message}</p>`;
+                                // Remove the message after 3 seconds
+                                setTimeout(() => {
+                                    messageArea.innerHTML = '';
+                                }, 3000);
+                            } else {
+                                messageArea.innerHTML = `<p class="error">${data.message}</p>`;
+                                setTimeout(() => {
+                                    messageArea.innerHTML = '';
+                                }, 5000);
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error:', error);
+                            const messageArea = document.getElementById('message-area');
+                            messageArea.innerHTML = `<p class="error">An error occurred while updating the description.</p>`;
+                            setTimeout(() => {
+                                messageArea.innerHTML = '';
+                            }, 5000);
+                        });
+                    }, 3000); // 1 second debounce
+                });
+            });
+        });
+    </script>
+</html>

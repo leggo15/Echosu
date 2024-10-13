@@ -7,9 +7,32 @@
     <meta charset="UTF-8">
     <title>echosu Home</title>
     <link rel="stylesheet" href="https://echosu-s3.s3.eu-central-1.amazonaws.com/css/master.css">
+    <!-- Include any other necessary scripts -->
+    <!-- Include additional CSS styles -->
+    <style>
+    .tag {
+        position: relative;
+        display: inline-block;
+        cursor: pointer;
+    }
+
+    .tooltip {
+        position: absolute;
+        background-color: rgba(60, 60, 60, 0.9);
+        color: #fff;
+        padding: 6px 8px;
+        border-radius: 4px;
+        white-space: nowrap;
+        z-index: 1000;
+        font-size: 14px;
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.2s ease-in-out;
+    }
+    </style>
+    <!-- Include jQuery and your JavaScript file -->
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://echosu-s3.s3.eu-central-1.amazonaws.com/js/master.js"></script>
-    <!-- Include any other necessary scripts -->
 </head>
 <body>
     {% include '_navbar.html' %}
@@ -68,7 +91,7 @@
                 <div class="applied-tags">
                     Tags:
                     {% for tag in beatmap_tags_with_counts %}
-                        <span class="tag" data-tag-name="{{ tag.name }}" data-applied-by-user="{{ tag.is_applied_by_user }}">
+                        <span class="tag" data-tag-name="{{ tag.name }}" data-applied-by-user="{{ tag.is_applied_by_user }}" data-description="{{ tag.description }}">
                             {{ tag.name }} ({{ tag.apply_count }})
                         </span>
                     {% endfor %}
@@ -84,13 +107,14 @@
         <!-- Top Tags Section -->
         <section class="tags-usage">
             <h2>Top 50 Tags</h2>
-            <div class="tag">
+            <div class="container">
                 {% for tag in tags %}
                     <a 
                         href="{% url 'search_results' %}?query={{ '"'|add:tag.name|add:'"'|urlencode }}" 
                         class="tag" 
                         data-tag-name="{{ tag.name }}" 
                         data-applied-by-user="{{ tag.is_applied_by_user }}"
+                        data-description="{{ tag.description }}"
                     >
                         {{ tag.name }} ({{ tag.total }})
                     </a>
@@ -138,5 +162,46 @@
             </ul>
         </section>
     </div>
+
+    <!-- JavaScript to handle hover events -->
+    <script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const tags = document.querySelectorAll('.tag');
+
+        tags.forEach(function(tag) {
+            let timeout;
+            tag.addEventListener('mouseenter', function() {
+                timeout = setTimeout(function() {
+                    // Create tooltip element
+                    let tooltip = document.createElement('div');
+                    tooltip.className = 'tooltip';
+                    tooltip.innerText = tag.getAttribute('data-description');
+                    document.body.appendChild(tooltip);
+
+                    // Position tooltip above the tag
+                    let rect = tag.getBoundingClientRect();
+                    let tooltipRect = tooltip.getBoundingClientRect();
+                    tooltip.style.left = rect.left + window.pageXOffset + (rect.width / 2) - (tooltipRect.width / 2) + 'px';
+                    tooltip.style.top = rect.top + window.pageYOffset - tooltipRect.height - 8 + 'px'; // 8px gap
+
+                    // Attach tooltip to tag element
+                    tag._tooltip = tooltip;
+
+                    // Fade-in effect
+                    setTimeout(function() {
+                        tooltip.style.opacity = '1';
+                    }, 10);
+                }, 500); // 500ms delay
+            });
+            tag.addEventListener('mouseleave', function() {
+                clearTimeout(timeout);
+                if (tag._tooltip) {
+                    document.body.removeChild(tag._tooltip);
+                    tag._tooltip = null;
+                }
+            });
+        });
+    });
+    </script>
 </body>
 </html>

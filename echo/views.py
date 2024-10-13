@@ -27,7 +27,7 @@ from rest_framework.decorators import action, api_view, permission_classes  # Us
 from rest_framework.response import Response  # Used in API views
 
 # Local application imports
-from .models import Beatmap, Tag, TagApplication, UserProfile  # Used in multiple views
+from .models import Beatmap, Tag, TagApplication, UserProfile   # Used in multiple views
 from .serializers import (
     BeatmapSerializer, TagSerializer,
     TagApplicationSerializer, UserProfileSerializer
@@ -310,6 +310,71 @@ def modify_tag(request):
     # If the request method is not POST, return an error
     return JsonResponse({'status': 'error', 'message': 'Invalid request method'}, status=400)
 
+
+from .templatetags.custom_tags import has_tag_edit_permission
+from django.http import HttpResponseForbidden
+
+@login_required
+def edit_tags(request):
+    user = request.user
+
+    # Check if the user has permission
+    if not has_tag_edit_permission(user):
+        return HttpResponseForbidden("You do not have permission to edit tags.")
+
+    if request.method == 'POST':
+        # Handle tag description updates
+        tag_ids = request.POST.getlist('tag_id')
+        descriptions = request.POST.getlist('description')
+
+        for tag_id, description in zip(tag_ids, descriptions):
+            tag = get_object_or_404(Tag, id=tag_id)
+            tag.description = description.strip()
+            tag.save()
+
+        return redirect('edit_tags')
+
+    else:
+        # Get all tags
+        tags = Tag.objects.all().order_by('name')
+        context = {'tags': tags}
+        return render(request, 'edit_tags.html', context)
+
+
+@login_required
+def update_tag_description(request):
+    """
+    Handle AJAX requests to update a tag's description.
+    """
+    if request.method == 'POST' and request.headers.get('x-requested-with') == 'XMLHttpRequest':
+        tag_id = request.POST.get('tag_id')
+        new_description = request.POST.get('description', '').strip()
+        user = request.user
+
+        # Permission Check
+        if not has_tag_edit_permission(user):
+            return JsonResponse({'status': 'error', 'message': 'Permission denied.'}, status=403)
+
+        # Validate Tag ID
+        tag = get_object_or_404(Tag, id=tag_id)
+
+        # Validate Description
+        if profanity.contains_profanity(new_description):
+            return JsonResponse({'status': 'error', 'message': 'Description contains inappropriate language.'}, status=400)
+
+        # Update Description
+        try:
+            with transaction.atomic():
+                tag.description = new_description
+                tag.save()
+            return JsonResponse({'status': 'success', 'message': 'Description updated successfully.'})
+        except Exception as e:
+            # Log the exception as needed (optional)
+            # logger.error(f"Error updating tag description: {e}")
+            return JsonResponse({'status': 'error', 'message': 'Internal server error.'}, status=500)
+    else:
+        return JsonResponse({'status': 'error', 'message': 'Invalid request.'}, status=400)
+
 # ------------------------------------------------------------------------------ #
 
 # ----------------------------- Profile Views ----------------------------- #
@@ -366,7 +431,24 @@ def search_results(request):
     Handle beatmap search queries and display results focused on tag searches with pagination and sorted tags.
     """
     query = request.GET.get('query', '').strip()
-    selected_mode = request.GET.get('mode', '').strip()
+    selected_mode = request.GET.get('mode', '').strip().lower()
+    
+    # Map user-friendly mode names to stored values
+    MODE_MAPPING = {
+        'osu': 'GameMode.OSU',
+        'taiko': 'GameMode.TAIKO',
+        'catch': 'GameMode.CATCH',
+        'mania': 'GameMode.MANIA',
+    }
+    
+    # Initialize the beatmaps queryset
+    beatmaps = Beatmap.objects.all()
+    
+    # Filter by mode if selected
+    if selected_mode:
+        mapped_mode = MODE_MAPPING.get(selected_mode)
+        if mapped_mode:
+            beatmaps = beatmaps.filter(mode__iexact=mapped_mode)
 
     # If query is empty, return an empty context or a message
     if not query:

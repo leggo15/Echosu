@@ -19,7 +19,6 @@ body {
     border-radius: 15px;
     font-size: 14px;
     transition: background-color 0.3s;
-    background-color: lightblue; /* Color for tags applied by the user */
 }
 
 /* General hover style for tags */
@@ -191,16 +190,28 @@ body {
 /* Navbar Styles */
 nav {
     background-color: #cc1177;
-    padding: 10px 20px;
+    padding: 10px 17%;
     display: flex;
     justify-content: space-between;
     align-items: center;
+}
+
+.logo img {
+    width:100%;
+    max-width: 140px; /* Adjust size of the logo as necessary */
 }
 
 .nav-links a {
     color: white;
     margin-right: 15px;
     text-decoration: none;
+    
+}
+
+.nav-links a:hover {
+    color: #f6c578;
+    text-shadow: 1px #f6c578;
+
 }
 
 .nav-links a:last-child {
@@ -217,7 +228,8 @@ nav {
 .dropdown-content {
     display: none;
     position: absolute;
-    right: 0;
+    margin-top: 60px;
+    top: 0%;
     background-color: white;
     box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
     z-index: 1;
@@ -225,10 +237,18 @@ nav {
 
 .dropdown-content a, .dropdown-content form button {
     color: black;
-    padding: 12px 16px;
+    padding: 12px 16px; /* Ensure consistent padding */
     text-decoration: none;
     display: block;
+    background: none;
+    border: none;   /* Remove default border */
+    cursor: pointer; /* Make it look clickable like a link */
+    font: inherit;   /* Inherit font styles from parent */
+    width: 100%;     /* Ensure it takes full width like the link */
+    text-align: left; /* Align text to the left to match the links */
+    box-sizing: border-box; /* Ensures padding is included in width */
 }
+
 
 .dropdown-content a:hover, .dropdown-content form button:hover {
     background-color: #ddd;
@@ -237,6 +257,15 @@ nav {
 
 /* ########### DROP DOWN MENU ##########*/
 
+.dropdown-content {
+    display: none;
+    position: absolute;
+    margin-top: 60px;
+    top: 0%;
+    background-color: white;
+    box-shadow: 0px 8px 16px 0px rgba(0, 0, 0, 0.2);
+    z-index: 1;
+}
 
 /* ############# BEATMAP DETAIL ################## */
 /* Add to your master.css or within a <style> tag in the HTML head */
@@ -300,15 +329,41 @@ nav {
     margin-top: 20px;
 }
 
+/* Base tag styling */
 .applied-tags span.tag {
     display: inline-block;
-    background-color: #17a2b8;
-    color: white;
     padding: 5px 10px;
     border-radius: 15px;
     margin: 5px;
     font-size: 14px;
+    cursor: pointer;
+    transition: background-color 0.15s, color 0.15s;
+    color: white;
+    background-color: lightgrey;
+    /* No background-color here */
 }
+
+/* Tag applied by the current user (Blue) */
+.applied-tags span.tag.tag-applied {
+    background-color: #17a2b8; /* Blue */
+}
+
+/* Tag not applied by the current user (Grey) */
+.applied-tags span.tag.tag-unapplied {
+    background-color: #aaaaaa; /* Grey */
+}
+
+/* Hover over a tag that can be applied (unapplied) */
+.applied-tags span.tag.tag-unapplied:hover {
+    background-color: lightgreen; /* Green */
+}
+
+/* Hover over a tag that can be removed (applied by user) */
+.applied-tags span.tag.tag-applied:hover {
+    background-color: lightcoral; /* Red */
+}
+
+
 
 /* ########### PROFILE PAGE ##########*/
 /* Add this to your master.css or an equivalent CSS file */

@@ -2,112 +2,244 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <!-- ... existing head content ... -->
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Search Results</title>
     <link rel="stylesheet" href="https://echosu-s3.s3.eu-central-1.amazonaws.com/css/master.css">
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://echosu-s3.s3.eu-central-1.amazonaws.com/js/master.js"></script>
+    <meta name="csrf-token" content="{{ csrf_token }}">
+    <style>
+        /* Base tag styling */
+        .applied-tags span.tag {
+            display: inline-block;
+            /* Removed base background-color */
+            color: white;
+            padding: 5px 10px;
+            border-radius: 15px;
+            margin: 5px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        /* Tag applied by the current user (Blue) */
+        .applied-tags span.tag.tag-applied {
+            background-color: #17a2b8; /* Blue */
+        }
+
+        /* Tag not applied by the current user (Grey) */
+        .applied-tags span.tag.tag-unapplied {
+            background-color: #6c757d; /* Grey */
+        }
+
+        /* Hover Effects */
+
+        /* Hover over a tag that can be applied (unapplied) */
+        .applied-tags span.tag.tag-unapplied:hover {
+            background-color: #28a745; /* Green */
+        }
+
+        /* Hover over a tag that can be removed (applied by user) */
+        .applied-tags span.tag.tag-applied:hover {
+            background-color: #dc3545; /* Red */
+        }
+    </style>
 </head>
 <body>
-{% include '_navbar.html' %}
-<div class="container">
-    <h2>Search Results</h2>
-    <h4>Here you can search for maps that already exist in our database.</h4>
-    <i> How to use</i> </br>
-    <i class="search_description">
-        You can search for specific genres like Aim, Tech and such by typing them in. 
-        If you're looking for a genre with spaces in the name you need to encapsulate it using quotes like so; "Spaced Streams". 
-        You can also search for specific map characteristics such as AR=8 or an artist- or mapper's name. 
-        These rules can be combined into a very specific search. 
-        An example could look like: "Aim awkward "No Bursts" AR=9 Od>8 cs<6 Monstrata".
-    </i>
-    <!-- Search form with tag input for auto-complete functionality -->
-    <form action="{% url 'search_results' %}" method="get" class="beatmap-form">
-        <!-- Add Game Mode Selection -->
-         <div class="container">
-            <select name="mode">
-                <option value="" {% if not request.GET.mode %}selected{% endif %}>All Modes</option>
-                <option value="osu" {% if request.GET.mode == 'osu' %}selected{% endif %}>Standard</option>
-                <option value="taiko" {% if request.GET.mode == 'taiko' %}selected{% endif %}>Taiko</option>
-                <option value="catch" {% if request.GET.mode == 'catch' %}selected{% endif %}>Catch the Beat</option>
-                <option value="mania" {% if request.GET.mode == 'mania' %}selected{% endif %}>Mania</option>
-            </select>
-        </div>
-        <input type="text" name="query" id="tag-input" placeholder="Search by Genre, name, ID, mapper, or artist" value="{{ request.GET.query }}">
-        <button type="submit" class="generic_btn">Search</button>
-    </form>
-
-    <div class="search-results">
-        
-        {% for beatmap in beatmaps %}
-        <div class="beatmap-display">
-            {% if beatmap.cover_image_url %}
-            <div class="beatmap-cover-container">
-                <img class="beatmap-cover" src="{{ beatmap.cover_image_url }}" alt="Cover Image">
+    {% include '_navbar.html' %}
+    <div class="container">
+        <h2>Search Results</h2>
+        <h4>Here you can search for maps that already exist in our database.</h4>
+        <i> How to use</i> </br>
+        <i class="search_description">
+            You can search for specific genres like Aim, Tech and such by typing them in. 
+            If you're looking for a genre with spaces in the name you need to encapsulate it using quotes like so; "Spaced Streams". 
+            You can also search for specific map characteristics such as AR=8 or an artist- or mapper's name. 
+            These rules can be combined into a very specific search. 
+            An example could look like: "Aim awkward "No Bursts" AR=9 Od>8 cs<6 Monstrata".
+        </i>
+        <!-- Search form with tag input for auto-complete functionality -->
+        <form action="{% url 'search_results' %}" method="get" class="beatmap-form">
+            <!-- Add Game Mode Selection -->
+            <div class="container">
+                <select name="mode">
+                    <option value="" {% if not request.GET.mode %}selected{% endif %}>All Modes</option>
+                    <option value="osu" {% if request.GET.mode == 'osu' %}selected{% endif %}>Standard</option>
+                    <option value="taiko" {% if request.GET.mode == 'taiko' %}selected{% endif %}>Taiko</option>
+                    <option value="catch" {% if request.GET.mode == 'catch' %}selected{% endif %}>Catch the Beat</option>
+                    <option value="mania" {% if request.GET.mode == 'mania' %}selected{% endif %}>Mania</option>
+                </select>
             </div>
-            {% endif %}
-            <div class="beatmap-details-container">
+            <input type="text" name="query" id="tag-input" placeholder="Search by Genre, name, ID, mapper, or artist" value="{{ request.GET.query }}">
+            <button type="submit" class="generic_btn">Search</button>
+        </form>
 
-            {% if beatmap %}
-                <div class="beatmap-title-artist">
-                    <h2 class="title">{{ beatmap.title }} - [{{ beatmap.version }}]</h2>
-                    <h3 class="artist">Artist: {{ beatmap.artist }}</h3>
-                    <h3 class="mapper">Mapper: {{ beatmap.creator }}</h3>
+        <div class="search-results">
+            {% for beatmap in beatmaps %}
+            <div class="beatmap-display" id="beatmap-{{ beatmap.beatmap_id }}">
+                {% if beatmap.cover_image_url %}
+                <div class="beatmap-cover-container">
+                    <img class="beatmap-cover" src="{{ beatmap.cover_image_url }}" alt="Cover Image">
                 </div>
-                <div class="beatmap-stats">
-                    <span>Length: {{ beatmap.total_length }} </span>
-                    <span>BPM: {{ beatmap.bpm }} </span>
-                    <span>CS: {{ beatmap.cs }} </span>
-                    <span>HP: {{ beatmap.drain }}</span>
-                    <span>OD: {{ beatmap.accuracy }}</span>
-                    <span>AR: {{ beatmap.ar }}</span>
-                    <span>SR: {{ beatmap.difficulty_rating }}</span>
-                </div>
-                <a href="{% url 'beatmap_detail' beatmap_id=beatmap.beatmap_id %}" class="beatmap-link">View Beatmap</a>
+                {% endif %}
+                <div class="beatmap-details-container">
+                    {% if beatmap %}
+                        <div class="beatmap-title-artist">
+                            <h2 class="title">{{ beatmap.title }} - [{{ beatmap.version }}]</h2>
+                            <h3 class="artist">Artist: {{ beatmap.artist }}</h3>
+                            <h3 class="mapper">Mapper: {{ beatmap.creator }}</h3>
+                        </div>
+                        <div class="beatmap-stats">
+                            <span>Length: {{ beatmap.total_length }} </span>
+                            <span>BPM: {{ beatmap.bpm }} </span>
+                            <span>CS: {{ beatmap.cs }} </span>
+                            <span>HP: {{ beatmap.drain }}</span>
+                            <span>OD: {{ beatmap.accuracy }}</span>
+                            <span>AR: {{ beatmap.ar }}</span>
+                            <span>SR: {{ beatmap.difficulty_rating }}</span>
+                        </div>
+                        <a href="{% url 'beatmap_detail' beatmap_id=beatmap.beatmap_id %}" class="beatmap-link">View Beatmap</a>
 
-                <div class="applied-tags"> 
-                    Tags:
-                    {% if beatmap.tags_with_counts %}
-                        {% for tag_info in beatmap.tags_with_counts %}
-                            <span class="tag" data-tag-name="{{ tag_info.tag.name }}" data-applied-by-user="{{ tag_info.is_applied_by_user }}">
-                                {{ tag_info.tag.name }} ({{ tag_info.apply_count }})
-                            </span>
-                        {% endfor %}
-                    {% else %}
-                        <span>No genres associated.</span>
+                        <!-- Hidden input to store the current beatmap's ID for JavaScript -->
+                        <input type="hidden" class="current_beatmap_id" value="{{ beatmap.beatmap_id }}">
+
+                        <div class="applied-tags"> 
+                            Tags:
+                            {% if beatmap.tags_with_counts %}
+                                {% for tag_info in beatmap.tags_with_counts %}
+                                    <span class="tag {% if tag_info.is_applied_by_user %}tag-applied{% else %}tag-unapplied{% endif %}" 
+                                          data-tag-name="{{ tag_info.tag.name }}" 
+                                          data-applied-by-user="{{ tag_info.is_applied_by_user }}"
+                                          data-description="{{ tag_info.tag.description }}">
+                                        {{ tag_info.tag.name }} ({{ tag_info.apply_count }})
+                                    </span>
+                                {% endfor %}
+                            {% else %}
+                                <span>No genres associated.</span>
+                            {% endif %}
+                        </div>
                     {% endif %}
                 </div>
-                
-            {% endif %}
-
             </div>
+            {% empty %}
+                <p>No results found.</p>
+            {% endfor %}
         </div>
-        {% empty %}
-            <p>No results found.</p>
-        {% endfor %}
-    </div>
 
-    <!-- Pagination Controls -->
-    <div class="pagination">
-        <span class="step-links">
-            {% if beatmaps.has_previous %}
-                <a href="?query={{ query }}&mode={{ request.GET.mode }}&page=1">&laquo; first</a>
-                <a href="?query={{ query }}&mode={{ request.GET.mode }}&page={{ beatmaps.previous_page_number }}">previous</a>
-            {% endif %}
+        <!-- Pagination Controls -->
+        <div class="pagination">
+            <span class="step-links">
+                {% if beatmaps.has_previous %}
+                    <a href="?query={{ query }}&mode={{ request.GET.mode }}&page=1">&laquo; first</a>
+                    <a href="?query={{ query }}&mode={{ request.GET.mode }}&page={{ beatmaps.previous_page_number }}">previous</a>
+                {% endif %}
 
-            <span class="current">
-                Page {{ beatmaps.number }} of {{ beatmaps.paginator.num_pages }}.
+                <span class="current">
+                    Page {{ beatmaps.number }} of {{ beatmaps.paginator.num_pages }}.
+                </span>
+
+                {% if beatmaps.has_next %}
+                    <a href="?query={{ query }}&mode={{ request.GET.mode }}&page={{ beatmaps.next_page_number }}">next</a>
+                    <a href="?query={{ query }}&mode={{ request.GET.mode }}&page={{ beatmaps.paginator.num_pages }}">last &raquo;</a>
+                {% endif %}
             </span>
-
-            {% if beatmaps.has_next %}
-                <a href="?query={{ query }}&mode={{ request.GET.mode }}&page={{ beatmaps.next_page_number }}">next</a>
-                <a href="?query={{ query }}&mode={{ request.GET.mode }}&page={{ beatmaps.paginator.num_pages }}">last &raquo;</a>
-            {% endif %}
-        </span>
+        </div>
     </div>
 
+    <!-- Include your JavaScript at the end of the body -->
+    <script>
+        // Function to retrieve CSRF token from meta tag
+        function getCSRFToken() {
+            return $('meta[name="csrf-token"]').attr('content');
+        }
 
-</div>
+        $(document).ready(function() {
+            // Function to attach click events to tags within each beatmap
+            function attachTagClickEvents() {
+                $('.applied-tags').off('click', '.tag').on('click', '.tag', function() {
+                    var $this = $(this);
+                    var isApplied = $this.hasClass('tag-applied');
+                    var tagName = $this.data('tag-name');
+                    var beatmapId = $this.closest('.beatmap-display').find('.current_beatmap_id').val();
+
+                    if (isApplied) {
+                        // Remove the tag
+                        removeTag(tagName, beatmapId, $this);
+                    } else {
+                        // Apply the tag
+                        applyTag(tagName, beatmapId, $this);
+                    }
+                });
+            }
+
+            // Function to apply a tag via AJAX
+            function applyTag(tagName, beatmapId, $tagElement) {
+                $.ajax({
+                    type: 'POST',
+                    url: '{% url "modify_tag" %}',  // Update with your URL name
+                    data: {
+                        'action': 'apply',
+                        'tag': tagName,
+                        'beatmap_id': beatmapId,
+                        'csrfmiddlewaretoken': getCSRFToken()
+                    },
+                    success: function(response) {
+                        if (response.status === 'success') {
+                            // Update the tag's class to 'tag-applied'
+                            $tagElement.removeClass('tag-unapplied').addClass('tag-applied');
+                            // Update the apply_count
+                            var countMatch = $tagElement.text().match(/\((\d+)\)/);
+                            var count = countMatch ? parseInt(countMatch[1]) : 0;
+                            $tagElement.text(tagName + ' (' + (count + 1) + ')');
+                        } else {
+                            alert(response.message);
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('Error applying tag:', error);
+                        alert('Failed to apply tag. Please try again.');
+                    }
+                });
+            }
+
+            // Function to remove a tag via AJAX
+            function removeTag(tagName, beatmapId, $tagElement) {
+                $.ajax({
+                    type: 'POST',
+                    url: '{% url "modify_tag" %}',  // Update with your URL name
+                    data: {
+                        'action': 'remove',
+                        'tag': tagName,
+                        'beatmap_id': beatmapId,
+                        'csrfmiddlewaretoken': getCSRFToken()
+                    },
+                    success: function(response) {
+                        if (response.status === 'success') {
+                            // Update the tag's class to 'tag-unapplied'
+                            $tagElement.removeClass('tag-applied').addClass('tag-unapplied');
+                            // Update the apply_count
+                            var countMatch = $tagElement.text().match(/\((\d+)\)/);
+                            var count = countMatch ? parseInt(countMatch[1]) : 0;
+                            $tagElement.text(tagName + ' (' + (count - 1) + ')');
+                        } else {
+                            alert(response.message);
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('Error removing tag:', error);
+                        alert('Failed to remove tag. Please try again.');
+                    }
+                });
+            }
+
+            // Initial call to attach click events
+            attachTagClickEvents();
+
+            // Example: Re-attach events after AJAX pagination
+            // If using AJAX-based pagination, ensure to call attachTagClickEvents() after new content loads
+        });
+    </script>
 </body>
 </html>

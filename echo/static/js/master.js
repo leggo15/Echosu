@@ -75,13 +75,23 @@ $(document).ready(function() {
         var beatmapId = $('#current_beatmap_id').val();
         $.ajax({
             type: 'GET',
-            url: 'get_tags/',
+            url: '/echo/get_tags/',
             data: { 'beatmap_id': beatmapId },
             success: function(tags) {
                 $('.applied-tags').empty().append('Tags: ');
                 tags.forEach(function(tag) {
-                    var tagClass = tag.is_applied_by_user === 'true' ? 'tag-applied' : 'tag-unapplied';
-                    $('.applied-tags').append(`<span class="tag ${tagClass}" data-tag-name="${tag.name}" data-applied-by-user="${tag.is_applied_by_user}">${tag.name} (${tag.apply_count})</span>`);
+                    // Determine the class based on whether the user has applied the tag
+                    var tagClass = tag.is_applied_by_user ? 'tag-applied' : 'tag-unapplied';
+                    
+                    // Append the tag with the appropriate class
+                    $('.applied-tags').append(`
+                        <span class="tag ${tagClass}" 
+                              data-tag-name="${tag.name}" 
+                              data-applied-by-user="${tag.is_applied_by_user}" 
+                              data-description="${tag.description}">
+                            ${tag.name} (${tag.apply_count})
+                        </span>
+                    `);
                 });
                 attachTagClickEvents(); // Re-attach click events to new tags
             },
@@ -90,7 +100,7 @@ $(document).ready(function() {
             }
         });
     }
-
+    
     // Initial call to load the tags
     refreshTags();
 

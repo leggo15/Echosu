@@ -54,7 +54,9 @@
             {% if error %}
                 <p class="error">{{ error }}</p>
             {% endif %}
-
+            <span class="tag tag-applied" data-tag-name="Hard" data-applied-by-user="true" data-description="Hard tag description">Hard (10)</span>
+            <span class="tag tag-unapplied" data-tag-name="Easy" data-applied-by-user="false" data-description="Easy tag description">Easy (5)</span>
+            
             {% if beatmap %}
                 <div class="beatmap-display">
                     {% if beatmap.cover_image_url %}

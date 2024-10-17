@@ -2,7 +2,7 @@ from django.contrib import admin
 from django.contrib.auth.views import LogoutView
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
-from echo.views import update_tag_description, edit_tags, api_token, home, osu_callback, search_tags, modify_tag, get_tags, profile, search_results, beatmap_detail, BeatmapViewSet, TagViewSet, TagApplicationViewSet, UserProfileViewSet, tags_for_beatmaps, settings, confirm_data_deletion, delete_user_data
+from echo.views import confirm_data_deletion, update_tag_description, edit_tags, api_token, home, osu_callback, search_tags, modify_tag, get_tags, profile, search_results, beatmap_detail, BeatmapViewSet, TagViewSet, TagApplicationViewSet, UserProfileViewSet, tags_for_beatmaps, settings, confirm_data_deletion, delete_user_data
 
 
 router = DefaultRouter()
@@ -25,6 +25,7 @@ urlpatterns = [
     path('search_results/', search_results, name='search_results'),
     path('edit_tags/', edit_tags, name='edit_tags'),
     path('update_tag_description/', update_tag_description, name='update_tag_description'),
+    path('confirm_data_deletion/', confirm_data_deletion, name='confirm_data_deletion'),
 
 
     # Commenting out API and beatmap-related URLs for now

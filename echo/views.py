@@ -244,7 +244,7 @@ def search_tags(request):
 from better_profanity import profanity
 
 # Define the allowed tag pattern if not already defined
-ALLOWED_TAG_PATTERN = re.compile(r'^[A-Za-z0-9 _-]{1,100}$')
+ALLOWED_TAG_PATTERN = re.compile(r'^[A-Za-z0-9 _\-\/]{1,25}$')
 
 @login_required
 def modify_tag(request):
@@ -265,7 +265,7 @@ def modify_tag(request):
 
         # Disallow specific chars and set max length
         if not ALLOWED_TAG_PATTERN.match(processed_tag):
-            error_message = 'Tag must be 1-100 characters long and can only contain letters, numbers, spaces, hyphens, and underscores.'
+            error_message = 'Tag must be 1-25 characters long and can only contain letters, numbers, spaces, hyphens, and underscores.'
             return JsonResponse({'status': 'error', 'message': error_message}, status=400)
 
         # Profanity filtering
@@ -311,8 +311,21 @@ def modify_tag(request):
     return JsonResponse({'status': 'error', 'message': 'Invalid request method'}, status=400)
 
 
+import difflib
+from django.contrib.auth.decorators import login_required
+from django.http import HttpResponseForbidden, JsonResponse
+from django.shortcuts import get_object_or_404, render
+from django.core.paginator import Paginator
+from .models import Tag
 from .templatetags.custom_tags import has_tag_edit_permission
-from django.http import HttpResponseForbidden
+
+def count_word_differences(old_desc, new_desc):
+    old_words = old_desc.lower().split()
+    new_words = new_desc.lower().split()
+    # Use difflib to find differences
+    diff = difflib.ndiff(old_words, new_words)
+    changes = sum(1 for word in diff if word.startswith('- ') or word.startswith('+ '))
+    return changes
 
 @login_required
 def edit_tags(request):
@@ -323,22 +336,58 @@ def edit_tags(request):
         return HttpResponseForbidden("You do not have permission to edit tags.")
 
     if request.method == 'POST':
-        # Handle tag description updates
-        tag_ids = request.POST.getlist('tag_id')
-        descriptions = request.POST.getlist('description')
-
-        for tag_id, description in zip(tag_ids, descriptions):
-            tag = get_object_or_404(Tag, id=tag_id)
-            tag.description = description.strip()
-            tag.save()
-
-        return redirect('edit_tags')
+        # Check if the request is AJAX
+        if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+            # Handle AJAX tag description updates
+            tag_id = request.POST.get('tag_id')
+            new_description = request.POST.get('description', '').strip()
+            
+            if tag_id and new_description:
+                tag = get_object_or_404(Tag, id=tag_id)
+                old_description = tag.description
+                word_diff_count = count_word_differences(old_description, new_description)
+                
+                # Update the description
+                tag.description = new_description
+                
+                # Update description_author if at least 3 words have changed
+                if word_diff_count >= 3:
+                    tag.description_author = user  # Assign User instance
+                
+                tag.save()
+                
+                return JsonResponse({
+                    'status': 'success',
+                    'message': 'Tag description updated.',
+                    'word_diff_count': word_diff_count,
+                    'description_author': tag.description_author.username if tag.description_author else 'N/A'
+                })
+            else:
+                return JsonResponse({'status': 'error', 'message': 'Invalid data.'}, status=400)
+        else:
+            # Handle standard POST requests if any (currently none)
+            return JsonResponse({'status': 'error', 'message': 'Invalid request method.'}, status=400)
 
     else:
-        # Get all tags
-        tags = Tag.objects.all().order_by('name')
-        context = {'tags': tags}
+        # Handle GET requests with search and pagination
+        search_query = request.GET.get('search', '').strip()
+
+        if search_query:
+            tags = Tag.objects.filter(name__icontains=search_query).order_by('name')
+        else:
+            tags = Tag.objects.all().order_by('name')
+
+        # Paginate tags
+        paginator = Paginator(tags, 25)  # Show 25 tags per page
+        page_number = request.GET.get('page')
+        page_obj = paginator.get_page(page_number)
+
+        context = {
+            'tags': page_obj,  # Pass the Page object to the template
+            'search_query': search_query,
+        }
         return render(request, 'edit_tags.html', context)
+
 
 
 @login_required
@@ -787,6 +836,10 @@ def get_top_tags(user=None):
 
     return tags
 
+
+
+from collections import defaultdict
+
 def get_recommendations(user=None):
     if user and user.is_authenticated:
         # Get a list of tag IDs applied by the user
@@ -820,8 +873,51 @@ def get_recommendations(user=None):
         ).filter(
             total_tags__gt=0
         ).order_by('?')[:5]
-
+    
+    # Annotate recommended_maps with tags_with_counts
+    recommended_maps = annotate_beatmaps_with_tags(recommended_maps, user)
+    
     return recommended_maps
+
+def annotate_beatmaps_with_tags(beatmaps, user):
+    beatmap_ids = beatmaps.values_list('id', flat=True)
+    # Fetch all TagApplications related to the beatmaps
+    tag_apps = TagApplication.objects.filter(beatmap_id__in=beatmap_ids).select_related('tag')
+    # Mapping from beatmap_id to a dictionary of tags and counts
+    beatmap_tag_counts = defaultdict(lambda: defaultdict(int))
+    user_applied_tags = defaultdict(set)
+
+    for tag_app in tag_apps:
+        beatmap_id = tag_app.beatmap_id
+        tag = tag_app.tag
+        beatmap_tag_counts[beatmap_id][tag] += 1
+        if user and user.is_authenticated and tag_app.user_id == user.id:
+            user_applied_tags[beatmap_id].add(tag)
+
+    # Attach the tags and counts to the beatmaps
+    for beatmap in beatmaps:
+        tags_with_counts = []
+        beatmap_tags = beatmap_tag_counts.get(beatmap.id, {})
+        for tag, count in beatmap_tags.items():
+            is_applied_by_user = tag in user_applied_tags.get(beatmap.id, set())
+            tags_with_counts.append({
+                'tag': tag,
+                'apply_count': count,
+                'is_applied_by_user': is_applied_by_user,
+            })
+        beatmap.tags_with_counts = sorted(tags_with_counts, key=lambda x: -x['apply_count'])
+
+    return beatmaps
+
+def recommended_maps_view(request):
+    user = request.user
+    recommended_maps = get_recommendations(user=user)
+    
+    context = {
+        'recommended_maps': recommended_maps,
+    }
+    
+    return render(request, 'your_template.html', context)
 
 
 def home(request):

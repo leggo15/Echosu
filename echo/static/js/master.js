@@ -80,7 +80,7 @@ $(document).ready(function() {
             success: function(tags) {
                 $('.applied-tags').empty().append('Tags: ');
                 tags.forEach(function(tag) {
-                    // Determine the class based on whether the user has applied the tag
+                    // Assign class based on whether the user has applied the tag
                     var tagClass = tag.is_applied_by_user ? 'tag-applied' : 'tag-unapplied';
                     
                     // Append the tag with the appropriate class
@@ -89,6 +89,7 @@ $(document).ready(function() {
                               data-tag-name="${tag.name}" 
                               data-applied-by-user="${tag.is_applied_by_user}" 
                               data-description="${tag.description}">
+                              data-description-author="${tag.description_author}">
                             ${tag.name} (${tag.apply_count})
                         </span>
                     `);
@@ -100,6 +101,7 @@ $(document).ready(function() {
             }
         });
     }
+    
     
     // Initial call to load the tags
     refreshTags();
@@ -151,36 +153,88 @@ $(document).ready(function() {
 document.addEventListener('DOMContentLoaded', function () {
     const tags = document.querySelectorAll('.tag');
 
-    tags.forEach(function(tag) {
+    tags.forEach(function(tag, index) {  // Added 'index' for unique IDs
         let timeout;
+
         tag.addEventListener('mouseenter', function() {
+            // Start the timeout to show the tooltip after 500ms
             timeout = setTimeout(function() {
+                // Check if tooltip already exists to prevent duplicates
+                if (tag._tooltip) return;
+
                 // Create tooltip element
                 let tooltip = document.createElement('div');
                 tooltip.className = 'tooltip';
-                tooltip.innerText = tag.getAttribute('data-description');
+                
+                // Set a unique ID for accessibility
+                tooltip.id = `tooltip-${index}`;
+                tooltip.setAttribute('role', 'tooltip');
+                tag.setAttribute('aria-describedby', tooltip.id);
+                
+                // Get description and author
+                const description = tag.getAttribute('data-description');
+                const author = tag.getAttribute('data-description-author');
+
+                // Debugging: Log the retrieved data
+                console.log(`Tag: ${tag.getAttribute('data-tag-name')}, Description: "${description}", Author: "${author}"`);
+
+                // Set tooltip content
+                let tooltipContent = description ? description : 'No description available';
+                tooltipContent += (author && author !== 'N/A') ? ` - ${author}` : '';
+                tooltip.innerText = tooltipContent;
+
+                // Append tooltip to body
                 document.body.appendChild(tooltip);
 
-                // Position tooltip above the tag
+                // Position tooltip to overlap half with the tag and half outside
                 let rect = tag.getBoundingClientRect();
                 let tooltipRect = tooltip.getBoundingClientRect();
-                tooltip.style.left = rect.left + window.pageXOffset + (rect.width / 2) - (tooltipRect.width / 2) + 'px';
-                tooltip.style.top = rect.top + window.pageYOffset - tooltipRect.height - 8 + 'px'; // 8px gap
+                
+                // Calculate left position: center the tooltip horizontally relative to the tag
+                let left = rect.left + window.pageXOffset + (rect.width / 2) - (tooltipRect.width / 2);
+                
+                // Ensure the tooltip doesn't go off the left or right edge of the viewport
+                left = Math.max(left, 10); // 10px padding from the left
+                left = Math.min(left, window.innerWidth - tooltipRect.width - 10); // 10px padding from the right
+
+                tooltip.style.left = `${left}px`;
+
+                // Calculate top position: overlap half inside and half above the tag
+                // Since tooltip has transform: translateY(-50%), setting top to rect.top + pageYOffset - (tooltip height / 2)
+                let top = rect.top + window.pageYOffset - (tooltipRect.height / 2);
+                
+                // Prevent tooltip from going off the top edge
+                top = Math.max(top, 10); // 10px padding from the top
+
+                tooltip.style.top = `${top}px`;
 
                 // Attach tooltip to tag element
                 tag._tooltip = tooltip;
 
                 // Fade-in effect
-                setTimeout(function() {
+                requestAnimationFrame(() => {
                     tooltip.style.opacity = '1';
-                }, 10);
+                });
             }, 500); // 500ms delay
         });
+
         tag.addEventListener('mouseleave', function() {
+            // Clear the timeout if the user leaves before 500ms
             clearTimeout(timeout);
+
             if (tag._tooltip) {
-                document.body.removeChild(tag._tooltip);
-                tag._tooltip = null;
+                let tooltip = tag._tooltip;
+
+                // Fade-out effect
+                tooltip.style.opacity = '0';
+
+                // Remove the tooltip after the transition duration (200ms)
+                setTimeout(function() {
+                    if (tooltip.parentElement) {
+                        tooltip.parentElement.removeChild(tooltip);
+                    }
+                    tag._tooltip = null;
+                }, 200); // Match this with the CSS transition duration
             }
         });
     });

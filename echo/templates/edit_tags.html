@@ -4,31 +4,73 @@
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Beatmap Info</title>
+        <title>Edit Tags</title>
         <link rel="stylesheet" href="https://echosu-s3.s3.eu-central-1.amazonaws.com/css/master.css">
         <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
         <script src="https://echosu-s3.s3.eu-central-1.amazonaws.com/js/master.js"></script>
         <meta name="csrf-token" content="{{ csrf_token }}">
         <style>
-            /* Optional: Add styles for success and error messages */
+            /* Styles for success and error messages */
             .success {
                 color: green;
             }
             .error {
                 color: red;
             }
+            /* Table Styles */
             table {
                 width: 100%;
                 border-collapse: collapse;
+                margin-top: 20px;
             }
             th, td {
                 padding: 12px;
                 border: 1px solid #ddd;
                 text-align: left;
             }
+            /* Textarea Styles */
             textarea {
                 width: 100%;
                 resize: vertical;
+            }
+            /* Search Form Styles */
+            .tag-search-form {
+                margin-top: 20px;
+                margin-bottom: 20px;
+            }
+            /* Button Styles */
+            .generic_btn {
+                padding: 8px 16px;
+                background-color: #17a2b8;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+            }
+            .generic_btn:hover {
+                background-color: #138496;
+            }
+            /* Pagination Styles */
+            .pagination {
+                margin-top: 20px;
+            }
+            .pagination .step-links a {
+                margin: 0 5px;
+                text-decoration: none;
+                color: #17a2b8;
+            }
+            .pagination .step-links .current {
+                margin: 0 5px;
+                font-weight: bold;
+            }
+            /* Loading Spinner Styles */
+            #loading-spinner {
+                display: none;
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                z-index: 1000;
             }
         </style>
     </head>
@@ -39,18 +81,28 @@
             {% load custom_tags %}
             {% block content %}
             <h1>Edit Tags</h1>
+            <i>e</i>
             
+            <!-- Display Django Messages -->
             {% if messages %}
                 {% for message in messages %}
                     <p class="message {{ message.tags }}">{{ message }}</p>
                 {% endfor %}
             {% endif %}
             
+            <!-- Search Form -->
+            <form method="get" action="{% url 'edit_tags' %}" class="tag-search-form">
+                <input type="text" name="search" placeholder="Search tags..." value="{{ search_query }}">
+                <button type="submit" class="generic_btn">Search</button>
+            </form>
+            
+            <!-- Tags Table -->
             <table>
                 <thead>
                     <tr>
                         <th>Tag Name</th>
                         <th>Description</th>
+                        <th>Edited By</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -61,38 +113,76 @@
                             <input type="hidden" class="tag-id" value="{{ tag.id }}">
                             <textarea class="tag-description" data-tag-id="{{ tag.id }}" rows="2" cols="50">{{ tag.description }}</textarea>
                         </td>
+                        <td>
+                            {% if tag.description_author %}
+                                {{ tag.description_author }}
+                            {% else %}
+                                N/A
+                            {% endif %}
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
             
-            <!-- Optional: Add a message area for feedback -->
+            <!-- Pagination Controls -->
+            <div class="pagination">
+                <span class="step-links">
+                    {% if tags.has_previous %}
+                        <a href="?search={{ search_query }}&page=1">&laquo; first</a>
+                        <a href="?search={{ search_query }}&page={{ tags.previous_page_number }}">previous</a>
+                    {% endif %}
+
+                    <span class="current">
+                        Page {{ tags.number }} of {{ tags.paginator.num_pages }}.
+                    </span>
+
+                    {% if tags.has_next %}
+                        <a href="?search={{ search_query }}&page={{ tags.next_page_number }}">next</a>
+                        <a href="?search={{ search_query }}&page={{ tags.paginator.num_pages }}">last &raquo;</a>
+                    {% endif %}
+                </span>
+            </div>
+            
+            <!-- Message Area for AJAX Feedback -->
             <div id="message-area"></div>
             
-            {% endblock %}
+            <!-- Loading Spinner -->
+            <div id="loading-spinner">
+                <img src="{% static 'images/spinner.gif' %}" alt="Loading...">
+            </div>
             
+            {% endblock %}
         </div>
     </body>
     <script>
         document.addEventListener('DOMContentLoaded', function () {
             const descriptionFields = document.querySelectorAll('.tag-description');
-        
+            const messageArea = document.getElementById('message-area');
+            const loadingSpinner = document.getElementById('loading-spinner');
+            const debounceTimeout = 3000; // 3 seconds
+            const debounceTimers = {};
+
             descriptionFields.forEach(function(field) {
-                let timeoutId;
-        
                 field.addEventListener('input', function() {
-                    clearTimeout(timeoutId);
-                    timeoutId = setTimeout(function() {
-                        const newDescription = field.value.trim();
-                        const tagId = field.getAttribute('data-tag-id');
-        
+                    const tagId = field.getAttribute('data-tag-id');
+                    const newDescription = field.value.trim();
+
+                    // Clear existing timer if any
+                    if (debounceTimers[tagId]) {
+                        clearTimeout(debounceTimers[tagId]);
+                    }
+
+                    // Set a new timer
+                    debounceTimers[tagId] = setTimeout(function() {
+                        showLoading();
                         // AJAX request to update the tag description
-                        fetch("{% url 'update_tag_description' %}", {
+                        fetch("{% url 'edit_tags' %}", {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/x-www-form-urlencoded',
-                                'X-CSRFToken': '{{ csrf_token }}',
-                                'X-Requested-With': 'XMLHttpRequest' // Added header
+                                'X-CSRFToken': getCSRFToken(),
+                                'X-Requested-With': 'XMLHttpRequest' // Indicate AJAX request
                             },
                             body: new URLSearchParams({
                                 'tag_id': tagId,
@@ -101,31 +191,50 @@
                         })
                         .then(response => response.json())
                         .then(data => {
-                            const messageArea = document.getElementById('message-area');
                             if (data.status === 'success') {
-                                messageArea.innerHTML = `<p class="success">${data.message}</p>`;
-                                // Remove the message after 3 seconds
-                                setTimeout(() => {
-                                    messageArea.innerHTML = '';
-                                }, 3000);
+                                showMessage(`${data.message} Author: ${data.description_author}`, 'success');
+                                // Update the author display in the table
+                                const authorCell = field.closest('tr').querySelector('td:nth-child(3)');
+                                authorCell.textContent = data.description_author;
                             } else {
-                                messageArea.innerHTML = `<p class="error">${data.message}</p>`;
-                                setTimeout(() => {
-                                    messageArea.innerHTML = '';
-                                }, 5000);
+                                showMessage(data.message, 'error');
                             }
                         })
                         .catch(error => {
                             console.error('Error:', error);
-                            const messageArea = document.getElementById('message-area');
-                            messageArea.innerHTML = `<p class="error">An error occurred while updating the description.</p>`;
-                            setTimeout(() => {
-                                messageArea.innerHTML = '';
-                            }, 5000);
+                            showMessage('An error occurred while updating the description.', 'error');
+                        })
+                        .finally(() => {
+                            hideLoading();
+                            // Remove the timer
+                            delete debounceTimers[tagId];
                         });
-                    }, 3000); // 1 second debounce
+                    }, debounceTimeout);
                 });
             });
+
+            // Function to display messages
+            function showMessage(message, type) {
+                messageArea.innerHTML = `<p class="${type}">${message}</p>`;
+                // Remove the message after a delay
+                setTimeout(() => {
+                    messageArea.innerHTML = '';
+                }, type === 'success' ? 3000 : 5000);
+            }
+
+            // Functions to show and hide the loading spinner
+            function showLoading() {
+                loadingSpinner.style.display = 'block';
+            }
+
+            function hideLoading() {
+                loadingSpinner.style.display = 'none';
+            }
+
+            // Function to retrieve CSRF token from meta tag
+            function getCSRFToken() {
+                return $('meta[name="csrf-token"]').attr('content');
+            }
         });
     </script>
 </html>

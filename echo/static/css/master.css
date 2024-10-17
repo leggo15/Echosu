@@ -793,18 +793,22 @@ nav {
     font-size: 14px;
 }
 
+
 .tooltip {
     position: absolute;
-    background-color: rgba(60, 60, 60, 0.9);
+    background-color: rgba(60, 60, 60, 0.95);
     color: #fff;
-    padding: 6px 8px;
+    padding: 6px 10px;
     border-radius: 4px;
     white-space: nowrap;
     z-index: 1000;
     font-size: 14px;
     pointer-events: none;
     opacity: 0;
-    transition: opacity 0.2s ease-in-out;
+    transition: opacity 0.2s ease-in-out, transform 0.2s ease-in-out;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+    transform: translateY(-50%);
+    word-wrap: break-word; /* Allow breaking long words */
 }
 
 

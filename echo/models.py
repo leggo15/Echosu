@@ -38,20 +38,23 @@ class UserProfile(models.Model):
     def __str__(self):
         return self.user.username or "Unknown User"
 
+from django.contrib.auth.models import User
 
 class Tag(models.Model):
     name = models.CharField(max_length=100, null=False, unique=True)
     description = models.CharField(max_length=255, unique=False, null=False, blank=True)
+    description_author = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='tag_descriptions')
     beatmaps = models.ManyToManyField(Beatmap, related_name='tags', blank=True, through='TagApplication')
 
     def save(self, *args, **kwargs):
         self.name = self.name.strip().lower()
         super(Tag, self).save(*args, **kwargs)
 
-
     def __str__(self):
         return self.name
-    
+
+
+
 
 class TagApplication(models.Model):
     tag = models.ForeignKey(Tag, on_delete=models.CASCADE)

@@ -24,26 +24,26 @@
             transition: background-color 0.3s, color 0.3s;
         }
 
-        /* Tag applied by the current user (Blue) */
+        /* Tag applied by the current user (lightblue) */
         .applied-tags span.tag.tag-applied {
             background-color: #17a2b8; /* Blue */
         }
 
         /* Tag not applied by the current user (Grey) */
         .applied-tags span.tag.tag-unapplied {
-            background-color: #6c757d; /* Grey */
+            background-color: #aaaaaa; /* Grey */
         }
 
         /* Hover Effects */
 
         /* Hover over a tag that can be applied (unapplied) */
         .applied-tags span.tag.tag-unapplied:hover {
-            background-color: #28a745; /* Green */
+            background-color: lightgreen; /* Green */
         }
 
         /* Hover over a tag that can be removed (applied by user) */
         .applied-tags span.tag.tag-applied:hover {
-            background-color: #dc3545; /* Red */
+            background-color: lightcoral; /* Red */
         }
     </style>
 </head>
@@ -147,99 +147,5 @@
             </span>
         </div>
     </div>
-
-    <!-- Include your JavaScript at the end of the body -->
-    <script>
-        // Function to retrieve CSRF token from meta tag
-        function getCSRFToken() {
-            return $('meta[name="csrf-token"]').attr('content');
-        }
-
-        $(document).ready(function() {
-            // Function to attach click events to tags within each beatmap
-            function attachTagClickEvents() {
-                $('.applied-tags').off('click', '.tag').on('click', '.tag', function() {
-                    var $this = $(this);
-                    var isApplied = $this.hasClass('tag-applied');
-                    var tagName = $this.data('tag-name');
-                    var beatmapId = $this.closest('.beatmap-display').find('.current_beatmap_id').val();
-
-                    if (isApplied) {
-                        // Remove the tag
-                        removeTag(tagName, beatmapId, $this);
-                    } else {
-                        // Apply the tag
-                        applyTag(tagName, beatmapId, $this);
-                    }
-                });
-            }
-
-            // Function to apply a tag via AJAX
-            function applyTag(tagName, beatmapId, $tagElement) {
-                $.ajax({
-                    type: 'POST',
-                    url: '{% url "modify_tag" %}',  // Update with your URL name
-                    data: {
-                        'action': 'apply',
-                        'tag': tagName,
-                        'beatmap_id': beatmapId,
-                        'csrfmiddlewaretoken': getCSRFToken()
-                    },
-                    success: function(response) {
-                        if (response.status === 'success') {
-                            // Update the tag's class to 'tag-applied'
-                            $tagElement.removeClass('tag-unapplied').addClass('tag-applied');
-                            // Update the apply_count
-                            var countMatch = $tagElement.text().match(/\((\d+)\)/);
-                            var count = countMatch ? parseInt(countMatch[1]) : 0;
-                            $tagElement.text(tagName + ' (' + (count + 1) + ')');
-                        } else {
-                            alert(response.message);
-                        }
-                    },
-                    error: function(xhr, status, error) {
-                        console.error('Error applying tag:', error);
-                        alert('Failed to apply tag. Please try again.');
-                    }
-                });
-            }
-
-            // Function to remove a tag via AJAX
-            function removeTag(tagName, beatmapId, $tagElement) {
-                $.ajax({
-                    type: 'POST',
-                    url: '{% url "modify_tag" %}',  // Update with your URL name
-                    data: {
-                        'action': 'remove',
-                        'tag': tagName,
-                        'beatmap_id': beatmapId,
-                        'csrfmiddlewaretoken': getCSRFToken()
-                    },
-                    success: function(response) {
-                        if (response.status === 'success') {
-                            // Update the tag's class to 'tag-unapplied'
-                            $tagElement.removeClass('tag-applied').addClass('tag-unapplied');
-                            // Update the apply_count
-                            var countMatch = $tagElement.text().match(/\((\d+)\)/);
-                            var count = countMatch ? parseInt(countMatch[1]) : 0;
-                            $tagElement.text(tagName + ' (' + (count - 1) + ')');
-                        } else {
-                            alert(response.message);
-                        }
-                    },
-                    error: function(xhr, status, error) {
-                        console.error('Error removing tag:', error);
-                        alert('Failed to remove tag. Please try again.');
-                    }
-                });
-            }
-
-            // Initial call to attach click events
-            attachTagClickEvents();
-
-            // Example: Re-attach events after AJAX pagination
-            // If using AJAX-based pagination, ensure to call attachTagClickEvents() after new content loads
-        });
-    </script>
 </body>
 </html>

@@ -54,9 +54,7 @@
             {% if error %}
                 <p class="error">{{ error }}</p>
             {% endif %}
-            <span class="tag tag-applied" data-tag-name="Hard" data-applied-by-user="true" data-description="Hard tag description">Hard (10)</span>
-            <span class="tag tag-unapplied" data-tag-name="Easy" data-applied-by-user="false" data-description="Easy tag description">Easy (5)</span>
-            
+
             {% if beatmap %}
                 <div class="beatmap-display">
                     {% if beatmap.cover_image_url %}
@@ -104,7 +102,6 @@
             <p>You have to be logged in to use this. ( click the little oranges in the top right c: )</p>
         {% endif %}
     </div>
-
     <div class="container">
         <!-- Top Tags Section -->
         <section class="tags-usage">
@@ -117,6 +114,7 @@
                         data-tag-name="{{ tag.name }}" 
                         data-applied-by-user="{{ tag.is_applied_by_user }}"
                         data-description="{{ tag.description }}"
+                        data-description-author="{{ tag.description_author }}" 
                     >
                         {{ tag.name }} ({{ tag.total }})
                     </a>
@@ -139,11 +137,13 @@
                                 </div>
                             {% endif %}
                             <div class="beatmap-details-container">
+                                
                                 <div class="beatmap-title-artist">
                                     <h2 class="title">{{ map.title }} - [{{ map.version }}] | {{ map.beatmap_id }}</h2>
                                     <h3 class="artist">Artist: {{ map.artist }}</h3>
                                     <h3 class="mapper">Mapper: {{ map.creator }}</h3>
                                 </div>
+                                
                                 <div class="beatmap-stats">
                                     <span>Length: {{ map.total_length }} </span>
                                     <span>BPM: {{ map.bpm }} </span>
@@ -154,6 +154,23 @@
                                     <span>SR: {{ map.difficulty_rating }}</span>
                                     <span>Mode: {{ map.mode }}</span>
                                 </div>
+        
+                                <div class="applied-tags"> 
+                                    Tags:
+                                    {% if map.tags_with_counts %}
+                                        {% for tag_info in map.tags_with_counts %}
+                                            <span class="tag {% if tag_info.is_applied_by_user %}tag-applied{% else %}tag-unapplied{% endif %}" 
+                                                  data-tag-name="{{ tag_info.tag.name }}" 
+                                                  data-applied-by-user="{{ tag_info.is_applied_by_user }}"
+                                                  data-description="{{ tag_info.tag.description }}">
+                                                {{ tag_info.tag.name }} ({{ tag_info.apply_count }})
+                                            </span>
+                                        {% endfor %}
+                                    {% else %}
+                                        <span>No genres associated.</span>
+                                    {% endif %}
+                                </div>
+        
                                 <a href="{% url 'beatmap_detail' beatmap_id=map.beatmap_id %}" class="beatmap-link">View Details</a>
                             </div>
                         </div>
@@ -167,43 +184,64 @@
 
     <!-- JavaScript to handle hover events -->
     <script>
-    document.addEventListener('DOMContentLoaded', function () {
-        const tags = document.querySelectorAll('.tag');
-
-        tags.forEach(function(tag) {
-            let timeout;
-            tag.addEventListener('mouseenter', function() {
-                timeout = setTimeout(function() {
-                    // Create tooltip element
-                    let tooltip = document.createElement('div');
-                    tooltip.className = 'tooltip';
-                    tooltip.innerText = tag.getAttribute('data-description');
-                    document.body.appendChild(tooltip);
-
-                    // Position tooltip above the tag
-                    let rect = tag.getBoundingClientRect();
-                    let tooltipRect = tooltip.getBoundingClientRect();
-                    tooltip.style.left = rect.left + window.pageXOffset + (rect.width / 2) - (tooltipRect.width / 2) + 'px';
-                    tooltip.style.top = rect.top + window.pageYOffset - tooltipRect.height - 8 + 'px'; // 8px gap
-
-                    // Attach tooltip to tag element
-                    tag._tooltip = tooltip;
-
-                    // Fade-in effect
-                    setTimeout(function() {
-                        tooltip.style.opacity = '1';
-                    }, 10);
-                }, 500); // 500ms delay
-            });
-            tag.addEventListener('mouseleave', function() {
-                clearTimeout(timeout);
-                if (tag._tooltip) {
-                    document.body.removeChild(tag._tooltip);
-                    tag._tooltip = null;
-                }
+        document.addEventListener('DOMContentLoaded', function () {
+            const tags = document.querySelectorAll('.tag');
+        
+            tags.forEach(function(tag) {
+                let timeout;
+        
+                tag.addEventListener('mouseenter', function() {
+                    // Start the timeout to show the tooltip after 500ms
+                    timeout = setTimeout(function() {
+                        // Check if tooltip already exists to prevent duplicates
+                        if (tag._tooltip) return;
+        
+                        // Create tooltip element
+                        let tooltip = document.createElement('div');
+                        tooltip.className = 'tooltip';
+                        tooltip.innerText = tag.getAttribute('data-description');
+                        document.body.appendChild(tooltip);
+        
+                        // Position tooltip above the tag
+                        let rect = tag.getBoundingClientRect();
+                        let tooltipRect = tooltip.getBoundingClientRect();
+                        tooltip.style.left = (rect.left + window.pageXOffset + (rect.width / 2) - (tooltipRect.width / 2)) + 'px';
+                        tooltip.style.top = (rect.top + window.pageYOffset - tooltipRect.height - 8) + 'px'; // 8px gap
+        
+                        // Attach tooltip to tag element
+                        tag._tooltip = tooltip;
+        
+                        // Fade-in effect
+                        requestAnimationFrame(() => {
+                            tooltip.style.opacity = '1';
+                        });
+                    }, 500); // 500ms delay
+                });
+        
+                tag.addEventListener('mouseleave', function() {
+                    // Clear the timeout if the user leaves before 500ms
+                    clearTimeout(timeout);
+        
+                    if (tag._tooltip) {
+                        let tooltip = tag._tooltip;
+        
+                        // Fade-out effect
+                        tooltip.style.opacity = '0';
+        
+                        // Remove the tooltip after the transition duration (200ms)
+                        setTimeout(function() {
+                            if (tooltip.parentElement) {
+                                tooltip.parentElement.removeChild(tooltip);
+                            }
+                            tag._tooltip = null;
+                        }, 100); // Match this with the CSS transition duration
+                    }
+                });
             });
         });
-    });
-    </script>
+        
+        </script>
+        
+
 </body>
 </html>

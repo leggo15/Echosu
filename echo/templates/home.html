@@ -102,6 +102,7 @@
             <p>You have to be logged in to use this. ( click the little oranges in the top right c: )</p>
         {% endif %}
     </div>
+
     <div class="container">
         <!-- Top Tags Section -->
         <section class="tags-usage">
@@ -114,7 +115,7 @@
                         data-tag-name="{{ tag.name }}" 
                         data-applied-by-user="{{ tag.is_applied_by_user }}"
                         data-description="{{ tag.description }}"
-                        data-description-author="{{ tag.description_author }}" 
+ 
                     >
                         {{ tag.name }} ({{ tag.total }})
                     </a>

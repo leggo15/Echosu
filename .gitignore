@@ -89,6 +89,3 @@ local_settings.py
 db.sqlite3
 
 *.swp
-
-# Ignore Django migrations
-**/migrations/

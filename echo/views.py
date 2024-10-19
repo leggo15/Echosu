@@ -198,6 +198,7 @@ def beatmap_detail(request, beatmap_id):
 
 # ----------------------------- Tag Views ----------------------------- #
 
+
 def get_tags(request):
     """
     Retrieve tags for a specific beatmap

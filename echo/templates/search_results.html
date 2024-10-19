@@ -6,9 +6,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Search Results</title>
-    <link rel="stylesheet" href="https://echosu-s3.s3.eu-central-1.amazonaws.com/css/master.css">
+    <link rel="stylesheet" href="https://echosu-s3.s3.eu-central-1.amazonaws.com/static/css/master.css">
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script src="https://echosu-s3.s3.eu-central-1.amazonaws.com/js/master.js"></script>
+    <script src="https://echosu-s3.s3.eu-central-1.amazonaws.com/static/js/master.js"></script>
     <meta name="csrf-token" content="{{ csrf_token }}">
     <style>
         /* Base tag styling */
@@ -62,16 +62,7 @@
         </i>
         <!-- Search form with tag input for auto-complete functionality -->
         <form action="{% url 'search_results' %}" method="get" class="beatmap-form">
-            <!-- Add Game Mode Selection -->
-            <div class="container">
-                <select name="mode">
-                    <option value="" {% if not request.GET.mode %}selected{% endif %}>All Modes</option>
-                    <option value="osu" {% if request.GET.mode == 'osu' %}selected{% endif %}>Standard</option>
-                    <option value="taiko" {% if request.GET.mode == 'taiko' %}selected{% endif %}>Taiko</option>
-                    <option value="catch" {% if request.GET.mode == 'catch' %}selected{% endif %}>Catch the Beat</option>
-                    <option value="mania" {% if request.GET.mode == 'mania' %}selected{% endif %}>Mania</option>
-                </select>
-            </div>
+
             <input type="text" name="query" id="tag-input" placeholder="Search by Genre, name, ID, mapper, or artist" value="{{ request.GET.query }}">
             <button type="submit" class="generic_btn">Search</button>
         </form>

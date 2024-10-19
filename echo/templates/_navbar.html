@@ -4,11 +4,7 @@
 <html lang="en">
 <nav>
     <div class="nav-links">
-        <div class="logo">
-            <a href="{% url 'home' %}">
-                <img src="{% static 'echosu_logo.png' %}" alt="Echosu Logo">
-            </a>
-        </div>
+        <a href="{% url 'home' %}">Home</a>
         <a href="{% url 'search_results' %}">Search</a>
         {% if user.is_superuser %}
             <a href="{% url 'admin:index' %}">Admin Dashboard</a>

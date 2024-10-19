@@ -6,31 +6,7 @@
 <head>
     <meta charset="UTF-8">
     <title>echosu Home</title>
-    <link rel="stylesheet" href="https://echosu-s3.s3.eu-central-1.amazonaws.com/css/master.css">
-    <!-- Include any other necessary scripts -->
-    <!-- Include additional CSS styles -->
-    <style>
-    .tag {
-        position: relative;
-        display: inline-block;
-        cursor: pointer;
-    }
-
-    .tooltip {
-        position: absolute;
-        background-color: rgba(60, 60, 60, 0.9);
-        color: #fff;
-        padding: 6px 8px;
-        border-radius: 4px;
-        white-space: nowrap;
-        z-index: 1000;
-        font-size: 14px;
-        pointer-events: none;
-        opacity: 0;
-        transition: opacity 0.2s ease-in-out;
-    }
-    </style>
-    <!-- Include jQuery and your JavaScript file -->
+    <link rel="stylesheet" href="https://echosu-s3.s3.eu-central-1.amazonaws.com/static/css/master.css">
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://echosu-s3.s3.eu-central-1.amazonaws.com/js/master.js"></script>
 </head>
@@ -107,7 +83,7 @@
         <!-- Top Tags Section -->
         <section class="tags-usage">
             <h2>Top 50 Tags</h2>
-            <div class="container">
+            <div class="container"> 
                 {% for tag in tags %}
                     <a 
                         href="{% url 'search_results' %}?query={{ '"'|add:tag.name|add:'"'|urlencode }}" 
@@ -115,7 +91,11 @@
                         data-tag-name="{{ tag.name }}" 
                         data-applied-by-user="{{ tag.is_applied_by_user }}"
                         data-description="{{ tag.description }}"
- 
+                        {% if tag.description_author %}
+                            data-description-author=" - {{ tag.description_author }}"
+                        {% else %}
+                            data-description-author=""
+                        {% endif %}
                     >
                         {{ tag.name }} ({{ tag.total }})
                     </a>
@@ -182,67 +162,5 @@
             </ul>
         </section>
     </div>
-
-    <!-- JavaScript to handle hover events -->
-    <script>
-        document.addEventListener('DOMContentLoaded', function () {
-            const tags = document.querySelectorAll('.tag');
-        
-            tags.forEach(function(tag) {
-                let timeout;
-        
-                tag.addEventListener('mouseenter', function() {
-                    // Start the timeout to show the tooltip after 500ms
-                    timeout = setTimeout(function() {
-                        // Check if tooltip already exists to prevent duplicates
-                        if (tag._tooltip) return;
-        
-                        // Create tooltip element
-                        let tooltip = document.createElement('div');
-                        tooltip.className = 'tooltip';
-                        tooltip.innerText = tag.getAttribute('data-description');
-                        document.body.appendChild(tooltip);
-        
-                        // Position tooltip above the tag
-                        let rect = tag.getBoundingClientRect();
-                        let tooltipRect = tooltip.getBoundingClientRect();
-                        tooltip.style.left = (rect.left + window.pageXOffset + (rect.width / 2) - (tooltipRect.width / 2)) + 'px';
-                        tooltip.style.top = (rect.top + window.pageYOffset - tooltipRect.height - 8) + 'px'; // 8px gap
-        
-                        // Attach tooltip to tag element
-                        tag._tooltip = tooltip;
-        
-                        // Fade-in effect
-                        requestAnimationFrame(() => {
-                            tooltip.style.opacity = '1';
-                        });
-                    }, 500); // 500ms delay
-                });
-        
-                tag.addEventListener('mouseleave', function() {
-                    // Clear the timeout if the user leaves before 500ms
-                    clearTimeout(timeout);
-        
-                    if (tag._tooltip) {
-                        let tooltip = tag._tooltip;
-        
-                        // Fade-out effect
-                        tooltip.style.opacity = '0';
-        
-                        // Remove the tooltip after the transition duration (200ms)
-                        setTimeout(function() {
-                            if (tooltip.parentElement) {
-                                tooltip.parentElement.removeChild(tooltip);
-                            }
-                            tag._tooltip = null;
-                        }, 100); // Match this with the CSS transition duration
-                    }
-                });
-            });
-        });
-        
-        </script>
-        
-
 </body>
 </html>

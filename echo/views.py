@@ -823,7 +823,7 @@ from django.contrib.auth.decorators import login_required
 
 def get_top_tags(user=None):
     # Annotate tags with total usage and get top 50 tags
-    tags = Tag.objects.annotate(total=Count('tagapplication')).filter(total__gt=0).order_by('-total')[:50]
+    tags = Tag.objects.annotate(total=Count('tagapplication')).filter(total__gt=0).order_by('-total').select_related('description_author')[:50]
 
     # Prepare tags for display
     if user and user.is_authenticated:
@@ -835,6 +835,7 @@ def get_top_tags(user=None):
             tag.is_applied_by_user = False
 
     return tags
+
 
 
 

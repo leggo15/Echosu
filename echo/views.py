@@ -1032,6 +1032,8 @@ def recommended_maps_view(request):
     return render(request, 'your_template.html', context)
 
 
+import re
+
 def home(request):
     user = request.user if request.user.is_authenticated else None
 
@@ -1046,72 +1048,80 @@ def home(request):
 
     # Handle beatmap info form submission (POST request)
     if request.method == 'POST':
-        beatmap_id_request = request.POST.get('beatmap_id')
-        if beatmap_id_request:
+        beatmap_input = request.POST.get('beatmap_id', '').strip()
+
+        if beatmap_input:
             try:
-                # Attempt to fetch beatmap data from the osu! API
-                beatmap_data = api.beatmap(beatmap_id_request)
-                
-                if not beatmap_data:
-                    # If no data is returned, the beatmap ID is invalid
-                    raise ValueError(f"{beatmap_id_request} isn't a valid beatmap ID.")
+                # Extract the beatmap ID from the input (either full URL, partial URL, or just the ID)
+                match = re.search(r'(\d+)$', beatmap_input)
+                if match:
+                    beatmap_id_request = match.group(1)  # Get the beatmap ID as a string
 
-                # Get or create the beatmap object in the database
-                beatmap, created = Beatmap.objects.get_or_create(beatmap_id=beatmap_id_request)
+                    # Attempt to fetch beatmap data from the osu! API
+                    beatmap_data = api.beatmap(beatmap_id_request)
+                    
+                    if not beatmap_data:
+                        raise ValueError(f"{beatmap_id_request} isn't a valid beatmap ID.")
 
-                # Check if beatmap data needs to be updated
-                if created or any(
-                    attr is None for attr in [
-                        beatmap.title, beatmap.version, beatmap.artist, beatmap.creator,
-                        beatmap.cover_image_url, beatmap.total_length, beatmap.bpm,
-                        beatmap.cs, beatmap.drain, beatmap.accuracy, beatmap.ar,
-                        beatmap.difficulty_rating, beatmap.mode, beatmap.beatmapset_id, 
-                        beatmap.status
-                    ]
-                ):
-                    # Update beatmap attributes from the API data
-                    if hasattr(beatmap_data, '_beatmapset'):
-                        beatmapset = beatmap_data._beatmapset
-                        beatmap.beatmapset_id = getattr(beatmapset, 'id', beatmap.beatmapset_id)
-                        beatmap.title = getattr(beatmapset, 'title', beatmap.title)
-                        beatmap.artist = getattr(beatmapset, 'artist', beatmap.artist)
-                        beatmap.creator = getattr(beatmapset, 'creator', beatmap.creator)
-                        beatmap.cover_image_url = getattr(
-                            getattr(beatmapset, 'covers', {}),
-                            'cover_2x',
-                            beatmap.cover_image_url
-                        )
+                    # Get or create the beatmap object in the database
+                    beatmap, created = Beatmap.objects.get_or_create(beatmap_id=beatmap_id_request)
 
-                    status_mapping = {
-                        -2: "Graveyard",
-                        -1: "WIP",
-                        0: "Pending",
-                        1: "Ranked",
-                        2: "Approved",
-                        3: "Qualified",
-                        4: "Loved"
-                    }
+                    # Check if beatmap data needs to be updated
+                    if created or any(
+                        attr is None for attr in [
+                            beatmap.title, beatmap.version, beatmap.artist, beatmap.creator,
+                            beatmap.cover_image_url, beatmap.total_length, beatmap.bpm,
+                            beatmap.cs, beatmap.drain, beatmap.accuracy, beatmap.ar,
+                            beatmap.difficulty_rating, beatmap.mode, beatmap.beatmapset_id, 
+                            beatmap.status
+                        ]
+                    ):
+                        # Update beatmap attributes from the API data
+                        if hasattr(beatmap_data, '_beatmapset'):
+                            beatmapset = beatmap_data._beatmapset
+                            beatmap.beatmapset_id = getattr(beatmapset, 'id', beatmap.beatmapset_id)
+                            beatmap.title = getattr(beatmapset, 'title', beatmap.title)
+                            beatmap.artist = getattr(beatmapset, 'artist', beatmap.artist)
+                            beatmap.creator = getattr(beatmapset, 'creator', beatmap.creator)
+                            beatmap.cover_image_url = getattr(
+                                getattr(beatmapset, 'covers', {}),
+                                'cover_2x',
+                                beatmap.cover_image_url
+                            )
 
-                    # Update other beatmap attributes
-                    beatmap.version = getattr(beatmap_data, 'version', beatmap.version)
-                    beatmap.total_length = getattr(beatmap_data, 'total_length', beatmap.total_length)
-                    beatmap.bpm = getattr(beatmap_data, 'bpm', beatmap.bpm)
-                    beatmap.cs = getattr(beatmap_data, 'cs', beatmap.cs)
-                    beatmap.drain = getattr(beatmap_data, 'drain', beatmap.drain)
-                    beatmap.accuracy = getattr(beatmap_data, 'accuracy', beatmap.accuracy)
-                    beatmap.ar = getattr(beatmap_data, 'ar', beatmap.ar)
-                    beatmap.difficulty_rating = getattr(beatmap_data, 'difficulty_rating', beatmap.difficulty_rating)
-                    beatmap.mode = getattr(beatmap_data, 'mode', beatmap.mode)
-                    beatmap.status = status_mapping.get(beatmap_data.status.value, "Unknown")
+                        status_mapping = {
+                            -2: "Graveyard",
+                            -1: "WIP",
+                            0: "Pending",
+                            1: "Ranked",
+                            2: "Approved",
+                            3: "Qualified",
+                            4: "Loved"
+                        }
 
-                    # Save the updated beatmap to the database
-                    beatmap.save()
+                        # Update other beatmap attributes
+                        beatmap.version = getattr(beatmap_data, 'version', beatmap.version)
+                        beatmap.total_length = getattr(beatmap_data, 'total_length', beatmap.total_length)
+                        beatmap.bpm = getattr(beatmap_data, 'bpm', beatmap.bpm)
+                        beatmap.cs = getattr(beatmap_data, 'cs', beatmap.cs)
+                        beatmap.drain = getattr(beatmap_data, 'drain', beatmap.drain)
+                        beatmap.accuracy = getattr(beatmap_data, 'accuracy', beatmap.accuracy)
+                        beatmap.ar = getattr(beatmap_data, 'ar', beatmap.ar)
+                        beatmap.difficulty_rating = getattr(beatmap_data, 'difficulty_rating', beatmap.difficulty_rating)
+                        beatmap.mode = getattr(beatmap_data, 'mode', beatmap.mode)
+                        beatmap.status = status_mapping.get(beatmap_data.status.value, "Unknown")
 
-                # Add the beatmap to the context to display its information
-                context['beatmap'] = beatmap
+                        # Save the updated beatmap to the database
+                        beatmap.save()
+
+                    # Add the beatmap to the context to display its information
+                    context['beatmap'] = beatmap
+                else:
+                    raise ValueError("Invalid input. Please provide a valid beatmap link or ID.")
 
             except Exception as e:
-                context['error'] = f'{beatmap_id_request} is not a valid beatmap ID.'
+                context['error'] = f'{beatmap_input} is not a valid beatmap input.'
+
     else:
         beatmap_id = request.GET.get('beatmap_id')
         if beatmap_id:
@@ -1142,6 +1152,7 @@ def home(request):
         context['beatmap_tags_with_counts'] = beatmap_tags_with_counts
 
     return render(request, 'home.html', context)
+
 
 
 

@@ -210,7 +210,7 @@ def get_tags(request):
     # Fetch all tags for this beatmap with a count of distinct users that applied each tag
     tags_with_user_counts = TagApplication.objects.filter(
         beatmap=beatmap
-    ).values('tag__name').annotate(
+    ).values('tag__name', 'tag__description', 'tag__description_author__username').annotate(
         apply_count=Count('user', distinct=True)
     ).order_by('-apply_count')
 
@@ -223,6 +223,8 @@ def get_tags(request):
     tags_with_counts_list = [
         {
             'name': tag['tag__name'],
+            'description': tag.get('tag__description', ''),
+            'description_author': tag.get('tag__description_author__username', ''),
             'apply_count': tag['apply_count'],
             'is_applied_by_user': tag['tag__name'] in user_tag_names
         } for tag in tags_with_user_counts

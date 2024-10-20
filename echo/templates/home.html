@@ -8,7 +8,7 @@
     <title>echosu Home</title>
     <link rel="stylesheet" href="https://echosu-s3.s3.eu-central-1.amazonaws.com/static/css/master.css">
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script src="https://echosu-s3.s3.eu-central-1.amazonaws.com/js/master.js"></script>
+    <script src="https://echosu-s3.s3.eu-central-1.amazonaws.com/static/js/master.js"></script>
 </head>
 <body>
     {% include '_navbar.html' %}
@@ -67,7 +67,15 @@
                 <div class="applied-tags">
                     Tags:
                     {% for tag in beatmap_tags_with_counts %}
-                        <span class="tag" data-tag-name="{{ tag.name }}" data-applied-by-user="{{ tag.is_applied_by_user }}" data-description="{{ tag.description }}">
+                        <span class="tag" 
+                        data-tag-name="{{ tag.name }}" 
+                        data-applied-by-user="{{ tag.is_applied_by_user }}"
+                        data-description=' "{{ tag.description }}" '
+                        {% if tag.description_author %}
+                            data-description-author=" - {{ tag.description_author }}"
+                        {% else %}
+                            data-description-author=""
+                        {% endif %}
                             {{ tag.name }} ({{ tag.apply_count }})
                         </span>
                     {% endfor %}
@@ -90,7 +98,7 @@
                         class="tag" 
                         data-tag-name="{{ tag.name }}" 
                         data-applied-by-user="{{ tag.is_applied_by_user }}"
-                        data-description="{{ tag.description }}"
+                        data-description=' "{{ tag.description }}" '
                         {% if tag.description_author %}
                             data-description-author=" - {{ tag.description_author }}"
                         {% else %}

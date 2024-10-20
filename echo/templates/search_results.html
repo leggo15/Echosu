@@ -2,7 +2,6 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <!-- ... existing head content ... -->
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Search Results</title>
@@ -10,42 +9,6 @@
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://echosu-s3.s3.eu-central-1.amazonaws.com/static/js/master.js"></script>
     <meta name="csrf-token" content="{{ csrf_token }}">
-    <style>
-        /* Base tag styling */
-        .applied-tags span.tag {
-            display: inline-block;
-            /* Removed base background-color */
-            color: white;
-            padding: 5px 10px;
-            border-radius: 15px;
-            margin: 5px;
-            font-size: 14px;
-            cursor: pointer;
-            transition: background-color 0.3s, color 0.3s;
-        }
-
-        /* Tag applied by the current user (lightblue) */
-        .applied-tags span.tag.tag-applied {
-            background-color: #17a2b8; /* Blue */
-        }
-
-        /* Tag not applied by the current user (Grey) */
-        .applied-tags span.tag.tag-unapplied {
-            background-color: #aaaaaa; /* Grey */
-        }
-
-        /* Hover Effects */
-
-        /* Hover over a tag that can be applied (unapplied) */
-        .applied-tags span.tag.tag-unapplied:hover {
-            background-color: lightgreen; /* Green */
-        }
-
-        /* Hover over a tag that can be removed (applied by user) */
-        .applied-tags span.tag.tag-applied:hover {
-            background-color: lightcoral; /* Red */
-        }
-    </style>
 </head>
 <body>
     {% include '_navbar.html' %}
@@ -101,9 +64,14 @@
                             {% if beatmap.tags_with_counts %}
                                 {% for tag_info in beatmap.tags_with_counts %}
                                     <span class="tag {% if tag_info.is_applied_by_user %}tag-applied{% else %}tag-unapplied{% endif %}" 
-                                          data-tag-name="{{ tag_info.tag.name }}" 
-                                          data-applied-by-user="{{ tag_info.is_applied_by_user }}"
-                                          data-description="{{ tag_info.tag.description }}">
+                                        data-tag-name="{{ tag_info.tag.name }}" 
+                                        data-applied-by-user="{{ tag_info.is_applied_by_user }}"
+                                        data-description=' "{{ tag_info.tag.description }}" '
+                                        {% if tag_info.tag.description_author %}
+                                            data-description-author=" - {{ tag_info.tag.description_author }}"
+                                        {% else %}
+                                            data-description-author=""
+                                        {% endif %}>
                                         {{ tag_info.tag.name }} ({{ tag_info.apply_count }})
                                     </span>
                                 {% endfor %}
@@ -111,6 +79,7 @@
                                 <span>No genres associated.</span>
                             {% endif %}
                         </div>
+
                     {% endif %}
                 </div>
             </div>

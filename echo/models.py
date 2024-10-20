@@ -57,15 +57,51 @@ class Tag(models.Model):
     description = models.CharField(max_length=255, unique=False, null=False, blank=True)
     description_author = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='tag_descriptions', default=get_default_author)
     beatmaps = models.ManyToManyField(Beatmap, related_name='tags', blank=True, through='TagApplication')
+    upvotes = models.PositiveIntegerField(default=0)
+    downvotes = models.PositiveIntegerField(default=0)
+    is_locked = models.BooleanField(default=False)
+
+    def vote_score(self):
+        return self.upvotes - self.downvotes
 
     def save(self, *args, **kwargs):
+        # Detect if the description has changed
+        if self.pk:
+            previous = Tag.objects.get(pk=self.pk)
+            if previous.description != self.description:
+                # Reset votes and lock status
+                self.upvotes = 0
+                self.downvotes = 0
+                self.is_locked = False
+                # Delete all existing votes for this tag
+                self.votes.all().delete()
         self.name = self.name.strip().lower()
         super(Tag, self).save(*args, **kwargs)
 
     def __str__(self):
         return self.name
 
+class Vote(models.Model):
+    UPVOTE = 'upvote'
+    DOWNVOTE = 'downvote'
+    VOTE_CHOICES = [
+        (UPVOTE, 'Upvote'),
+        (DOWNVOTE, 'Downvote'),
+    ]
 
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='votes')
+    tag = models.ForeignKey(Tag, on_delete=models.CASCADE, related_name='votes')
+    vote_type = models.CharField(max_length=10, choices=VOTE_CHOICES)  # Corrected max_length
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('user', 'tag')  # Ensures a user can vote only once per tag
+        indexes = [
+            models.Index(fields=['user', 'tag']),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username} {self.vote_type}d '{self.tag.name}'"
 
 
 class TagApplication(models.Model):

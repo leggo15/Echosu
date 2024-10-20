@@ -9,4 +9,9 @@ def has_tag_edit_permission(user):
     if not user.is_authenticated:
         return False
     tagged_maps_count = TagApplication.objects.filter(user=user).values('beatmap').distinct().count()
-    return tagged_maps_count >= 5
+    return tagged_maps_count >= 10
+
+
+@register.filter
+def get_item(dictionary, key):
+    return dictionary.get(key)

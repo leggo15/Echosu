@@ -316,16 +316,16 @@ def modify_tag(request):
 
 import difflib
 from django.contrib.auth.decorators import login_required
-from django.http import HttpResponseForbidden, JsonResponse
+from django.http import HttpResponseForbidden, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.core.paginator import Paginator
-from .models import Tag
+from django.db import IntegrityError
+from .models import Tag, Vote
 from .templatetags.custom_tags import has_tag_edit_permission
 
 def count_word_differences(old_desc, new_desc):
     old_words = old_desc.lower().split()
     new_words = new_desc.lower().split()
-    # Use difflib to find differences
     diff = difflib.ndiff(old_words, new_words)
     changes = sum(1 for word in diff if word.startswith('- ') or word.startswith('+ '))
     return changes
@@ -334,14 +334,13 @@ def count_word_differences(old_desc, new_desc):
 def edit_tags(request):
     user = request.user
 
-    # Check if the user has permission
+    # Check if the user has permission to edit tags
     if not has_tag_edit_permission(user):
         return HttpResponseForbidden("You do not have permission to edit tags.")
 
     if request.method == 'POST':
-        # Check if the request is AJAX
+        # Handle AJAX tag description updates
         if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-            # Handle AJAX tag description updates
             tag_id = request.POST.get('tag_id')
             new_description = request.POST.get('description', '').strip()
             
@@ -363,13 +362,14 @@ def edit_tags(request):
                     'status': 'success',
                     'message': 'Tag description updated.',
                     'word_diff_count': word_diff_count,
-                    'description_author': tag.description_author.username if tag.description_author else 'N/A'
+                    'description_author': tag.description_author.username if tag.description_author else 'N/A',
+                    'upvotes': tag.upvotes,
+                    'downvotes': tag.downvotes,
                 })
             else:
                 return JsonResponse({'status': 'error', 'message': 'Invalid data.'}, status=400)
         else:
-            # Handle standard POST requests if any (currently none)
-            return JsonResponse({'status': 'error', 'message': 'Invalid request method.'}, status=400)
+            return HttpResponseBadRequest("Invalid request method.")
 
     else:
         # Handle GET requests with search and pagination
@@ -381,7 +381,7 @@ def edit_tags(request):
             tags = Tag.objects.all().order_by('name')
 
         # Paginate tags
-        paginator = Paginator(tags, 25)  # Show 25 tags per page
+        paginator = Paginator(tags, 10)  # Show 25 tags per page
         page_number = request.GET.get('page')
         page_obj = paginator.get_page(page_number)
 
@@ -391,7 +391,92 @@ def edit_tags(request):
         }
         return render(request, 'edit_tags.html', context)
 
+@login_required
+def vote_description(request):
+    """
+    Handle AJAX requests to upvote or downvote a tag's description.
+    Supports toggling and switching votes.
+    """
+    if request.method == 'POST' and request.headers.get('x-requested-with') == 'XMLHttpRequest':
+        tag_id = request.POST.get('tag_id')
+        vote_type = request.POST.get('vote_type')
 
+        if not tag_id or vote_type not in ['upvote', 'downvote']:
+            return JsonResponse({'status': 'error', 'message': 'Invalid data.'}, status=400)
+
+        tag = get_object_or_404(Tag, id=tag_id)
+        user = request.user
+
+        try:
+            existing_vote = Vote.objects.get(user=user, tag=tag)
+            if existing_vote.vote_type == vote_type:
+                # User clicked the same vote button again: Remove the vote
+                existing_vote.delete()
+                if vote_type == Vote.UPVOTE:
+                    tag.upvotes -= 1
+                else:
+                    tag.downvotes -= 1
+                vote_removed = True
+                vote_changed = False
+                new_vote = False
+            else:
+                # User clicked the opposing vote button: Change the vote
+                if existing_vote.vote_type == Vote.UPVOTE:
+                    tag.upvotes -= 1
+                else:
+                    tag.downvotes -= 1
+
+                existing_vote.vote_type = vote_type
+                existing_vote.save()
+
+                if vote_type == Vote.UPVOTE:
+                    tag.upvotes += 1
+                else:
+                    tag.downvotes += 1
+
+                vote_removed = False
+                vote_changed = True
+                new_vote = False
+        except Vote.DoesNotExist:
+            # No existing vote: Create a new vote
+            Vote.objects.create(user=user, tag=tag, vote_type=vote_type)
+            if vote_type == Vote.UPVOTE:
+                tag.upvotes += 1
+            else:
+                tag.downvotes += 1
+            vote_removed = False
+            vote_changed = False
+            new_vote = True
+
+        # Check if the vote causes the description to be locked
+        if (tag.upvotes - tag.downvotes) >= 25:
+            tag.is_locked = True
+        elif (tag.upvotes - tag.downvotes) < 25 and tag.is_locked:
+            tag.is_locked = False  # Optionally unlock if score drops below threshold
+
+        tag.save()
+
+        return JsonResponse({
+            'status': 'success',
+            'message': 'Vote recorded.' if new_vote or vote_changed else 'Vote removed.',
+            'upvotes': tag.upvotes,
+            'downvotes': tag.downvotes,
+            'is_locked': tag.is_locked,
+            'tag_name': tag.name,
+            'removed': vote_removed,
+            'changed': vote_changed,
+            'new_vote': new_vote,
+            'current_vote': vote_type if new_vote or vote_changed else None,
+        })
+
+    else:
+        return JsonResponse({'status': 'error', 'message': 'Invalid request.'}, status=400)
+
+
+ALLOWED_DESCRIPTION_PATTERN = re.compile(r'^[A-Za-z0-9 .,!?\-_/\'"]{1,255}$')
+
+
+ALLOWED_DESCRIPTION_PATTERN = re.compile(r'^[A-Za-z0-9 .,!?\-_/\'"]{1,255}$')
 
 @login_required
 def update_tag_description(request):
@@ -410,9 +495,27 @@ def update_tag_description(request):
         # Validate Tag ID
         tag = get_object_or_404(Tag, id=tag_id)
 
-        # Validate Description
-        if profanity.contains_profanity(new_description):
-            return JsonResponse({'status': 'error', 'message': 'Description contains inappropriate language.'}, status=400)
+        # Validate Description Length
+        if len(new_description) == 0:
+            return JsonResponse({'status': 'error', 'message': 'Description cannot be empty.'}, status=400)
+        if len(new_description) > 100:
+            return JsonResponse({'status': 'error', 'message': 'Description cannot exceed 100 characters.'}, status=400)
+
+        # Validate Allowed Characters using Regex
+        if not ALLOWED_DESCRIPTION_PATTERN.match(new_description):
+            error_message = 'Description contains invalid characters. Allowed characters are letters, numbers, spaces, and basic punctuation (. , ! ? - _ / \' ").'
+            return JsonResponse({'status': 'error', 'message': error_message}, status=400)
+
+        # Check each word in the description for profanity
+        words = new_description.split()  # Split description into words
+        for word in words:
+            if profanity.contains_profanity(word):  # Check each word
+                return JsonResponse({'status': 'error', 'message': 'Description contains inappropriate language.'}, status=400)
+            
+        for i in range(len(new_description) - 3):
+            substring = new_description[i:i+4]  # Check substrings of length 4
+            if profanity.contains_profanity(substring):
+                return JsonResponse({'status': 'error', 'message': 'Description contains inappropriate language.'}, status=400)
 
         # Update Description
         try:
@@ -422,10 +525,10 @@ def update_tag_description(request):
             return JsonResponse({'status': 'success', 'message': 'Description updated successfully.'})
         except Exception as e:
             # Log the exception as needed (optional)
-            # logger.error(f"Error updating tag description: {e}")
             return JsonResponse({'status': 'error', 'message': 'Internal server error.'}, status=500)
     else:
         return JsonResponse({'status': 'error', 'message': 'Invalid request.'}, status=400)
+
 
 # ------------------------------------------------------------------------------ #
 
@@ -463,8 +566,6 @@ def profile(request):
 # ------------------------------------------------------------------------ #
 
 # ----------------------------- Search Views ----------------------------- #
-
-# views.py
 
 from django.shortcuts import render
 from django.db.models import Q, Count, Value, IntegerField
@@ -505,7 +606,7 @@ def search_results(request):
 
     # Map user-friendly mode names to stored values
     MODE_MAPPING = {
-        'osu': 'GameMode.OSU',          # Assuming mode field stores 'osu', 'taiko', etc.
+        'osu': 'GameMode.OSU',
         'taiko': 'GameMode.TAIKO',
         'catch': 'GameMode.CATCH',
         'mania': 'GameMode.MANIA',

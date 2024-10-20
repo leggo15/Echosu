@@ -344,3 +344,214 @@ $(function() {
         $("#star-rating-slider").slider("values", [min, max >= 10 ? 10 : max]);
     });
 });
+
+
+
+// Edit Tag js
+
+
+document.addEventListener('DOMContentLoaded', function () {
+    const descriptionFields = document.querySelectorAll('.tag-description');
+    const messageArea = document.getElementById('message-area');
+    const loadingSpinner = document.getElementById('loading-spinner');
+    const debounceTimeout = 3000; // 3 seconds
+    const debounceTimers = {};
+
+    // Handle Description Editing with Debounce
+    descriptionFields.forEach(function(field) {
+        field.addEventListener('input', function() {
+            const tagId = field.getAttribute('data-tag-id');
+            const newDescription = field.value.trim();
+
+            // Clear existing timer if any
+            if (debounceTimers[tagId]) {
+                clearTimeout(debounceTimers[tagId]);
+            }
+
+            // Set a new timer
+            debounceTimers[tagId] = setTimeout(function() {
+                showLoading();
+                // AJAX request to update the tag description
+                fetch("{% url 'edit_tags' %}", {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'X-CSRFToken': getCSRFToken(),
+                        'X-Requested-With': 'XMLHttpRequest' // Indicate AJAX request
+                    },
+                    body: new URLSearchParams({
+                        'tag_id': tagId,
+                        'description': newDescription
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        showMessage(`${data.message} Author: ${data.description_author}`, 'success');
+                        // Update the author display in the table
+                        const authorCell = field.closest('tr').querySelector('td:nth-child(3)');
+                        authorCell.textContent = data.description_author;
+                        // Reset vote counts in the UI
+                        const voteSection = field.closest('td').querySelector('.vote-section');
+                        voteSection.querySelector('.upvote-count').textContent = data.upvotes;
+                        voteSection.querySelector('.downvote-count').textContent = data.downvotes;
+                        // Enable voting buttons
+                        voteSection.querySelector('.upvote-btn').disabled = false;
+                        voteSection.querySelector('.downvote-btn').disabled = false;
+                        voteSection.querySelector('.upvote-btn').classList.remove('disabled-btn');
+                        voteSection.querySelector('.downvote-btn').classList.remove('disabled-btn');
+                        // Reset button styles
+                        voteSection.querySelector('.upvote-btn').style.backgroundColor = '';
+                        voteSection.querySelector('.downvote-btn').style.backgroundColor = '';
+                    } else {
+                        showMessage(data.message, 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    showMessage('An error occurred while updating the description.', 'error');
+                })
+                .finally(() => {
+                    hideLoading();
+                    // Remove the timer
+                    delete debounceTimers[tagId];
+                });
+            }, debounceTimeout);
+        });
+    });
+
+    // Handle Upvote and Downvote Buttons
+    const voteSections = document.querySelectorAll('.vote-section');
+
+    voteSections.forEach(function(voteSection) {
+        const tagId = voteSection.getAttribute('data-tag-id');
+        const upvoteBtn = voteSection.querySelector('.upvote-btn');
+        const downvoteBtn = voteSection.querySelector('.downvote-btn');
+        const upvoteCountSpan = voteSection.querySelector('.upvote-count');
+        const downvoteCountSpan = voteSection.querySelector('.downvote-count');
+
+        // Attach event listeners for voting
+        upvoteBtn.addEventListener('click', function() {
+            handleVote(tagId, 'upvote', upvoteCountSpan, downvoteCountSpan, voteSection);
+        });
+
+        downvoteBtn.addEventListener('click', function() {
+            handleVote(tagId, 'downvote', upvoteCountSpan, downvoteCountSpan, voteSection);
+        });
+    });
+
+    function handleVote(tagId, voteType, upvoteCountSpan, downvoteCountSpan, voteSection) {
+        const csrfToken = getCSRFToken();
+
+        showLoading();
+        fetch("{% url 'vote_description' %}", {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-CSRFToken': csrfToken,
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: new URLSearchParams({
+                'tag_id': tagId,
+                'vote_type': voteType
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                upvoteCountSpan.textContent = data.upvotes;
+                downvoteCountSpan.textContent = data.downvotes;
+
+                const upvoteBtn = voteSection.querySelector('.upvote-btn');
+                const downvoteBtn = voteSection.querySelector('.downvote-btn');
+
+                // Reset button styles and states
+                upvoteBtn.disabled = false;
+                downvoteBtn.disabled = false;
+                upvoteBtn.style.backgroundColor = '';
+                downvoteBtn.style.backgroundColor = '';
+                upvoteBtn.classList.remove('disabled-btn');
+                downvoteBtn.classList.remove('disabled-btn');
+
+                if (data.removed) {
+                    // Vote was removed
+                    showMessage('Your vote has been removed.', 'success');
+                } else if (data.changed) {
+                    // Vote was changed from one type to another
+                    if (voteType === 'upvote') {
+                        upvoteBtn.style.backgroundColor = 'green';
+                    } else if (voteType === 'downvote') {
+                        downvoteBtn.style.backgroundColor = 'red';
+                    }
+                    showMessage('Your vote has been updated.', 'success');
+                } else if (data.new_vote) {
+                    // New vote was added
+                    if (voteType === 'upvote') {
+                        upvoteBtn.style.backgroundColor = 'green';
+                    } else if (voteType === 'downvote') {
+                        downvoteBtn.style.backgroundColor = 'red';
+                    }
+                    showMessage('Your vote has been recorded.', 'success');
+                }
+
+                // If a new vote or changed vote, disable the opposite button
+                if (data.new_vote || data.changed) {
+                    if (voteType === 'upvote') {
+                        downvoteBtn.disabled = true;
+                        downvoteBtn.classList.add('disabled-btn');
+                    } else if (voteType === 'downvote') {
+                        upvoteBtn.disabled = true;
+                        upvoteBtn.classList.add('disabled-btn');
+                    }
+                }
+
+                // Lock description if vote score reaches the threshold
+                if (data.is_locked) {
+                    const descriptionTextarea = document.querySelector(`.tag-description[data-tag-id="${tagId}"]`);
+                    descriptionTextarea.disabled = true;
+
+                    showMessage(`Description for tag "${data.tag_name}" has been locked due to high vote score.`, 'success');
+                }
+            } else {
+                showMessage(data.message, 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error during vote request:', error);
+            showMessage('An error occurred while voting.', 'error');
+        })
+        .finally(() => {
+            hideLoading();
+        });
+    }
+
+    // Function to display messages
+    function showMessage(message, type) {
+        messageArea.innerHTML = `<p class="${type}">${message}</p>`;
+        // Remove the message after a delay
+        setTimeout(() => {
+            messageArea.innerHTML = '';
+        }, type === 'success' ? 3000 : 5000);
+    }
+
+    // Functions to show and hide the loading spinner
+    function showLoading() {
+        loadingSpinner.style.display = 'block';
+    }
+
+    function hideLoading() {
+        loadingSpinner.style.display = 'none';
+    }
+
+    // Function to retrieve CSRF token from meta tag
+    function getCSRFToken() {
+        // Attempt to get CSRF token from meta tag
+        const meta = document.querySelector('meta[name="csrf-token"]');
+        if (meta) {
+            return meta.getAttribute('content');
+        }
+        // Fallback: Get CSRF token from hidden input field
+        const csrfInput = document.querySelector('[name=csrfmiddlewaretoken]');
+        return csrfInput ? csrfInput.value : '';
+    }
+});

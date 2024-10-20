@@ -1118,3 +1118,80 @@ nav {
 .delete-data-btn:hover {
     background-color: #a30000;
 }
+
+/*EDIT TAG Page*/
+            /* Styles for success and error messages */
+    .success {
+        color: lightgreen;
+    }
+    .error {
+        color: lightcoral;
+    }
+    /* Table Styles */
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 20px;
+    }
+    th, td {
+        padding: 12px;
+        border: 1px solid #ddd;
+        text-align: left;
+    }
+    /* Textarea Styles */
+    textarea {
+        width: 100%;
+        resize: vertical;
+    }
+    /* Search Form Styles */
+    .tag-search-form {
+        margin-top: 20px;
+        margin-bottom: 20px;
+    }
+    /* Button Styles */
+    .generic_btn {
+        padding: 8px 16px;
+        background-color: #17a2b8;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+    .generic_btn:hover {
+        background-color: #138496;
+    }
+    /* Pagination Styles */
+    .pagination {
+        margin-top: 20px;
+    }
+    .pagination .step-links a {
+        margin: 0 5px;
+        text-decoration: none;
+        color: #17a2b8;
+    }
+    .pagination .step-links .current {
+        margin: 0 5px;
+        font-weight: bold;
+    }
+    /* Loading Spinner Styles */
+    #loading-spinner {
+        display: none;
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 1000;
+    }
+    .vote-section {
+        margin-top: 10px;
+    }
+    .vote-section button {
+        margin-right: 5px;
+    }
+    .vote-count {
+        margin-right: 15px;
+    }
+    .disabled-btn {
+        background-color: #6c757d !important;
+        cursor: not-allowed !important;
+    }

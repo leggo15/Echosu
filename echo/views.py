@@ -1072,7 +1072,8 @@ def home(request):
                         beatmap.title, beatmap.version, beatmap.artist, beatmap.creator,
                         beatmap.cover_image_url, beatmap.total_length, beatmap.bpm,
                         beatmap.cs, beatmap.drain, beatmap.accuracy, beatmap.ar,
-                        beatmap.difficulty_rating, beatmap.mode, beatmap.beatmapset_id
+                        beatmap.difficulty_rating, beatmap.mode, beatmap.beatmapset_id, 
+                        beatmap.status
                     ]
                 ):
                     # Update beatmap attributes from the API data
@@ -1088,6 +1089,16 @@ def home(request):
                             beatmap.cover_image_url
                         )
 
+                    status_mapping = {
+                        -2: "Graveyard",
+                        -1: "WIP",
+                        0: "Pending",
+                        1: "Ranked",
+                        2: "Approved",
+                        3: "Qualified",
+                        4: "Loved"
+                    }
+
                     # Update other beatmap attributes
                     beatmap.version = getattr(beatmap_data, 'version', beatmap.version)
                     beatmap.total_length = getattr(beatmap_data, 'total_length', beatmap.total_length)
@@ -1098,6 +1109,7 @@ def home(request):
                     beatmap.ar = getattr(beatmap_data, 'ar', beatmap.ar)
                     beatmap.difficulty_rating = getattr(beatmap_data, 'difficulty_rating', beatmap.difficulty_rating)
                     beatmap.mode = getattr(beatmap_data, 'mode', beatmap.mode)
+                    beatmap.status = status_mapping.get(beatmap_data.status.value, "Unknown")
 
                     # Save the updated beatmap to the database
                     beatmap.save()

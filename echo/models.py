@@ -18,6 +18,7 @@ class Beatmap(models.Model):
     ar = models.FloatField(null=True, blank=True)
     difficulty_rating = models.FloatField(null=True, blank=True)
     mode = models.CharField(max_length=100, null=False, blank=True)
+    status = models.CharField(max_length=32, null=False, blank=True)
 
     def get_weighted_tags(self):
         tags = self.tags.annotate(

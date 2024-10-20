@@ -37,6 +37,7 @@ def get_default_user():
         # If the user doesn't exist, fall back to the user with the osu_id '4978940'
         return UserProfile.objects.get(osu_id='4978940').user
 
+
 class UserProfile(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, default=get_default_user)
     osu_id = models.CharField(max_length=100, null=False, unique=True)

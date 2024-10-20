@@ -464,11 +464,13 @@ def profile(request):
 
 # ----------------------------- Search Views ----------------------------- #
 
+# views.py
+
 from django.shortcuts import render
-from django.db.models import Q, Count, Case, When, Value, BooleanField, IntegerField
-from django.db.models import Prefetch
+from django.db.models import Q, Count, Value, IntegerField
 from django.core.paginator import Paginator
 from django.contrib.auth.models import User
+from .models import Beatmap, TagApplication, Tag  # Ensure correct import paths
 import re
 from collections import defaultdict
 from nltk.stem import PorterStemmer
@@ -483,55 +485,72 @@ def search_results(request):
     Handle beatmap search queries and display results focused on tag searches with pagination and sorted tags.
     """
     query = request.GET.get('query', '').strip()
-    selected_mode = request.GET.get('mode', '').strip().lower()
+    selected_mode = request.GET.get('mode', 'osu').strip().lower()  # Default to 'osu'
+    star_min = request.GET.get('star_min', '0').strip()
+    star_max = request.GET.get('star_max', '10').strip()
     
+    # Validate and convert star ratings
+    try:
+        star_min = float(star_min)
+        if star_min < 0:
+            star_min = 0.0
+    except ValueError:
+        star_min = 0.0
+    try:
+        star_max = float(star_max)
+        if star_max < star_min:
+            star_max = 10.0  # Reset to default if max is less than min
+    except ValueError:
+        star_max = 10.0
+
     # Map user-friendly mode names to stored values
     MODE_MAPPING = {
-        'osu': 'GameMode.OSU',
+        'osu': 'GameMode.OSU',          # Assuming mode field stores 'osu', 'taiko', etc.
         'taiko': 'GameMode.TAIKO',
         'catch': 'GameMode.CATCH',
         'mania': 'GameMode.MANIA',
     }
-    
+
     # Initialize the beatmaps queryset
     beatmaps = Beatmap.objects.all()
-    
-    # Filter by mode if selected
-    if selected_mode:
-        mapped_mode = MODE_MAPPING.get(selected_mode)
-        if mapped_mode:
-            beatmaps = beatmaps.filter(mode__iexact=mapped_mode)
 
-    # If query is empty, return an empty context or a message
-    if not query:
-        context = {
-            'beatmaps': Paginator(Beatmap.objects.none(), 10).page(1),  # Empty page
-            'query': query,
-            'message': 'Please enter a search term.',
-        }
-        return render(request, 'search_results.html', context)
-
-    # Initialize the beatmaps queryset and filter by mode if selected (case-insensitive)
-    beatmaps = Beatmap.objects.all()
-    if selected_mode:
-        beatmaps = beatmaps.filter(mode__iexact=selected_mode)
-
-    # Parse the query into search terms
-    search_terms = parse_search_terms(query)
-
-    # Build inclusion and exclusion Q objects and get include_tag_names
-    beatmaps, include_tag_names = build_query_conditions(beatmaps, search_terms)
-
-    # Annotate beatmaps with the sum of counts of TagApplications for the searched tags
-    if include_tag_names:
-        beatmaps = beatmaps.annotate(
-            priority=Count('tagapplication', filter=Q(tagapplication__tag__name__in=include_tag_names))
-        ).order_by('-priority')
+    # Filter by mode
+    mapped_mode = MODE_MAPPING.get(selected_mode)
+    if mapped_mode:
+        beatmaps = beatmaps.filter(mode__iexact=mapped_mode)
     else:
-        # Default ordering if no specific tags are searched
-        beatmaps = beatmaps.annotate(
-            priority=Value(0, IntegerField())
-        ).order_by('-priority')
+        # Default to 'osu' if mode is not recognized
+        beatmaps = beatmaps.filter(mode__iexact='osu')
+
+    # Filter by star rating
+    if star_max >= 10:
+        # Unbounded upper limit; include all beatmaps with difficulty_rating >= star_min
+        beatmaps = beatmaps.filter(difficulty_rating__gte=star_min)
+    else:
+        # Bounded star rating; include beatmaps within the specified range
+        beatmaps = beatmaps.filter(difficulty_rating__gte=star_min, difficulty_rating__lte=star_max)
+
+    # If query is empty, return all beatmaps matching mode and star rating
+    if not query:
+        # Order by difficulty_rating descending
+        beatmaps = beatmaps.order_by('-difficulty_rating')
+    else:
+        # Parse the query into search terms
+        search_terms = parse_search_terms(query)
+
+        # Build inclusion and exclusion Q objects and get include_tag_names
+        beatmaps, include_tag_names = build_query_conditions(beatmaps, search_terms)
+
+        # Annotate beatmaps with the sum of counts of TagApplications for the searched tags
+        if include_tag_names:
+            beatmaps = beatmaps.annotate(
+                priority=Count('tagapplication', filter=Q(tagapplication__tag__name__in=include_tag_names))
+            ).order_by('-priority')
+        else:
+            # Default ordering if no specific tags are searched
+            beatmaps = beatmaps.annotate(
+                priority=Value(0, IntegerField())
+            ).order_by('-priority')
 
     # Implement pagination
     paginator = Paginator(beatmaps, 10)  # Show 10 beatmaps per page
@@ -550,8 +569,6 @@ def search_results(request):
     }
 
     return render(request, 'search_results.html', context)
-
-
 
 #######################################################################################
 
@@ -586,7 +603,6 @@ def annotate_beatmaps_with_tags(beatmaps, user):
         beatmap.tags_with_counts = sorted(tags_with_counts, key=lambda x: -x['apply_count'])
 
     return beatmaps
-
 
 #######################################################################################
 
@@ -655,8 +671,6 @@ def build_query_conditions(beatmaps, search_terms):
         beatmaps = beatmaps.filter(tags__name__in=include_tag_names).distinct()
 
     return beatmaps, include_tag_names
-
-
 
 #######################################################################################
 

@@ -6,9 +6,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Search Results</title>
     <link rel="stylesheet" href="https://echosu-s3.s3.eu-central-1.amazonaws.com/static/css/master.css">
+    <!-- jQuery UI CSS for the slider -->
+    <link rel="stylesheet" href="https://code.jquery.com/ui/1.13.2/themes/base/jquery-ui.css">
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <!-- jQuery UI JS for the slider -->
+    <script src="https://code.jquery.com/ui/1.13.2/jquery-ui.min.js"></script>
     <script src="https://echosu-s3.s3.eu-central-1.amazonaws.com/static/js/master.js"></script>
     <meta name="csrf-token" content="{{ csrf_token }}">
+
 </head>
 <body>
     {% include '_navbar.html' %}
@@ -23,9 +28,33 @@
             These rules can be combined into a very specific search. 
             An example could look like: "Aim awkward "No Bursts" AR=9 Od>8 cs<6 Monstrata".
         </i>
-        <!-- Search form with tag input for auto-complete functionality -->
+        
+        <!-- Search form with additional filters -->
         <form action="{% url 'search_results' %}" method="get" class="beatmap-form">
-
+            <div class="filter-container">
+                <!-- Star Rating Slider -->
+                <div class="filter-item slider-container">
+                    <label for="star-rating">Star Rating:</label>
+                    <div id="star-rating-slider"></div>
+                    <div class="slider-labels">
+                        <span id="star-rating-min">0</span>
+                        <span id="star-rating-max">10+</span>
+                    </div>
+                    <input type="hidden" name="star_min" id="star_min" value="{{ request.GET.star_min|default:0 }}">
+                    <input type="hidden" name="star_max" id="star_max" value="{{ request.GET.star_max|default:10 }}">
+                </div>
+                
+                <!-- Game Mode Selection -->
+                <div class="filter-mode">
+                    <label for="mode">Game Mode:</label>
+                    <select name="mode" id="mode">
+                        <option value="osu" {% if not request.GET.mode or request.GET.mode == "osu" %}selected{% endif %}>osu!</option>
+                        <option value="taiko" {% if request.GET.mode == "taiko" %}selected{% endif %}>Taiko</option>
+                        <option value="catch" {% if request.GET.mode == "catch" %}selected{% endif %}>Catch the Beat</option>
+                        <option value="mania" {% if request.GET.mode == "mania" %}selected{% endif %}>osu!mania</option>
+                    </select>
+                </div>
+            </div>
             <input type="text" name="query" id="tag-input" placeholder="Search by Genre, name, ID, mapper, or artist" value="{{ request.GET.query }}">
             <button type="submit" class="generic_btn">Search</button>
         </form>
@@ -92,8 +121,8 @@
         <div class="pagination">
             <span class="step-links">
                 {% if beatmaps.has_previous %}
-                    <a href="?query={{ query }}&mode={{ request.GET.mode }}&page=1">&laquo; first</a>
-                    <a href="?query={{ query }}&mode={{ request.GET.mode }}&page={{ beatmaps.previous_page_number }}">previous</a>
+                    <a href="?query={{ query }}&mode={{ request.GET.mode }}&star_min={{ request.GET.star_min }}&star_max={{ request.GET.star_max }}&page=1">&laquo; first</a>
+                    <a href="?query={{ query }}&mode={{ request.GET.mode }}&star_min={{ request.GET.star_min }}&star_max={{ request.GET.star_max }}&page={{ beatmaps.previous_page_number }}">previous</a>
                 {% endif %}
 
                 <span class="current">
@@ -101,8 +130,8 @@
                 </span>
 
                 {% if beatmaps.has_next %}
-                    <a href="?query={{ query }}&mode={{ request.GET.mode }}&page={{ beatmaps.next_page_number }}">next</a>
-                    <a href="?query={{ query }}&mode={{ request.GET.mode }}&page={{ beatmaps.paginator.num_pages }}">last &raquo;</a>
+                    <a href="?query={{ query }}&mode={{ request.GET.mode }}&star_min={{ request.GET.star_min }}&star_max={{ request.GET.star_max }}&page={{ beatmaps.next_page_number }}">next</a>
+                    <a href="?query={{ query }}&mode={{ request.GET.mode }}&star_min={{ request.GET.star_min }}&star_max={{ request.GET.star_max }}&page={{ beatmaps.paginator.num_pages }}">last &raquo;</a>
                 {% endif %}
             </span>
         </div>

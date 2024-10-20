@@ -1,3 +1,4 @@
+
 $(document).ready(function() {
     var selectedTag;
 
@@ -268,4 +269,78 @@ $(document).ready(function() {
 
     // Call the function to attach hover events to initial Top Tags
     loadInitialTags();
+});
+
+
+// Search_results star rating slider
+$(function() {
+    // Initialize the star rating slider
+    $("#star-rating-slider").slider({
+        range: true,
+        min: 0,
+        max: 10,
+        step: 0.1,
+        values: [
+            parseFloat($("#star_min").val()) || 0,
+            parseFloat($("#star_max").val()) >= 10 ? 10 : parseFloat($("#star_max").val()) || 10
+        ],
+        slide: function(event, ui) {
+            $("#star_min").val(ui.values[0]);
+            if (ui.values[1] >= 10) {
+                $("#star_max").val(10); // Keep star_max at 10 to indicate "10+"
+                $("#star-rating-max").text("10+");
+            } else {
+                $("#star_max").val(ui.values[1]);
+                $("#star-rating-max").text(ui.values[1].toFixed(1));
+            }
+            $("#star-rating-min").text(ui.values[0].toFixed(1));
+        },
+        change: function(event, ui) {
+            var min = parseFloat($("#star_min").val()) || 0;
+            var max = parseFloat($("#star_max").val()) || 10;
+
+            if (max >= 10) {
+                $("#star_max").val(10);
+                $("#star-rating-max").text("10+");
+            } else {
+                $("#star-rating-max").text(max.toFixed(1));
+            }
+
+            $("#star-rating-min").text(min.toFixed(1));
+            $("#star-rating-slider").slider("values", [min, max >= 10 ? 10 : max]);
+        }
+    });
+
+    // Set initial slider labels
+    var initial_min = parseFloat($("#star_min").val());
+    var initial_max = parseFloat($("#star_max").val());
+
+    if (initial_max >= 10) {
+        $("#star-rating-max").text("10+");
+    } else {
+        $("#star-rating-max").text(isNaN(initial_max) ? "10+" : initial_max.toFixed(1));
+    }
+
+    if (!isNaN(initial_min)) {
+        $("#star-rating-min").text(initial_min.toFixed(1));
+    } else {
+        $("#star-rating-min").text("0.0");
+    }
+
+    // Optional: Update labels if user manually changes hidden inputs
+    $("#star_min, #star_max").on('change', function() {
+        var min = parseFloat($("#star_min").val()) || 0;
+        var max = parseFloat($("#star_max").val()) || 10;
+
+        if (max >= 10) {
+            max = 10; // Keep star_max at 10 to indicate "10+"
+            $("#star_max").val(max);
+            $("#star-rating-max").text("10+");
+        } else {
+            $("#star-rating-max").text(max.toFixed(1));
+        }
+
+        $("#star-rating-min").text(min.toFixed(1));
+        $("#star-rating-slider").slider("values", [min, max >= 10 ? 10 : max]);
+    });
 });

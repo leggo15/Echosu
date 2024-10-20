@@ -32,6 +32,7 @@
         <!-- Search form with additional filters -->
         <form action="{% url 'search_results' %}" method="get" class="beatmap-form">
             <div class="filter-container">
+
                 <!-- Star Rating Slider -->
                 <div class="filter-item slider-container">
                     <label for="star-rating">Star Rating:</label>
@@ -43,7 +44,30 @@
                     <input type="hidden" name="star_min" id="star_min" value="{{ request.GET.star_min|default:0 }}">
                     <input type="hidden" name="star_max" id="star_max" value="{{ request.GET.star_max|default:10 }}">
                 </div>
-                
+
+                <!-- Add status filter toggle buttons -->
+                <div class="filter-status">
+                    <label>Status:</label>
+                    <div class="status-toggles">
+                        <label>
+                            <input type="checkbox" name="status_ranked" value="ranked"
+                                {% if status_ranked %}checked{% endif %}>
+                            Ranked
+                        </label>
+                        <label>
+                            <input type="checkbox" name="status_loved" value="loved"
+                                {% if status_loved %}checked{% endif %}>
+                            Loved
+                        </label>
+                        <label>
+                            <input type="checkbox" name="status_unranked" value="unranked"
+                                {% if status_unranked %}checked{% endif %}>
+                            Unranked
+                        </label>
+                    </div>
+                </div>
+
+
                 <!-- Game Mode Selection -->
                 <div class="filter-mode">
                     <label for="mode">Game Mode:</label>
@@ -82,6 +106,7 @@
                             <span>OD: {{ beatmap.accuracy }}</span>
                             <span>AR: {{ beatmap.ar }}</span>
                             <span>SR: {{ beatmap.difficulty_rating }}</span>
+                            <span>Status: {{ beatmap.status }}</span>
                         </div>
                         <a href="{% url 'beatmap_detail' beatmap_id=beatmap.beatmap_id %}" class="beatmap-link">View Beatmap</a>
 

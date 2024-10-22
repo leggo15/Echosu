@@ -110,6 +110,12 @@
                         </div>
                         <a href="{% url 'beatmap_detail' beatmap_id=beatmap.beatmap_id %}" class="beatmap-link">View Beatmap</a>
 
+                        {% if beatmap.beatmapset_id %}
+                            <a href="https://osu.ppy.sh/beatmapsets/{{ beatmap.beatmapset_id }}" class="beatmap-link">View on osu!</a>
+                        {% else %}
+                            <span class="no-link">Beatmap set not available on osu!</span>
+                        {% endif %}
+
                         <!-- Hidden input to store the current beatmap's ID for JavaScript -->
                         <input type="hidden" class="current_beatmap_id" value="{{ beatmap.beatmap_id }}">
 
@@ -120,11 +126,10 @@
                                     <span class="tag {% if tag_info.is_applied_by_user %}tag-applied{% else %}tag-unapplied{% endif %}" 
                                         data-tag-name="{{ tag_info.tag.name }}" 
                                         data-applied-by-user="{{ tag_info.is_applied_by_user }}"
-                                        data-description=' "{{ tag_info.tag.description }}" '
-                                        {% if tag_info.tag.description_author %}
+                                        {% if tag_info.tag.description %}
+                                            data-description=' "{{ tag_info.tag.description }}" '
                                             data-description-author=" - {{ tag_info.tag.description_author }}"
                                         {% else %}
-                                            data-description-author=""
                                         {% endif %}>
                                         {{ tag_info.tag.name }} ({{ tag_info.apply_count }})
                                     </span>

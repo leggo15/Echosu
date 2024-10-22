@@ -642,8 +642,9 @@ def search_results(request):
 
         beatmaps = beatmaps.filter(status_filters)
 
-    # Process query...
-    # Rest of your existing search query processing remains unchanged
+    # Process query
+    search_terms = parse_search_terms(query)
+    beatmaps, include_tag_names = build_query_conditions(beatmaps, search_terms)
 
     # Pagination, annotation with tags, and context setup remain the same
     paginator = Paginator(beatmaps, 10)

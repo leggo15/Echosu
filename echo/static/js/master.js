@@ -7,7 +7,7 @@ $(document).ready(function() {
         var inputVal = $(this).val();
         if (inputVal.length > 0) {
             $.ajax({
-                url: '/echo/search_tags/',
+                url: '/search_tags/',
                 data: { 'q': inputVal },
                 success: function(data) {
                     $('#tag-list').empty();
@@ -58,7 +58,7 @@ $(document).ready(function() {
     function modifyTag(tagName, beatmapId, action) {
         $.ajax({
             type: 'POST',
-            url: '/echo/modify_tag/',
+            url: '/modify_tag/',
             data: {
                 'action': action,
                 'tag': tagName,
@@ -79,7 +79,7 @@ $(document).ready(function() {
         var beatmapId = $('#current_beatmap_id').val();
         $.ajax({
             type: 'GET',
-            url: '/echo/get_tags/',
+            url: '/get_tags/',
             data: { 'beatmap_id': beatmapId },
             success: function(tags) {
                 $('.applied-tags').empty().append('Tags: ');
@@ -300,14 +300,12 @@ $(function() {
             var max = parseFloat($("#star_max").val()) || 10;
 
             if (max >= 10) {
-                $("#star_max").val(10);
                 $("#star-rating-max").text("10+");
             } else {
                 $("#star-rating-max").text(max.toFixed(1));
             }
 
             $("#star-rating-min").text(min.toFixed(1));
-            $("#star-rating-slider").slider("values", [min, max >= 10 ? 10 : max]);
         }
     });
 
@@ -333,8 +331,6 @@ $(function() {
         var max = parseFloat($("#star_max").val()) || 10;
 
         if (max >= 10) {
-            max = 10; // Keep star_max at 10 to indicate "10+"
-            $("#star_max").val(max);
             $("#star-rating-max").text("10+");
         } else {
             $("#star-rating-max").text(max.toFixed(1));
@@ -344,4 +340,3 @@ $(function() {
         $("#star-rating-slider").slider("values", [min, max >= 10 ? 10 : max]);
     });
 });
-

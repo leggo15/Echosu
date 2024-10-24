@@ -20,13 +20,9 @@
 - [Error Handling](#error-handling)
 
 
-## Authentication
+## API Token
 
 The API uses Token-Based Authentication to secure endpoints. To use the API, you must include a valid token in the request headers.
-
-### Obtaining an API Token
-
-To generate an API token:
 
 #### Generate Token:
 

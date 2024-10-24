@@ -26,7 +26,7 @@ The API uses Token-Based Authentication to secure endpoints. To use the API, you
 
 #### Generate Token:
 
-- Login to echosu.com using the osu authentication api
+- Login to echosu.com (through the osu authentication api)
 - Click your profile picture and go to settings.
 - Click generate API token. You can generate as many tokens as you want, but only the latest one will be active.
 

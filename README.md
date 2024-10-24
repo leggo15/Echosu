@@ -1,4 +1,4 @@
-# Django REST Framework API Documentation
+# API Documentation
 
 # Table of Contents
 - [Authentication](#authentication)

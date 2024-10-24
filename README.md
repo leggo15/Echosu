@@ -92,7 +92,6 @@ Retrieve tags associated with a specific beatmap or a batch of beatmaps.
             }
         ]
     }
-    // ... more beatmaps
 ]
 ```
 
@@ -219,7 +218,6 @@ Manage tag applications to beatmaps. Provides standard read-only operations, and
             "tag": "streams",
             "action": "removed"
         }
-        // ... more tags
     ]
 }
 ```
@@ -397,10 +395,8 @@ headers = {
                 "tag": "diff spike",
                 "action": "applied"
             }
-            // ... more tags
         ]
     }
-    // ... more beatmaps matching the query
 ]
 ```
 

@@ -340,3 +340,14 @@ $(function() {
         $("#star-rating-slider").slider("values", [min, max >= 10 ? 10 : max]);
     });
 });
+
+
+// For collapsible items in home and search
+$(document).ready(function(){
+    // Toggle the collapsible content when header is clicked
+    $('.collapsible-header').click(function(){
+        $(this).toggleClass('active');
+        $(this).find('.arrow').toggleClass('rotated');
+        $(this).next('.collapsible-content').toggleClass('show');
+    });
+});

@@ -2,36 +2,46 @@
 {% load custom_tags %}
 <!DOCTYPE html>
 <html lang="en">
+
 <nav>
-    <div class="nav-links">
-        <a href="{% url 'home' %}">Home</a>
-        <a href="{% url 'search_results' %}">Search</a>
-        {% if user.is_superuser %}
-            <a href="{% url 'admin:index' %}">Admin Dashboard</a>
-        {% endif %}
-        {% if user|has_tag_edit_permission %}
-            <a href="{% url 'edit_tags' %}">Edit Tags</a>
-        {% elif user.is_superuser %}
-            <a href="{% url 'edit_tags' %}">Edit Tags</a>
-        {% endif %}
-    </div>
-    <div class="user-section">
-        {% if user.is_authenticated %}
-            <img src="{{ user_profile.profile_pic_url }}" alt="Profile Picture" id="profileMenuButton">
-            <div id="profileDropdown" class="dropdown-content">
-                <!-- <a href="{% url 'profile' %}">Profile</a> -->
-                <a href="{% url 'settings' %}">Settings</a>
-                <form method="post" action="{% url 'logout' %}">
-                    {% csrf_token %}
-                    <button type="submit">Logout</button>
-                </form>
-            </div>
-        {% else %}
-            <img src="https://echosu-s3.s3.eu-central-1.amazonaws.com/static/default.png" alt="Profile Picture" id="profileMenuButton">
-            <div id="profileDropdown" class="dropdown-content">
-                <a href="{{ osu_oauth_url }}">Login</a>
-            </div>
-        {% endif %}
+    <div class="nav-content">
+        <div class="nav-links">
+            <a href="{% url 'home' %}" class="generic_btn">Home</a>
+            
+            {% if user.is_superuser %}
+                <a href="{% url 'admin:index' %}" class="generic_btn">Admin Dashboard</a>
+            {% endif %}
+            
+            {% if user|has_tag_edit_permission %}
+                <a href="{% url 'edit_tags' %}" class="generic_btn">Edit Tags</a>
+            {% elif user.is_superuser %}
+                <a href="{% url 'edit_tags' %}" class="generic_btn">Edit Tags</a>
+            {% endif %}
+            
+            <form method="get" action="{% url 'search_results' %}" class="quick-search-form">
+                <input type="text" name="query" placeholder="Quick Search; by Tags, name, ID, mapper, or artist">
+                <button type="submit" class="generic_btn">Search</button>
+            </form>
+        </div>
+        
+        <div class="user-section">
+            {% if user.is_authenticated %}
+                <img src="{{ user_profile.profile_pic_url }}" alt="Profile Picture" id="profileMenuButton">
+                <div id="profileDropdown" class="dropdown-content">
+                    <!-- <a href="{% url 'profile' %}">Profile</a> -->
+                    <a href="{% url 'settings' %}" class="generic_btn">Settings</a>
+                    <form method="post" action="{% url 'logout' %}">
+                        {% csrf_token %}
+                        <button type="submit" class="generic_btn">Logout</button>
+                    </form>
+                </div>
+            {% else %}
+                <img src="https://echosu-s3.s3.eu-central-1.amazonaws.com/static/default.png" alt="Profile Picture" id="profileMenuButton">
+                <div id="profileDropdown" class="dropdown-content">
+                    <a href="{{ osu_oauth_url }}" class="generic_btn">Login</a>
+                </div>
+            {% endif %}
+        </div>
     </div>
 </nav>
 </html>

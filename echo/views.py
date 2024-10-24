@@ -1159,7 +1159,7 @@ def home(request):
             tag_count = TagApplication.objects.filter(tag=tag, beatmap=beatmap).count()
             is_applied_by_user = tag in user_tags
             beatmap_tags_with_counts.append({
-                'name': tag.name,
+                'tag': tag,  # Include the actual tag object
                 'apply_count': tag_count,
                 'is_applied_by_user': is_applied_by_user
             })

@@ -12,17 +12,24 @@
 </head>
 <body>
     {% include '_navbar.html' %}
-    <div class="container">
 
+    <div class="container">
         <!-- Beatmap Info Section -->
         {% if user.is_authenticated %}
             <form method="post" class="beatmap-form">
                 {% csrf_token %}
+                
+            <h2 class="collapsible-header" aria-expanded="false">
+                Add a New Beatmap
+                <span class="arrow">&#9660;</span> <!-- Down arrow -->
+            </h2>
+            <div class="collapsible-content">
                 <p>Use the beatmap ID from osu! to look up beatmaps.<br> 
                 https://osu.ppy.sh/beatmapsets/1289690#osu/"2897724" &lt;--- That ID.</p>
-                <label for="beatmap_id">Enter Beatmap ID:</label>
+            </div>
+
                 <div class="input-group">
-                    <input type="text" id="beatmap_id" name="beatmap_id">
+                    <input type="text" id="beatmap_id" name="beatmap_id" placeholder="Enter Beatmap ID">
                     <button type="submit">Get Info</button>
                 </div>
             </form>
@@ -67,24 +74,27 @@
 
                 <div class="applied-tags">
                     Tags:
-                    {% for tag in beatmap_tags_with_counts %}
-                        <span class="tag" 
-                        data-tag-name="{{ tag.name }}" 
-                        data-applied-by-user="{{ tag.is_applied_by_user }}"
-                        data-description=' "{{ tag.description }}" '
-                        {% if tag.description_author %}
-                            data-description-author=" - {{ tag.description_author }}"
-                        {% else %}
-                            data-description-author=""
-                        {% endif %}
-                            {{ tag.name }} ({{ tag.apply_count }})
-                        </span>
-                    {% endfor %}
+                    {% if beatmap.tags_with_counts %}
+                        {% for tag_info in beatmap.tags_with_counts %}
+                            <span class="tag {% if tag_info.is_applied_by_user %}tag-applied{% else %}tag-unapplied{% endif %}" 
+                                data-tag-name="{{ tag_info.tag.name }}" 
+                                data-applied-by-user="{{ tag_info.is_applied_by_user }}"
+                                {% if tag_info.tag.description %}
+                                data-description="{{ tag_info.tag.description|escapejs }}"
+                                data-description-author=" - {{ tag_info.tag.description_author|escapejs }}"
+                            {% endif %}>
+                                {{ tag_info.tag.name }} ({{ tag_info.apply_count }})
+                            </span>
+                        {% endfor %}
+                    {% else %}
+                        <span>No Tags associated.</span>
+                    {% endif %}
                 </div>
+                
             {% endif %}
 
         {% else %}
-            <p>You have to be logged in to use this. ( click the little oranges in the top right c: )</p>
+            <p>You have to be logged in to apply tags to beatmaps.</p>
         {% endif %}
     </div>
 
@@ -99,11 +109,9 @@
                         class="tag" 
                         data-tag-name="{{ tag.name }}" 
                         data-applied-by-user="{{ tag.is_applied_by_user }}"
-                        data-description=' "{{ tag.description }}" '
-                        {% if tag.description_author %}
-                            data-description-author=" - {{ tag.description_author }}"
-                        {% else %}
-                            data-description-author=""
+                        {% if tag.description %}
+                            data-description="{{ tag.description|escapejs }}"
+                            data-description-author=" - {{ tag.description_author|escapejs }}"
                         {% endif %}
                     >
                         {{ tag.name }} ({{ tag.total }})
@@ -112,7 +120,7 @@
                     <p>No tags available.</p>
                 {% endfor %}
             </div>
-        </section>
+        </section>  
 
         <!-- Recommended Maps Section -->
         <section class="recommended-maps">
@@ -149,15 +157,18 @@
                                     Tags:
                                     {% if map.tags_with_counts %}
                                         {% for tag_info in map.tags_with_counts %}
-                                            <span class="tag {% if tag_info.is_applied_by_user %}tag-applied{% else %}tag-unapplied{% endif %}" 
-                                                  data-tag-name="{{ tag_info.tag.name }}" 
-                                                  data-applied-by-user="{{ tag_info.is_applied_by_user }}"
-                                                  data-description="{{ tag_info.tag.description }}">
-                                                {{ tag_info.tag.name }} ({{ tag_info.apply_count }})
-                                            </span>
+                                        <span class="tag {% if tag_info.is_applied_by_user %}tag-applied{% else %}tag-unapplied{% endif %}" 
+                                            data-tag-name="{{ tag_info.tag.name }}" 
+                                            data-applied-by-user="{{ tag_info.is_applied_by_user }}"
+                                            {% if tag_info.tag.description %}
+                                                data-description="{{ tag_info.tag.description|escapejs }}"
+                                                data-description-author=" - {{ tag_info.tag.description_author|escapejs }}"
+                                            {% endif %}>
+                                            {{ tag_info.tag.name }} ({{ tag_info.apply_count }})
+                                        </span>
                                         {% endfor %}
                                     {% else %}
-                                        <span>No genres associated.</span>
+                                        <span>No Tags associated.</span>
                                     {% endif %}
                                 </div>
         

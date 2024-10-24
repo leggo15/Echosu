@@ -58,8 +58,8 @@ body {
 }
 
 .container {
-    width: 80%; /* Adjust as needed for the width of the container */
-    max-width: 1200px; /* Maximum width of the container */
+    width: 80%;
+    max-width: 1200px;
     margin: 20px auto;
     padding: 20px;
     background-color: #f1ecee;
@@ -190,32 +190,74 @@ body {
 /* Navbar Styles */
 nav {
     background-color: #cc1177;
-    padding: 10px 17%;
+    padding: 10px 0; /* Adjusted padding for better vertical alignment */
     display: flex;
-    justify-content: space-between;
+    justify-content: center; /* Center the nav-content horizontally */
     align-items: center;
 }
 
-.logo img {
-    width:100%;
-    max-width: 140px; /* Adjust size of the logo as necessary */
+.nav-content {
+    width: 80%;
+    max-width: 1240px;
+    display: flex;
+    justify-content: space-between; /* Space between nav-links and user-section */
+    align-items: center;
 }
 
-.nav-links a {
-    color: white;
+.nav-links {
+    display: flex; /* Make nav-links a flex container */
+    align-items: center; /* Vertically center items */
+    background-color: #a00e5f;
+    border-radius: 4px;
+    padding: 5px 10px;
+}
+
+.nav-links a.generic_btn {
     margin-right: 15px;
-    text-decoration: none;
-    
 }
 
-.nav-links a:hover {
+.nav-links a.generic_btn:last-child {
+    margin-right: 0;
+}
+
+/* Apply button-like styling to links and buttons with the 'generic_btn' class */
+.generic_btn {
+    display: inline-block; /* Ensure proper box model for <a> and <button> elements */
+    padding: 5px 10px;
+    font-size: 1em;
+    background-color: #a00e5f;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.3s, color 0.3s, text-shadow 0.3s;
+    text-decoration: none; /* Remove underline from <a> elements */
+}
+
+.generic_btn:hover {
+    background-color: #880d51;
     color: #f6c578;
     text-shadow: 1px #f6c578;
-
 }
 
-.nav-links a:last-child {
-    margin-right: 0;
+.quick-search-form {
+    display: flex;
+    align-items: center;
+}
+
+.quick-search-form input[type="text"] {
+    flex: 1;
+    padding: 5px 10px;
+    font-size: 1em;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    margin-right: 10px;
+    transition: border-color 0.3s;
+}
+
+.quick-search-form input[type="text"]:focus {
+    border-color: #007BFF; /* Highlight on focus */
+    outline: none;
 }
 
 .user-section img {
@@ -235,6 +277,9 @@ nav {
     z-index: 1;
 }
 
+
+/* ########### DROP DOWN MENU ##########*/
+
 .dropdown-content a, .dropdown-content form button {
     color: black;
     padding: 12px 16px; /* Ensure consistent padding */
@@ -253,9 +298,6 @@ nav {
 .dropdown-content a:hover, .dropdown-content form button:hover {
     background-color: #ddd;
 }
-
-
-/* ########### DROP DOWN MENU ##########*/
 
 .dropdown-content {
     display: none;
@@ -601,7 +643,7 @@ nav {
 }
 
 .collapsible.active {
-    background-color: #a00e5f;
+    background-color: #880d51;
 }
 
 /* Style for the collapsible content */
@@ -949,7 +991,6 @@ nav {
     font-size: 18px;
     transition: background-color 0.3s;
     display: flex;
-    justify-content: space-between;
     align-items: center;
 }
 

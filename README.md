@@ -418,7 +418,7 @@ if response.status_code == 200:
     print(beatmaps)
 ```
 
-Script applying tags to a map and formating a print as json:
+Script applying tags to a map (and formating the print for readability):
 ```python
 import requests
 import json

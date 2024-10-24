@@ -571,7 +571,7 @@ from django.shortcuts import render
 from django.db.models import Q, Count, Value, IntegerField
 from django.core.paginator import Paginator
 from django.contrib.auth.models import User
-from .models import Beatmap, TagApplication, Tag  # Ensure correct import paths
+from .models import Beatmap, TagApplication, Tag
 import re
 from collections import defaultdict
 from nltk.stem import PorterStemmer
@@ -646,11 +646,25 @@ def search_results(request):
     search_terms = parse_search_terms(query)
     beatmaps, include_tag_names = build_query_conditions(beatmaps, search_terms)
 
-    # Pagination, annotation with tags, and context setup remain the same
+    # Annotate beatmaps with tag_match_count and tag_apply_count
+    if include_tag_names:
+        # When there is a tag query, order by tag_apply_count and tag_match_count
+        beatmaps = beatmaps.annotate(
+            tag_match_count=Count('tags', filter=Q(tags__name__in=include_tag_names), distinct=True),
+            tag_apply_count=Count('tagapplication', filter=Q(tags__name__in=include_tag_names))
+        ).order_by('-tag_apply_count', '-tag_match_count')
+    else:
+        # When there is no tag query, order by total_tag_apply_count
+        beatmaps = beatmaps.annotate(
+            total_tag_apply_count=Count('tagapplication')
+        ).order_by('-total_tag_apply_count')
+
+    # Pagination
     paginator = Paginator(beatmaps, 10)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
+    # Annotate beatmaps with tag details
     annotate_beatmaps_with_tags(page_obj.object_list, request.user)
 
     context = {

@@ -43,7 +43,7 @@ To generate an API token:
 
 Include the token in the `Authorization` header of your API requests as follows:
 
-```
+```python
 headers = {
     'Authorization': f'Token {API_TOKEN}',
     'Content-Type': 'application/json',
@@ -75,7 +75,7 @@ Retrieve tags associated with a specific beatmap or a batch of beatmaps.
 - **Responses:**
   - **200 OK:** Successfully retrieved tags.
 
-```
+```json
 [
     {
         "beatmap_id": "1244293",
@@ -98,7 +98,7 @@ Retrieve tags associated with a specific beatmap or a batch of beatmaps.
 
   - **404 Not Found:** Beatmap(s) not found.
 
-```
+```json
 {
     "detail": "Beatmap not found."
 }
@@ -106,7 +106,7 @@ Retrieve tags associated with a specific beatmap or a batch of beatmaps.
 
 or
 
-```
+```json
 {
     "detail": "No beatmaps found."
 }
@@ -137,7 +137,7 @@ Interact with Beatmap data. Provides read-only operations and filtering.
         - **Type:** string
         - **Example:** `/api/beatmaps/filtered/?query=Test`
 
-```
+```json
 {
     "id": 1,
     "beatmap_id": "1244293",
@@ -169,7 +169,7 @@ Interact with Tag data. Provides standard read-only operations.
     - **URL:** `/api/tags/{id}/`
     - **Method:** `GET`
     - **Description:** Retrieve details of a specific tag by its ID.
-```
+```json
 {
     "id": 1,
     "name": "aim"
@@ -200,14 +200,14 @@ Manage tag applications to beatmaps. Provides standard read-only operations, and
       - **Content-Type:** `application/json`
       - **Body:**
 
-```
+```json
 {
     "beatmap_id": "2897724",
     "tags": ["aim", "streams", "farm", "ohio", "rizz"]
 }
 ```
 
-```
+```json
 {
     "status": "success",
     "results": [
@@ -224,14 +224,14 @@ Manage tag applications to beatmaps. Provides standard read-only operations, and
 }
 ```
 
-```
+```json
 {
     "beatmap_id": ["2897724 isn't a valid beatmap ID."]
 }
 ```
 
 
-```
+```json
 {
     "tags": [
         "Tags must be 1-25 characters long and can only contain letters, numbers, spaces, hyphens, and underscores."
@@ -256,7 +256,7 @@ Manage user profiles. Provides standard read-only operations.
     - **Method:** `GET`
     - **Description:** Retrieve details of a specific user profile by its ID.
 
-```
+```json
 {
     "id": 1,
     "user": {
@@ -274,13 +274,13 @@ Manage user profiles. Provides standard read-only operations.
 
 **Endpoint:**
 
-```
+```bash
 GET /api/beatmaps/2897724/tags/
 ```
 
 **Headers:**
 
-```
+```python
 headers = {
     'Authorization': f'Token {API_TOKEN}',
     'Content-Type': 'application/json',
@@ -319,7 +319,7 @@ POST /api/tag-applications/toggle/
 
 **Headers:**
 
-```http
+```python
 headers = {
     'Authorization': f'Token {API_TOKEN}',
     'Content-Type': 'application/json',
@@ -372,7 +372,7 @@ GET /api/beatmaps/filtered/?query=aim
 
 **Headers:**
 
-```http
+```python
 headers = {
     'Authorization': f'Token {API_TOKEN}',
     'Content-Type': 'application/json',

@@ -143,7 +143,6 @@ Interact with Beatmap data. Provides read-only operations and filtering.
             "id": 1,
             "name": "aim"
         }
-        // ... more tags
     ]
 }
 ```

@@ -197,7 +197,7 @@ Manage tag applications to beatmaps. Provides standard read-only operations, and
 ```json
 {
     "beatmap_id": "2897724",
-    "tags": ["aim", "streams"
+    "tags": ["aim", "streams"]
 }
 ```
 

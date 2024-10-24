@@ -2,7 +2,28 @@ from django.contrib import admin
 from django.contrib.auth.views import LogoutView
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
-from echo.views import vote_description, confirm_data_deletion, update_tag_description, edit_tags, api_token, home, osu_callback, search_tags, modify_tag, get_tags, profile, search_results, beatmap_detail, BeatmapViewSet, TagViewSet, TagApplicationViewSet, UserProfileViewSet, tags_for_beatmaps, settings, confirm_data_deletion, delete_user_data
+from echo.views import (
+    vote_description,
+    confirm_data_deletion,
+    update_tag_description,
+    edit_tags,
+    api_token,
+    home,
+    osu_callback,
+    search_tags,
+    modify_tag,
+    get_tags,
+    profile,
+    search_results,
+    beatmap_detail,
+    BeatmapViewSet,
+    TagViewSet,
+    TagApplicationViewSet,
+    UserProfileViewSet,
+    tags_for_beatmaps,
+    settings,
+    delete_user_data,
+)
 
 
 router = DefaultRouter()
@@ -28,13 +49,12 @@ urlpatterns = [
     path('vote_description/', vote_description, name='vote_description'),
     path('confirm_data_deletion/', confirm_data_deletion, name='confirm_data_deletion'),
 
-
-    # Commenting out API and beatmap-related URLs for now
+######### API #########
     path('api-token/', api_token, name='api_token'),
     path('beatmap_detail/<int:beatmap_id>/', beatmap_detail, name='beatmap_detail'),
 
-    # Custom endpoint for beatmap tags
-    path('api/beatmaps/tags/', tags_for_beatmaps),  # Handles batch requests with pagination
+    # endpoint for beatmap tags
+    path('api/beatmaps/tags/', tags_for_beatmaps),
     path('api/beatmaps/<str:beatmap_id>/tags/', tags_for_beatmaps),  # Handles single beatmap requests
 
     # REST API endpoints using routers

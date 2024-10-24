@@ -197,7 +197,7 @@ Manage tag applications to beatmaps. Provides standard read-only operations, and
 ```json
 {
     "beatmap_id": "2897724",
-    "tags": ["aim", "streams", "farm", "ohio", "rizz"]
+    "tags": ["aim", "streams"
 }
 ```
 
@@ -456,7 +456,7 @@ def toggle_tags(beatmap_id, tags):
 
 if __name__ == '__main__':
     beatmap_id = '2897724'
-    tags_to_toggle = ['aim', 'ohio', 'rizz']
+    tags_to_toggle = ['aim', 'jumps', 'farm']
     
     result = toggle_tags(beatmap_id, tags_to_toggle)
     

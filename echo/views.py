@@ -710,13 +710,12 @@ def search_results(request):
 
     # Annotate beatmaps with tag_match_count and tag_apply_count
     if include_tag_names:
-        # When there is a tag query, order by tag_apply_count and tag_match_count
         beatmaps = beatmaps.annotate(
             tag_match_count=Count('tags', filter=Q(tags__name__in=include_tag_names), distinct=True),
             tag_apply_count=Count('tagapplication', filter=Q(tags__name__in=include_tag_names))
-        ).order_by('-tag_apply_count', '-tag_match_count')
+        ).order_by('-tag_match_count', '-tag_apply_count')
     else:
-        # When there is no tag query, order by total_tag_apply_count
+        # When there is no inclusion tag query, order by total_tag_apply_count
         beatmaps = beatmaps.annotate(
             total_tag_apply_count=Count('tagapplication')
         ).order_by('-total_tag_apply_count')
@@ -781,7 +780,7 @@ def parse_search_terms(query):
     """
     Use regular expression to split the query into terms, treating quoted strings as single terms.
     """
-    return re.findall(r'-?"[^"]+"|-?[^"\s]+', query)
+    return re.findall(r'[-*]?"[^"]+"|[-*]?[^"\s]+', query)
 
 #######################################################################################
 
@@ -790,8 +789,13 @@ def is_exclusion_term(term):
 
 #######################################################################################
 
-from django.db.models import OuterRef, Subquery, Count, IntegerField, FloatField, Value, F, Case, When
-from django.db.models.functions import Coalesce
+def is_required_term(term):
+    return term.startswith('*')
+
+#######################################################################################
+
+from django.db.models import OuterRef, Subquery, Count, IntegerField, FloatField, Value, F, Case, When, Max
+from django.db.models.functions import Coalesce, Cast
 
 def build_query_conditions(beatmaps, search_terms):
     """
@@ -801,6 +805,7 @@ def build_query_conditions(beatmaps, search_terms):
     exclude_q = Q()
     include_tag_names = set()
     exclude_tag_names = set()
+    required_tag_names = set()
 
     for term in search_terms:
         term = term.strip()
@@ -817,12 +822,23 @@ def build_query_conditions(beatmaps, search_terms):
                 exclude_tag_names.update([tag.name for tag in matching_tags])
             else:
                 exclude_q |= build_exclusion_q(exclude_term)
+        elif is_required_term(term):
+            required_term = term.lstrip('*').strip('"').strip()
+            # Fuzzy match tags
+            matching_tags = Tag.objects.filter(name__icontains=required_term)
+            if matching_tags.exists():
+                required_tag_names.update([tag.name for tag in matching_tags])
+            else:
+                include_q &= build_inclusion_q(required_term)
         else:
             include_term = term.strip('"').strip()
             # Fuzzy match tags
             matching_tags = Tag.objects.filter(name__icontains=include_term)
             if matching_tags.exists():
-                include_tag_names.update([tag.name for tag in matching_tags])
+                # Exclude tags that are already required
+                for tag in matching_tags:
+                    if tag.name not in required_tag_names:
+                        include_tag_names.add(tag.name)
             else:
                 include_q &= build_inclusion_q(include_term)
 
@@ -834,39 +850,64 @@ def build_query_conditions(beatmaps, search_terms):
     if exclude_q:
         beatmaps = beatmaps.exclude(exclude_q)
 
-    # Apply tag inclusion filters
+    # Apply required tags filter
+    if required_tag_names:
+        beatmaps = beatmaps.annotate(
+            matched_required_tags=Count('tags', filter=Q(tags__name__in=required_tag_names), distinct=True)
+        ).filter(
+            matched_required_tags=len(required_tag_names)
+        )
+
+    # Apply inclusion tags filter
     if include_tag_names:
         beatmaps = beatmaps.filter(tags__name__in=include_tag_names).distinct()
 
     # Apply modified tag exclusion logic
     if exclude_tag_names:
-        # Annotate each beatmap with the max tag application count
-        max_tag_count_subquery = TagApplication.objects.filter(
-            beatmap=OuterRef('pk')
-        ).values('beatmap').annotate(
-            max_count=Count('id')
-        ).values('max_count')
+        beatmaps = beatmaps.filter(tags__name__in=include_tag_names).distinct()
 
-        # Annotate each beatmap with the exclude tag count
+    # Apply modified tag exclusion logic
+    if exclude_tag_names:
+        # Subquery to get counts of each tag applied to the beatmap
+        tag_counts_subquery = TagApplication.objects.filter(
+            beatmap=OuterRef('pk')
+        ).values('tag').annotate(
+            tag_count=Count('id')
+        ).order_by('-tag_count')
+
+        # Subquery to get the maximum tag count
+        max_tag_count_subquery = tag_counts_subquery.values('tag_count')[:1]
+
+        # Annotate the beatmap with max_tag_count
+        beatmaps = beatmaps.annotate(
+            max_tag_count=Coalesce(
+                Subquery(max_tag_count_subquery, output_field=IntegerField()),
+                Value(0)
+            )
+        )
+
+        # Subquery to get the total count of the excluded tags applied to the beatmap
         exclude_tag_count_subquery = TagApplication.objects.filter(
             beatmap=OuterRef('pk'),
             tag__name__in=exclude_tag_names
         ).values('beatmap').annotate(
             exclude_count=Count('id')
-        ).values('exclude_count')
+        ).values('exclude_count')[:1]
 
+        # Annotate the beatmap with exclude_tag_count
         beatmaps = beatmaps.annotate(
-            max_tag_count=Coalesce(
-                Subquery(max_tag_count_subquery, output_field=IntegerField()), Value(0)
-            ),
             exclude_tag_count=Coalesce(
-                Subquery(exclude_tag_count_subquery, output_field=IntegerField()), Value(0)
+                Subquery(exclude_tag_count_subquery, output_field=IntegerField()),
+                Value(0)
             )
-        ).annotate(
+        )
+
+        # Compute the exclude_ratio
+        beatmaps = beatmaps.annotate(
             exclude_ratio=Case(
                 When(
                     max_tag_count__gt=0,
-                    then=F('exclude_tag_count') * 1.0 / F('max_tag_count')
+                    then=Cast(F('exclude_tag_count'), FloatField()) / Cast(F('max_tag_count'), FloatField())
                 ),
                 default=Value(0.0),
                 output_field=FloatField()

@@ -133,7 +133,7 @@ def save_user_data(access_token, request):
         # Add an error message with the ban reason
         messages.error(request, f"You have been banned: {user_profile.ban_reason}")
         # Redirect to the error_page
-        return redirect('error_page')  # Ensure 'error_page' is the name of your URL pattern
+        return redirect('error_page')
 
     # Grant superuser and staff status if the Osu ID matches a specific ID
     if osu_id in ("4978940", "9396661"):
@@ -142,7 +142,7 @@ def save_user_data(access_token, request):
         user.save()
 
     # Authenticate and log in the user
-    user.backend = 'django.contrib.auth.backends.ModelBackend'  # Set backend manually
+    user.backend = 'django.contrib.auth.backends.ModelBackend' 
     login(request, user)
 
     # Store osu_id in session for future use
@@ -790,6 +790,9 @@ def is_exclusion_term(term):
 
 #######################################################################################
 
+from django.db.models import OuterRef, Subquery, Count, IntegerField, FloatField, Value, F, Case, When
+from django.db.models.functions import Coalesce
+
 def build_query_conditions(beatmaps, search_terms):
     """
     Build inclusion and exclusion Q objects based on the search terms.
@@ -831,15 +834,47 @@ def build_query_conditions(beatmaps, search_terms):
     if exclude_q:
         beatmaps = beatmaps.exclude(exclude_q)
 
-    # Apply tag exclusion filters
-    if exclude_tag_names:
-        beatmaps = beatmaps.exclude(tags__name__in=exclude_tag_names)
-
     # Apply tag inclusion filters
-    # Fetch all beatmaps with at least one of the matching tags
-    # but only for the tags part of the search
     if include_tag_names:
         beatmaps = beatmaps.filter(tags__name__in=include_tag_names).distinct()
+
+    # Apply modified tag exclusion logic
+    if exclude_tag_names:
+        # Annotate each beatmap with the max tag application count
+        max_tag_count_subquery = TagApplication.objects.filter(
+            beatmap=OuterRef('pk')
+        ).values('beatmap').annotate(
+            max_count=Count('id')
+        ).values('max_count')
+
+        # Annotate each beatmap with the exclude tag count
+        exclude_tag_count_subquery = TagApplication.objects.filter(
+            beatmap=OuterRef('pk'),
+            tag__name__in=exclude_tag_names
+        ).values('beatmap').annotate(
+            exclude_count=Count('id')
+        ).values('exclude_count')
+
+        beatmaps = beatmaps.annotate(
+            max_tag_count=Coalesce(
+                Subquery(max_tag_count_subquery, output_field=IntegerField()), Value(0)
+            ),
+            exclude_tag_count=Coalesce(
+                Subquery(exclude_tag_count_subquery, output_field=IntegerField()), Value(0)
+            )
+        ).annotate(
+            exclude_ratio=Case(
+                When(
+                    max_tag_count__gt=0,
+                    then=F('exclude_tag_count') * 1.0 / F('max_tag_count')
+                ),
+                default=Value(0.0),
+                output_field=FloatField()
+            )
+        )
+
+        # Exclude beatmaps where the exclude_ratio is greater than or equal to 0.15
+        beatmaps = beatmaps.exclude(exclude_ratio__gte=0.15)
 
     return beatmaps, include_tag_names
 

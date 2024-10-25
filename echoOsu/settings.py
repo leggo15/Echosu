@@ -14,9 +14,9 @@ load_dotenv(dotenv_path)
 SECRET_KEY = os.getenv('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv("DEBUG") == "True"
 
-DEBUG_PORT = 8000
+DEBUG_PORT = 8080
 BASE_URL = f"127.0.0.1" if DEBUG else "echosu.com"
 
 ALLOWED_HOSTS = [BASE_URL, f"www.{BASE_URL}"]
@@ -119,6 +119,13 @@ USE_I18N = True
 USE_TZ = True
 
 
+# Static files (CSS, JavaScript, Images)
+# https://docs.djangoproject.com/en/5.0/howto/static-files/
+STATIC_URL = '/static/'
+if not DEBUG:
+    STATICFILES_DIRS = [os.path.join(BASE_DIR, "static")]
+    STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
 
@@ -131,52 +138,24 @@ SOCIAL_AUTH_OSU_REDIRECT_URI = f"http://{BASE_URL}:{DEBUG_PORT}/callback" if DEB
         else f"https://www.{BASE_URL}/callback"
 
 
-AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID')
-AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
+if not DEBUG:
+    # AWS Credentials
+    AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID')
+    AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
 
-# AWS S3 Configuration
-AWS_STORAGE_BUCKET_NAME = 'echosu-s3'
-AWS_S3_REGION_NAME = 'eu-central-1'
-AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.{AWS_S3_REGION_NAME}.amazonaws.com'
+    # AWS S3 Configuration
+    AWS_STORAGE_BUCKET_NAME = 'echosu-s3'
+    AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com'
+    AWS_s3_FILE_OVERWRITE = False
 
-AWS_S3_FILE_OVERWRITE = False
-AWS_DEFAULT_ACL = None
-AWS_QUERYSTRING_AUTH = False  # This setting is important for public access
-
-# Static files (CSS, JavaScript, Images)
-STATIC_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/static/'
-
-# Media files (User uploaded content)
-MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/media/'
-
-# Storage backends
-STORAGES = {
-    'default': {
-        'BACKEND': 'storages.backends.s3boto3.S3Boto3Storage',
-        'OPTIONS': {
-            'location': 'media',  # or wherever you want to store media files
+    STORAGES = {
+        "default": {
+            "BACKEND": "storages.backends.s3boto3.S3Boto3Storage"
         },
-    },
-    'staticfiles': {
-        'BACKEND': 'storages.backends.s3boto3.S3StaticStorage',
-        'OPTIONS': {
-            'location': 'static',  # Stores static files under 'static' prefix in the bucket
+        "staticfiles": {
+            "BACKEND": "storages.backends.s3boto3.S3Boto3Storage"
         },
-    },
-}
-
-# Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/5.0/howto/static-files/
-STATIC_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/static/'
-
-# Directory where collectstatic will collect static files for deployment
-STATIC_ROOT = BASE_DIR / 'staticfiles'
-
-# Additional directories to include in static files search
-STATICFILES_DIRS = [
-    BASE_DIR / 'echo' / 'static',
-]
-
+    }
 
 # Authentication
 LOGIN_URL = 'login'

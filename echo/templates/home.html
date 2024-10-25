@@ -9,6 +9,8 @@
     <link rel="stylesheet" href="https://echosu-s3.s3.eu-central-1.amazonaws.com/static/css/master.css">
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://echosu-s3.s3.eu-central-1.amazonaws.com/static/js/master.js"></script>
+    <script src="https://echosu-s3.s3.eu-central-1.amazonaws.com/static/js/collapsible_descriptions.js"></script>
+
 </head>
 <body>
     {% include '_navbar.html' %}
@@ -19,14 +21,15 @@
             <form method="post" class="beatmap-form">
                 {% csrf_token %}
                 
-            <h2 class="collapsible-header" aria-expanded="false">
-                Add a New Beatmap
-                <span class="arrow">&#9660;</span> <!-- Down arrow -->
-            </h2>
-            <div class="collapsible-content">
-                <p>Use the beatmap ID from osu! to look up beatmaps.<br> 
-                https://osu.ppy.sh/beatmapsets/1289690#osu/"2897724" &lt;--- That ID.</p>
-            </div>
+                <h2 class="collapsible-description-header" aria-expanded="false" aria-controls="add-beatmap-content" role="button" tabindex="0">
+                    Add a New Beatmap
+                    <span class="arrow">&#9660;</span> <!-- Down arrow -->
+                </h2>
+                <div class="collapsible-description-content" id="add-beatmap-content" aria-hidden="true">
+                    <p>Use the beatmap ID from osu! to look up beatmaps.<br> 
+                    https://osu.ppy.sh/beatmapsets/1289690#osu/"2897724" &lt;--- That ID.</p>
+                </div>
+            
 
                 <div class="input-group">
                     <input type="text" id="beatmap_id" name="beatmap_id" placeholder="Enter Beatmap ID">

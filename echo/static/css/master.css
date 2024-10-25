@@ -36,7 +36,6 @@ body {
     background-color: lightcoral; /* Color indicating the tag can be removed */
 }
 
-
 /* Style for the tag list (suggestions) */
 #tag-list {
     list-style: none;
@@ -66,6 +65,51 @@ body {
     color: #1f1f1f;
     box-shadow: 0 4px 8px rgba(0,0,0,0.1);
     border-radius: 10px;
+}
+
+/* Styles for collapsible description headers */
+.collapsible-description-header {
+    cursor: pointer;
+    padding: 10px;
+    background-color: #f1f1f1;
+    border: none;
+    text-align: left;
+    outline: none;
+    font-size: 18px;
+    transition: background-color 0.3s;
+    display: flex;
+    justify-content: flex-start; /* Align items to the start */
+    align-items: center; /* Vertically center items */
+}
+
+/* Change background color when active */
+.collapsible-description-header.active {
+    background-color: #ccc;
+}
+
+/* Styles for the arrow indicator */
+.collapsible-description-header .arrow {
+    transition: transform 0.3s;
+}
+
+/* Rotate the arrow when active */
+.collapsible-description-header.active .arrow {
+    transform: rotate(180deg);
+}
+
+/* Styles for the collapsible content */
+.collapsible-description-content {
+    display: none;
+    padding: 0 15px;
+    border-left: 2px solid #f1f1f1;
+    border-right: 2px solid #f1f1f1;
+    border-bottom: 2px solid #f1f1f1;
+    margin-bottom: 20px;
+}
+
+.collapsible-description-content.show {
+    display: block;
+    animation: fadeIn 0.3s;
 }
 
 .beatmap-form {
@@ -212,16 +256,15 @@ nav {
     padding: 5px 10px;
 }
 
-.nav-links a.generic_btn {
+.nav-links a.generic-nav-btn {
     margin-right: 15px;
 }
 
-.nav-links a.generic_btn:last-child {
+.nav-links a.generic-nav-btn:last-child {
     margin-right: 0;
 }
 
-/* Apply button-like styling to links and buttons with the 'generic_btn' class */
-.generic_btn {
+.generic-nav-btn {
     display: inline-block; /* Ensure proper box model for <a> and <button> elements */
     padding: 5px 10px;
     font-size: 1em;
@@ -234,7 +277,7 @@ nav {
     text-decoration: none; /* Remove underline from <a> elements */
 }
 
-.generic_btn:hover {
+.generic-nav-:hover {
     background-color: #880d51;
     color: #f6c578;
     text-shadow: 1px #f6c578;
@@ -990,6 +1033,7 @@ nav {
     outline: none;
     font-size: 18px;
     transition: background-color 0.3s;
+    justify-content: center;
     display: flex;
     align-items: center;
 }

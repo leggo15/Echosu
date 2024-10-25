@@ -12,22 +12,71 @@
     <!-- jQuery UI JS for the slider -->
     <script src="https://code.jquery.com/ui/1.13.2/jquery-ui.min.js"></script>
     <script src="https://echosu-s3.s3.eu-central-1.amazonaws.com/static/js/master.js"></script>
+    <script src="https://echosu-s3.s3.eu-central-1.amazonaws.com/static/js/collapsible_descriptions.js"></script>
     <meta name="csrf-token" content="{{ csrf_token }}">
 
 </head>
 <body>
     {% include '_navbar.html' %}
     <div class="container">
-        <h2>Search Results</h2>
-        <h4>Here you can search for maps that already exist in our database.</h4>
-        <i> How to use</i> </br>
-        <i class="search_description">
-            You can search for specific genres like Aim, Tech and such by typing them in. 
-            If you're looking for a genre with spaces in the name you need to encapsulate it using quotes like so; "Spaced Streams". 
-            You can also search for specific map characteristics such as AR=8 or an artist- or mapper's name. 
-            These rules can be combined into a very specific search. 
-            An example could look like: "Aim awkward "No Bursts" AR=9 Od>8 cs<6 Monstrata".
-        </i>
+
+        <h2 class="collapsible-description-header" aria-expanded="false" aria-controls="add-beatmap-content" role="button" tabindex="0">
+            Advanced Search
+            <span class="arrow">&#9660;</span> <!-- Down arrow -->
+        </h2>
+        <div class="collapsible-description-content" id="add-beatmap-content" aria-hidden="true">
+            <p>
+                Use the search box to find beatmaps by <strong>tags</strong>, <strong>name</strong>, <strong>mapper</strong>, <strong>artist</strong> etc. Refine your results with the following filters:
+            </p>
+            <ul>
+                <li><strong>Star Rating:</strong> Adjust the slider to set the minimum and maximum Star rating.</li>
+                <li><strong>Status:</strong> Select one or more statuses: Ranked, Loved, Unranked (Unranked includes everything not found in Ranked or Loved).</li>
+                <li><strong>Game Mode:</strong> Choose from osu!, Taiko, Catch the Beat, or osu!mania.</li>
+            </ul>
+            <p><strong>Advanced Search Operators:</strong></p>
+            <ul>
+                <li>
+                    <strong>Keywords:</strong>
+                    Keywords consist of words the search engine can recognize, including <strong>tags</strong>, <strong>song name</strong>, <strong>diffulty name</strong>, <strong>mapper</strong>, <strong>artist</strong>, <strong>AR, CS, OD, HP, BPM</strong>.
+                </li>
+                <li>
+                    <strong>Multi-Word Tags:</strong>
+                    Enclose phrases in quotes to search specifically for tags consisting of more than one word.
+                    <ul>
+                        <li><em>Example:</em> <code>"spaced streams"</code></li>
+                    </ul>
+                </li>
+                <li>
+                    <strong>Remove from Search:</strong>
+                    By adding a minus symbol in front of a tag, the search engine will only look for maps without these tags.
+                    <ul>
+                        <li><em>Example:</em> <code>-farm</code></li>
+                    </ul>
+                </li>
+                <li>
+                    <strong>Attribute Filters:</strong>
+                    Use operators to filter specific attributes.
+                    <ul>
+                        <li><em>Examples:</em>
+                            <ul>
+                                <li><code>AR=8</code></li>
+                                <li><code>OD&gt;8</code></li>
+                                <li><code>CS&lt;6</code></li>
+                                <li><code>BPM&gt;=170</code></li>
+                            </ul>
+                        </li>
+                    </ul>
+                </li>
+                <li>
+                    <strong>Combine Terms:</strong>
+                    Mix keywords and operators for precise searches.
+                    <ul>
+                        <li><em>Example:</em><code> farm "spaced streams" -speed -bursts -deathstreams AR&gt;=9.4 OD&gt;9 CS&lt;4 BPM&lt;=210 BPM&gt;=190</code></li>
+                    </ul>
+                </li>
+            </ul>
+        </div>
+        
         
         <!-- Search form with additional filters -->
         <form action="{% url 'search_results' %}" method="get" class="beatmap-form">

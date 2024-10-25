@@ -82,6 +82,18 @@ $(document).ready(function() {
             url: '/get_tags/',
             data: { 'beatmap_id': beatmapId },
             success: function(tags) {
+                // Remove existing tooltips to prevent orphaned descriptions
+                $('.tooltip, .description-author').remove();
+                
+                // Clear any pending tooltip timeouts
+                $('.tag').each(function() {
+                    var timeout = $(this).data('tooltip-timeout');
+                    if (timeout) {
+                        clearTimeout(timeout);
+                        $(this).removeData('tooltip-timeout');
+                    }
+                });
+        
                 $('.applied-tags').empty().append('Tags: ');
                 tags.forEach(function(tag) {
                     // Assign class based on whether the user has applied the tag
@@ -106,6 +118,8 @@ $(document).ready(function() {
             }
         });
     }
+
+
 
     // Initial call to load the tags
     refreshTags();

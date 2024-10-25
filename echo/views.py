@@ -52,6 +52,8 @@ logger = logging.getLogger(__name__)
 
 # ----------------------------- Authentication Views ----------------------------- #
 
+# ----------------------------- Authentication Views ----------------------------- #
+
 def osu_callback(request):
     """
     Callback function to handle OAuth response and exchange code for access token.
@@ -110,6 +112,7 @@ from rest_framework.authtoken.models import Token
 def save_user_data(access_token, request):
     """
     Save user data retrieved from osu API and authenticate the user.
+    If the user is banned, redirect to the error page with the ban reason.
     """
     user_data = get_user_data_from_api(access_token)
 
@@ -122,8 +125,15 @@ def save_user_data(access_token, request):
     # Update or create the user profile
     user_profile, profile_created = UserProfile.objects.get_or_create(user=user)
     user_profile.osu_id = osu_id
-    user_profile.profile_pic_url = user_data['avatar_url']
+    user_profile.profile_pic_url = user_data.get('avatar_url', '')  # Use get to avoid KeyError
     user_profile.save()
+
+    # Check if the user is banned
+    if user_profile.banned:
+        # Add an error message with the ban reason
+        messages.error(request, f"You have been banned: {user_profile.ban_reason}")
+        # Redirect to the error_page
+        return redirect('error_page')  # Ensure 'error_page' is the name of your URL pattern
 
     # Grant superuser and staff status if the Osu ID matches a specific ID
     if osu_id in ("4978940", "9396661"):
@@ -140,9 +150,7 @@ def save_user_data(access_token, request):
 
     # Generate or retrieve the token for the user
     token, _ = Token.objects.get_or_create(user=user)
-    # Optionally, you can store the token key in the session or display it to the user
 
-    # views.py
 
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
@@ -171,6 +179,12 @@ def home(request):
 def admin(request):
     """Redirect to the admin panel."""
     return redirect('/admin/')
+
+def error_page_view(request):
+    """
+    Render the error_page template.
+    """
+    return render(request, 'error_page.html')
 
 # ------------------------------------------------------------------------ #
 
@@ -223,7 +237,7 @@ def get_tags(request):
     tags_with_counts_list = [
         {
             'name': tag['tag__name'],
-            'description': tag.get('tag__description', ''),
+            'description': tag.get('tag__description', 'No description abaliable.'),
             'description_author': tag.get('tag__description_author__username', ''),
             'apply_count': tag['apply_count'],
             'is_applied_by_user': tag['tag__name'] in user_tag_names

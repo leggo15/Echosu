@@ -23,6 +23,7 @@ from echo.views import (
     tags_for_beatmaps,
     settings,
     delete_user_data,
+    error_page_view
 )
 
 
@@ -37,6 +38,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('', home, name='home'),
     path('profile/', profile, name='profile'),
+    path('error/', error_page_view, name='error_page'),
     path('callback', osu_callback, name='osu_callback'),
     path('search_tags/', search_tags, name='search_tags'),
     path('modify_tag/', modify_tag, name='modify_tag'),

@@ -43,6 +43,8 @@ class UserProfile(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, default=get_default_user)
     osu_id = models.CharField(max_length=100, null=False, unique=True)
     profile_pic_url = models.URLField(max_length=1000, null=True, blank=True)
+    banned = models.BooleanField(default=False)
+    ban_reason = models.CharField(max_length=255, unique=False, null=False, blank=True)
 
     def __str__(self):
         return self.user.username or "Unknown User"
@@ -66,6 +68,9 @@ class Tag(models.Model):
         return self.upvotes - self.downvotes
 
     def save(self, *args, **kwargs):
+        # Pop 'user' from kwargs if present
+        user = kwargs.pop('user', None)
+
         # Detect if the description has changed
         if self.pk:
             previous = Tag.objects.get(pk=self.pk)
@@ -76,11 +81,30 @@ class Tag(models.Model):
                 self.is_locked = False
                 # Delete all existing votes for this tag
                 self.votes.all().delete()
+                # Create a new description history entry with the new author
+                TagDescriptionHistory.objects.create(
+                    tag=self,
+                    description=previous.description,
+                    author=user if user else previous.description_author
+                )
         self.name = self.name.strip().lower()
         super(Tag, self).save(*args, **kwargs)
 
     def __str__(self):
         return self.name
+    
+class TagDescriptionHistory(models.Model):
+    tag = models.ForeignKey(Tag, on_delete=models.CASCADE, related_name='description_histories')
+    description = models.CharField(max_length=255)
+    date_written = models.DateTimeField(auto_now_add=True)
+    author = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+
+    class Meta:
+        ordering = ['-date_written']
+
+    def __str__(self):
+        return f"{self.tag.name} - {self.date_written.strftime('%Y-%m-%d %H:%M:%S')} by {self.author}"
+
 
 class Vote(models.Model):
     UPVOTE = 'upvote'

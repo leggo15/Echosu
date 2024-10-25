@@ -59,8 +59,9 @@
     {% include '_navbar.html' %}
     <div class="container confirmation-page">
         <h1>Are You Sure?</h1>
-        <p>You are about to delete all your contributions from our site. This action cannot be undone. Your account will remain active. Are you sure you want to proceed?</p>
-
+        <p>You are about to delete all your contributions from our site (Including every tag you've ever applied to a map). This action cannot be undone. Your account will remain active.</p>
+        </br>
+        <p>Are you sure you want to proceed?</p>
         <form method="post" action="{% url 'delete_user_data' %}">
             {% csrf_token %}
             <button type="submit" class="confirm-delete-btn">Yes, Delete My Data</button>

@@ -648,7 +648,7 @@ def search_results(request):
     print("Raw query string:", query)
     search_terms = parse_search_terms(query)
     print("Parsed search terms:", search_terms)
-    
+
     query = request.GET.get('query', '').strip()
     selected_mode = request.GET.get('mode', 'osu').strip().lower()
     star_min = request.GET.get('star_min', '0').strip()

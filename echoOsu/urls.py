@@ -5,6 +5,7 @@ from rest_framework.routers import DefaultRouter
 from echo.views import (
     vote_description,
     confirm_data_deletion,
+    delete_user_data,
     update_tag_description,
     edit_tags,
     api_token,
@@ -22,7 +23,6 @@ from echo.views import (
     UserProfileViewSet,
     tags_for_beatmaps,
     settings,
-    delete_user_data,
     error_page_view
 )
 
@@ -50,6 +50,7 @@ urlpatterns = [
     path('update_tag_description/', update_tag_description, name='update_tag_description'),
     path('vote_description/', vote_description, name='vote_description'),
     path('confirm_data_deletion/', confirm_data_deletion, name='confirm_data_deletion'),
+    path('delete_user_data/', delete_user_data, name='delete_user_data'),
 
 ######### API #########
     path('api-token/', api_token, name='api_token'),

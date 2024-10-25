@@ -8,6 +8,7 @@
         <link rel="stylesheet" href="https://echosu-s3.s3.eu-central-1.amazonaws.com/static/css/master.css">
         <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
         <script src="https://echosu-s3.s3.eu-central-1.amazonaws.com/static/js/master.js"></script>
+        <script src="https://echosu-s3.s3.eu-central-1.amazonaws.com/static/js/collapsible_descriptions.js"></script>
         <meta name="csrf-token" content="{{ csrf_token }}">
 
     </head>
@@ -17,8 +18,15 @@
             {% load static %}
             {% load custom_tags %}
             {% block content %}
-            <h1>Edit Tags</h1>
-            
+            <h2 class="collapsible-description-header" aria-expanded="false" aria-controls="add-beatmap-content" role="button" tabindex="0">
+                Edit Tags
+                <span class="arrow">&#9660;</span> <!-- Down arrow -->
+            </h2>
+            <div class="collapsible-description-content" id="add-beatmap-content" aria-hidden="true">
+                <p>Welcome, you might wonder when you got access to this page? well this appears after youve applied tags on a certain amount of maps.</p> 
+                <p>Here anyone can write a description for any tag. Then people can vote for these tags, where downvotes count negativly and upvotes count positivly, if a description reaches 10 total votes, it locks and can no longer be edited.</p>
+            </div>
+            <p>(Page is still under construction and far from final.)</p>
             <!-- Display Django Messages -->
             {% if messages %}
                 {% for message in messages %}

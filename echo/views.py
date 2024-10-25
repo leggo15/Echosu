@@ -780,7 +780,7 @@ def parse_search_terms(query):
     """
     Use regular expression to split the query into terms, treating quoted strings as single terms.
     """
-    return re.findall(r'[-*]?"[^"]+"|[-*]?[^"\s]+', query)
+    return re.findall(r'[-~]?"[^"]+"|[-~]?[^"\s]+', query)
 
 #######################################################################################
 
@@ -790,7 +790,7 @@ def is_exclusion_term(term):
 #######################################################################################
 
 def is_required_term(term):
-    return term.startswith('*')
+    return term.startswith('~')
 
 #######################################################################################
 
@@ -799,7 +799,7 @@ from django.db.models.functions import Coalesce, Cast
 
 def build_query_conditions(beatmaps, search_terms):
     """
-    Build inclusion and exclusion Q objects based on the search terms.
+    Build inclusion, exclusion, and required tag conditions based on the search terms.
     """
     include_q = Q()
     exclude_q = Q()
@@ -823,13 +823,14 @@ def build_query_conditions(beatmaps, search_terms):
             else:
                 exclude_q |= build_exclusion_q(exclude_term)
         elif is_required_term(term):
-            required_term = term.lstrip('*').strip('"').strip()
+            required_term = term.lstrip('~').strip('"').strip()
             # Fuzzy match tags
             matching_tags = Tag.objects.filter(name__icontains=required_term)
             if matching_tags.exists():
                 required_tag_names.update([tag.name for tag in matching_tags])
             else:
-                include_q &= build_inclusion_q(required_term)
+                # No matching required tags, return no results
+                return beatmaps.none(), include_tag_names
         else:
             include_term = term.strip('"').strip()
             # Fuzzy match tags
@@ -842,28 +843,21 @@ def build_query_conditions(beatmaps, search_terms):
             else:
                 include_q &= build_inclusion_q(include_term)
 
-    # Apply inclusion filters
+    # Apply inclusion filters (e.g., artist, title, etc.)
     if include_q:
         beatmaps = beatmaps.filter(include_q)
 
-    # Apply exclusion filters
+    # Apply exclusion filters (e.g., artist, title, etc.)
     if exclude_q:
         beatmaps = beatmaps.exclude(exclude_q)
 
     # Apply required tags filter
     if required_tag_names:
-        beatmaps = beatmaps.annotate(
-            matched_required_tags=Count('tags', filter=Q(tags__name__in=required_tag_names), distinct=True)
-        ).filter(
-            matched_required_tags=len(required_tag_names)
-        )
+        for tag_name in required_tag_names:
+            beatmaps = beatmaps.filter(tags__name=tag_name)
 
     # Apply inclusion tags filter
     if include_tag_names:
-        beatmaps = beatmaps.filter(tags__name__in=include_tag_names).distinct()
-
-    # Apply modified tag exclusion logic
-    if exclude_tag_names:
         beatmaps = beatmaps.filter(tags__name__in=include_tag_names).distinct()
 
     # Apply modified tag exclusion logic
@@ -918,6 +912,7 @@ def build_query_conditions(beatmaps, search_terms):
         beatmaps = beatmaps.exclude(exclude_ratio__gte=0.15)
 
     return beatmaps, include_tag_names
+
 
 #######################################################################################
 

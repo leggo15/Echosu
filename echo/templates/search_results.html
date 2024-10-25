@@ -55,9 +55,9 @@
                 </li>
                 <li>
                     <strong>Force results:</strong>
-                    By adding a star symbol in front of a tag, the search results will require that tag to be applied.
+                    By adding a tilda symbol in front of a tag, the search results will require that tag to be applied.
                     <ul>
-                        <li><em>Example:</em> <code>*farm</code></li>
+                        <li><em>Example:</em> <code>~farm</code></li>
                     </ul>
                 </li>
                 <li>
@@ -135,7 +135,7 @@
                     </select>
                 </div>
             </div>
-            <input type="text" name="query" id="tag-input" placeholder="Search by Tags, name, ID, mapper, or artist" value="{{ request.GET.query }}">
+            <input type="text" name="query" id="tag-input" placeholder="Search by Tags, name, mapper, or artist" value="{{ request.GET.query }}">
             <button type="submit" class="generic_btn">Search</button>
         </form>
 

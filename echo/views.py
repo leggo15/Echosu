@@ -645,6 +645,11 @@ def stem_word(word):
 
 def search_results(request):
     query = request.GET.get('query', '').strip()
+    print("Raw query string:", query)
+    search_terms = parse_search_terms(query)
+    print("Parsed search terms:", search_terms)
+    
+    query = request.GET.get('query', '').strip()
     selected_mode = request.GET.get('mode', 'osu').strip().lower()
     star_min = request.GET.get('star_min', '0').strip()
     star_max = request.GET.get('star_max', '10').strip()
@@ -780,7 +785,7 @@ def parse_search_terms(query):
     """
     Use regular expression to split the query into terms, treating quoted strings as single terms.
     """
-    return re.findall(r'[-~]?"[^"]+"|[-~]?[^"\s]+', query)
+    return re.findall(r'[-.]?"[^"]+"|[-.]?[^"\s]+', query)
 
 #######################################################################################
 
@@ -790,7 +795,7 @@ def is_exclusion_term(term):
 #######################################################################################
 
 def is_required_term(term):
-    return term.startswith('~')
+    return term.startswith('.')
 
 #######################################################################################
 
@@ -823,7 +828,7 @@ def build_query_conditions(beatmaps, search_terms):
             else:
                 exclude_q |= build_exclusion_q(exclude_term)
         elif is_required_term(term):
-            required_term = term.lstrip('~').strip('"').strip()
+            required_term = term.lstrip('.').strip('"').strip()
             # Fuzzy match tags
             matching_tags = Tag.objects.filter(name__icontains=required_term)
             if matching_tags.exists():

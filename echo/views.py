@@ -245,6 +245,58 @@ def search_tags(request):
 
 
 from better_profanity import profanity
+import unicodedata
+
+def sanitize_tag(tag):
+    """
+    Sanitize the tag by performing the following steps:
+    1. Trim leading and trailing spaces.
+    2. Collapse multiple consecutive spaces into one.
+    3. Reduce any character repeated more than twice consecutively to two.
+    4. Normalize Unicode characters to NFC form.
+    5. Remove non-printable and control characters.
+    6. Prevent leading or trailing non-alphanumeric characters.
+    7. (Optional) Limit the number of words.
+    8. (Optional) Exclude reserved words or patterns.
+    """
+    # Step 1: Trim leading and trailing spaces
+    tag = tag.strip()
+    
+    # Step 2: Collapse multiple consecutive spaces into one
+    tag = ' '.join(tag.split())
+    
+    # Step 3: Reduce consecutive identical characters to two
+    tag = re.sub(r'(.)\1{2,}', r'\1\1', tag)
+    
+    # Step 4: Unicode normalization to NFC form
+    tag = unicodedata.normalize('NFC', tag)
+    
+    # Step 5: Remove non-printable and control characters
+    # This regex matches any character that is not a printable character or space
+    tag = re.sub(r'[^\x20-\x7E]', '', tag)
+    
+    # Step 6: Prevent leading or trailing non-alphanumeric characters
+    # Remove leading non-alphanumeric characters
+    tag = re.sub(r'^[^A-Za-z0-9]+', '', tag)
+    # Remove trailing non-alphanumeric characters
+    tag = re.sub(r'[^A-Za-z0-9]+$', '', tag)
+    
+    # Step 7: (Optional) Limit the number of words
+    # For example, limit to a maximum of 3 words
+    max_words = 3
+    words = tag.split()
+    if len(words) > max_words:
+        tag = ' '.join(words[:max_words])
+    
+    # Step 8: (Optional) Exclude reserved words or patterns
+    # Define a set of reserved words
+    reserved_words = {'admin', 'null', 'undefined'}
+    if tag.lower() in reserved_words:
+        # Handle as needed, e.g., raise an exception or modify the tag
+        # For this example, we'll append a suffix to make it unique
+        tag += '_tag'
+    
+    return tag
 
 # Define the allowed tag pattern if not already defined
 ALLOWED_TAG_PATTERN = re.compile(r'^[A-Za-z0-9 _\-\/]{1,25}$')
@@ -260,11 +312,7 @@ def modify_tag(request):
         beatmap_id = request.POST.get('beatmap_id')
         user = request.user
 
-        # Trim leading and trailing spaces
-        processed_tag = tag_name.strip()
-
-        # Convert to lowercase
-        processed_tag = processed_tag.lower()
+        processed_tag = sanitize_tag(tag_name.lower())
 
         # Disallow specific chars and set max length
         if not ALLOWED_TAG_PATTERN.match(processed_tag):

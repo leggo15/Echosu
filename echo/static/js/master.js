@@ -110,7 +110,6 @@ $(document).ready(function() {
         });
     }
 
-
     // Refresh tags in the Beatmap Info section
     function refreshTags() {
         var beatmapId = $('#current_beatmap_id').val();
@@ -306,15 +305,43 @@ $(document).ready(function() {
 
     // Function to load tags on page load (e.g., Top Tags)
     function loadInitialTags() {
-        $('.tags-usage .tag').each(function() {
-            // No need to attach hover events individually since we're using event delegation
-            // This function can be used for other initial setups if needed
-        });
     }
 
     // Call the function to attach hover events to initial Top Tags
     loadInitialTags();
-});
+
+    // -----------------------------------------------
+    // Load More functionality for Recommended Maps
+    // -----------------------------------------------
+
+    // Initialize recommendationsOffset based on the current number of maps displayed
+    let recommendationsOffset = $('#recommended-map-list .map-entry').length;
+
+    $('#load-more-btn').on('click', function() {
+        $.ajax({
+            type: 'GET',
+            url: '/load_more_recommendations/',
+            data: {
+                'offset': recommendationsOffset,
+                'limit': 5
+            },
+            success: function(response) {
+                if (response.rendered_maps.trim() === '') {
+                    // No more maps to load
+                    $('#load-more-btn').text('No more recommendations').prop('disabled', true);
+                } else {
+                    // Append the new maps to the list
+                    $('#recommended-map-list').append(response.rendered_maps);
+                    recommendationsOffset += 5;
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('Error loading more recommendations:', error);
+            }
+        });
+    });
+
+}); 
 
 
 // Search_results star rating slider

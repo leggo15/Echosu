@@ -1280,3 +1280,9 @@ nav {
         background-color: #6c757d !important;
         cursor: not-allowed !important;
     }
+
+    /* centers the load more maps under recomendations in home*/
+    .loadmore_center {
+        max-width: fit-content;
+        margin-inline: auto;
+    }

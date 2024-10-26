@@ -50,7 +50,14 @@ logger = logging.getLogger(__name__)
 
 # -------------------------------------------------------------------------------- #
 
-# ----------------------------- Authentication Views ----------------------------- #
+# ----------------------------- Constants ----------------------------- #
+
+GAME_MODE_MAPPING = {
+    'GameMode.OSU': 'osu',
+    'GameMode.TAIKO': 'taiko',
+    'GameMode.CATCH': 'fruits',
+    'GameMode.MANIA': 'mania',
+}
 
 # ----------------------------- Authentication Views ----------------------------- #
 
@@ -676,7 +683,6 @@ def search_results(request):
     search_terms = parse_search_terms(query)
     print("Parsed search terms:", search_terms)
 
-    query = request.GET.get('query', '').strip()
     selected_mode = request.GET.get('mode', 'osu').strip().lower()
     star_min = request.GET.get('star_min', '0').strip()
     star_max = request.GET.get('star_max', '10').strip()
@@ -701,20 +707,20 @@ def search_results(request):
         star_max = 10.0
 
     MODE_MAPPING = {
-        'osu': 'GameMode.OSU',
-        'taiko': 'GameMode.TAIKO',
-        'catch': 'GameMode.CATCH',
-        'mania': 'GameMode.MANIA',
+        'osu': 'osu',
+        'taiko': 'taiko',
+        'catch': 'fruits',
+        'mania': 'mania',
     }
 
     beatmaps = Beatmap.objects.all()
 
     # Filter by mode
-    mapped_mode = MODE_MAPPING.get(selected_mode)
-    if mapped_mode:
-        beatmaps = beatmaps.filter(mode__iexact=mapped_mode)
-    else:
-        beatmaps = beatmaps.filter(mode__iexact='osu')
+    if selected_mode not in MODE_MAPPING:
+        selected_mode = 'osu'  # Default to 'osu' mode if invalid
+
+    mapped_mode = MODE_MAPPING[selected_mode]
+    beatmaps = beatmaps.filter(mode__iexact=mapped_mode)
 
     # Filter by star rating
     if star_max >= 10:
@@ -1172,19 +1178,20 @@ def get_recommendations(user=None, limit=5, offset=0):
 
 
 def load_more_recommendations(request):
-    if not request.is_ajax():
+    # Check if the request is an AJAX request
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+        user = request.user if request.user.is_authenticated else None
+        offset = int(request.GET.get('offset', 0))
+        limit = int(request.GET.get('limit', 5))
+
+        recommended_maps = get_recommendations(user=user, limit=limit, offset=offset)
+
+        # Render the recommended maps to an HTML string
+        rendered_maps = render_to_string('partials/recommended_maps.html', {'recommended_maps': recommended_maps}, request)
+
+        return JsonResponse({'rendered_maps': rendered_maps})
+    else:
         return JsonResponse({'error': 'Invalid request'}, status=400)
-
-    user = request.user if request.user.is_authenticated else None
-    offset = int(request.GET.get('offset', 0))
-    limit = int(request.GET.get('limit', 5))
-
-    recommended_maps = get_recommendations(user=user, limit=limit, offset=offset)
-
-    # Render the recommended maps to a HTML string
-    rendered_maps = render_to_string('partials/recommended_maps.html', {'recommended_maps': recommended_maps}, request)
-
-    return JsonResponse({'rendered_maps': rendered_maps})
 
 
 
@@ -1256,7 +1263,7 @@ def home(request):
 
                     # Attempt to fetch beatmap data from the osu! API
                     beatmap_data = api.beatmap(beatmap_id_request)
-                    
+
                     if not beatmap_data:
                         raise ValueError(f"{beatmap_id_request} isn't a valid beatmap ID.")
 
@@ -1269,7 +1276,7 @@ def home(request):
                             beatmap.title, beatmap.version, beatmap.artist, beatmap.creator,
                             beatmap.cover_image_url, beatmap.total_length, beatmap.bpm,
                             beatmap.cs, beatmap.drain, beatmap.accuracy, beatmap.ar,
-                            beatmap.difficulty_rating, beatmap.mode, beatmap.beatmapset_id, 
+                            beatmap.difficulty_rating, beatmap.mode, beatmap.beatmapset_id,
                             beatmap.status
                         ]
                     ):
@@ -1305,7 +1312,12 @@ def home(request):
                         beatmap.accuracy = getattr(beatmap_data, 'accuracy', beatmap.accuracy)
                         beatmap.ar = getattr(beatmap_data, 'ar', beatmap.ar)
                         beatmap.difficulty_rating = getattr(beatmap_data, 'difficulty_rating', beatmap.difficulty_rating)
-                        beatmap.mode = getattr(beatmap_data, 'mode', beatmap.mode)
+
+                        # Map the game mode to the desired string representation
+                        api_mode_value = getattr(beatmap_data, 'mode', beatmap.mode)
+                        beatmap.mode = GAME_MODE_MAPPING.get(str(api_mode_value), 'unknown')
+
+                        # Map the status
                         beatmap.status = status_mapping.get(beatmap_data.status.value, "Unknown")
 
                         # Save the updated beatmap to the database

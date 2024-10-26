@@ -165,6 +165,7 @@
                             <span>Mode: {{ beatmap.mode }}</span>
                             <span>Status: {{ beatmap.status }}</span>
                         </div>
+                        
                         <a href="{% url 'beatmap_detail' beatmap_id=beatmap.beatmap_id %}" class="beatmap-link">View Beatmap</a>
 
                         {% if beatmap.beatmapset_id %}

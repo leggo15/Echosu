@@ -201,12 +201,30 @@ def beatmap_detail(request, beatmap_id):
         apply_count=Count('id')
     ).order_by('-apply_count')
 
-    # Handle tag addition (if applicable)
+    # Extract the top N tags
+    top_N = 10
+    top_tags = [tag_app['tag__name'] for tag_app in tags_with_counts[:top_N] if tag_app['tag__name']]
+
+    # Modify tags to encapsulate multi-word tags in quotes
+    def encapsulate_tag(tag):
+        if ' ' in tag:
+            return f'"{tag}"'
+        else:
+            return tag
+
+    encapsulated_tags = [encapsulate_tag(tag) for tag in top_tags]
+
+    # Join the tags into a query string
+    tags_query_string = ' '.join(encapsulated_tags)
+
     if request.method == 'POST' and 'tag_name' in request.POST:
         tag_name = request.POST.get('tag_name')
-        # Logic to create a TagApplication for this beatmap and tag
 
-    return render(request, 'beatmap_detail.html', {'beatmap': beatmap, 'tags_with_counts': tags_with_counts})
+    return render(request, 'beatmap_detail.html', {
+        'beatmap': beatmap,
+        'tags_with_counts': tags_with_counts,
+        'tags_query_string': tags_query_string,  # Pass the query string to the template
+    })
 
 # --------------------------------------------------------------------- #
 

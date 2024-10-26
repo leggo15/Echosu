@@ -425,7 +425,7 @@ import json
 
 
 API_TOKEN = 'NoXLUxiMVGRRZTJKbk54TlarrnoMgtzl99qqwX4dTtghBjYlQp8UKw8R1iGOFY1x'
-BASE_URL = 'https://www.echosu.com/'
+BASE_URL = 'https://www.echosu.com'
 
 headers = {
     'Authorization': f'Token {API_TOKEN}',

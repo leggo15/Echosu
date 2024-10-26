@@ -191,40 +191,49 @@ def error_page_view(request):
 # ----------------------------- Beatmap Detail Views ----------------------------- #
 
 def beatmap_detail(request, beatmap_id):
-    """
-    Detailed view of a beatmap with tags and other information.
-    """
     beatmap = get_object_or_404(Beatmap, beatmap_id=beatmap_id)
 
-    # Query tags applied to this beatmap
-    tags_with_counts = TagApplication.objects.filter(beatmap=beatmap).values('tag__name').annotate(
+    # Get TagApplications for this beatmap
+    tag_apps = TagApplication.objects.filter(beatmap=beatmap).select_related('tag')
+
+    # Annotate tags with apply counts
+    tags_with_counts = tag_apps.values('tag__id', 'tag__name', 'tag__description', 'tag__description_author').annotate(
         apply_count=Count('id')
-    ).order_by('-apply_count')
+    )
 
-    # Extract the top N tags
+    # Determine if the user has applied each tag
+    user_applied_tags = []
+    if request.user.is_authenticated:
+        user_applied_tags = TagApplication.objects.filter(
+            beatmap=beatmap, user=request.user
+        ).values_list('tag__id', flat=True)
+
+    # Prepare tags_with_counts with is_applied_by_user flag
+    tags_with_counts = [
+        {
+            'tag__id': tag['tag__id'],
+            'tag__name': tag['tag__name'],
+            'tag__description': tag['tag__description'],
+            'tag__description_author': tag['tag__description_author'],
+            'apply_count': tag['apply_count'],
+            'is_applied_by_user': tag['tag__id'] in user_applied_tags
+        }
+        for tag in tags_with_counts
+    ]
+
+    # Prepare tags_query_string for "Find Similar Maps" link
     top_N = 10
-    top_tags = [tag_app['tag__name'] for tag_app in tags_with_counts[:top_N] if tag_app['tag__name']]
-
-    # Modify tags to encapsulate multi-word tags in quotes
-    def encapsulate_tag(tag):
-        if ' ' in tag:
-            return f'"{tag}"'
-        else:
-            return tag
-
-    encapsulated_tags = [encapsulate_tag(tag) for tag in top_tags]
-
-    # Join the tags into a query string
+    top_tags = [tag['tag__name'] for tag in tags_with_counts[:top_N] if tag['tag__name']]
+    encapsulated_tags = [f'"{tag}"' if ' ' in tag else tag for tag in top_tags]
     tags_query_string = ' '.join(encapsulated_tags)
 
-    if request.method == 'POST' and 'tag_name' in request.POST:
-        tag_name = request.POST.get('tag_name')
-
-    return render(request, 'beatmap_detail.html', {
+    context = {
         'beatmap': beatmap,
         'tags_with_counts': tags_with_counts,
-        'tags_query_string': tags_query_string,  # Pass the query string to the template
-    })
+        'tags_query_string': tags_query_string,
+    }
+
+    return render(request, 'beatmap_detail.html', context)
 
 # --------------------------------------------------------------------- #
 
@@ -1122,8 +1131,9 @@ def get_top_tags(user=None):
 
 
 from collections import defaultdict
+from django.template.loader import render_to_string
 
-def get_recommendations(user=None):
+def get_recommendations(user=None, limit=5, offset=0):
     if user and user.is_authenticated:
         # Get a list of tag IDs applied by the user
         user_tags = list(TagApplication.objects.filter(user=user).values_list('tag_id', flat=True))
@@ -1141,26 +1151,42 @@ def get_recommendations(user=None):
                 id__in=user_tagged_map_ids
             ).annotate(
                 total_tags=Count('tagapplication')
-            ).order_by('-total_tags').distinct()[:5]
+            ).order_by('-total_tags').distinct()[offset:offset+limit]
         else:
-            # User hasn't tagged anything yet; provide 5 random maps
             recommended_maps = Beatmap.objects.annotate(
                 total_tags=Count('tagapplication')
             ).filter(
                 total_tags__gt=0
-            ).order_by('?')[:5]
+            ).order_by('?')[offset:offset+limit]
     else:
         # For anonymous users, provide 5 random maps
         recommended_maps = Beatmap.objects.annotate(
             total_tags=Count('tagapplication')
         ).filter(
             total_tags__gt=0
-        ).order_by('?')[:5]
+        ).order_by('?')[offset:offset+limit]
     
     # Annotate recommended_maps with tags_with_counts
     recommended_maps = annotate_beatmaps_with_tags(recommended_maps, user)
-    
     return recommended_maps
+
+
+def load_more_recommendations(request):
+    if not request.is_ajax():
+        return JsonResponse({'error': 'Invalid request'}, status=400)
+
+    user = request.user if request.user.is_authenticated else None
+    offset = int(request.GET.get('offset', 0))
+    limit = int(request.GET.get('limit', 5))
+
+    recommended_maps = get_recommendations(user=user, limit=limit, offset=offset)
+
+    # Render the recommended maps to a HTML string
+    rendered_maps = render_to_string('partials/recommended_maps.html', {'recommended_maps': recommended_maps}, request)
+
+    return JsonResponse({'rendered_maps': rendered_maps})
+
+
 
 def annotate_beatmaps_with_tags(beatmaps, user):
     beatmap_ids = beatmaps.values_list('id', flat=True)

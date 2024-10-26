@@ -55,17 +55,29 @@
         <input type="text" id="tag-input" placeholder="Enter tag"> 
         <ul id="tag-list"></ul>
 
-        <div class="applied-tags"> 
+        <div class="applied-tags" id="beatmap-applied-tags">
             Tags:
-            {% for TagApplication in tags_with_counts %}
-            {% if TagApplication.tag__name %}
-                <span class="tag" data-tag-name="{{ TagApplication.tag__name }}" data-applied-by-user="false">
-                    {{ TagApplication.tag__name }} ({{ TagApplication.apply_count }})
-                </span>
+            {% if tags_with_counts %}
+                {% for tag_info in tags_with_counts %}
+                    {% if tag_info.tag__name %}
+                        <span class="tag {% if tag_info.is_applied_by_user %}tag-applied{% else %}tag-unapplied{% endif %}"
+                              data-tag-name="{{ tag_info.tag__name }}" 
+                              data-applied-by-user="{{ tag_info.is_applied_by_user }}"
+                              data-beatmap-id="{{ beatmap.beatmap_id }}"
+                              {% if tag_info.tag__description %}
+                                  data-description="{{ tag_info.tag__description|escapejs }}"
+                                  data-description-author=" - {{ tag_info.tag__description_author|escapejs }}"
+                              {% endif %}
+                        >
+                            {{ tag_info.tag__name }} ({{ tag_info.apply_count }})
+                        </span>
+                    {% else %}
+                        <span class="tag">(Unnamed Tag) ({{ tag_info.apply_count }})</span>
+                    {% endif %}
+                {% endfor %}
             {% else %}
-                <span class="tag">(Unnamed Tag) ({{ TagApplication.apply_count }})</span>
+                <span>No Tags associated.</span>
             {% endif %}
-        {% endfor %}
         </div>
 
 

@@ -1236,14 +1236,14 @@ nav {
     /* Button Styles */
     .generic_btn {
         padding: 8px 16px;
-        background-color: #17a2b8;
+        background-color: #649bd6;
         color: white;
         border: none;
         border-radius: 4px;
         cursor: pointer;
     }
     .generic_btn:hover {
-        background-color: #138496;
+        background-color: #8ec0f5;
     }
     /* Pagination Styles */
     .pagination {

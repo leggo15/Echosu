@@ -54,13 +54,6 @@
                     </ul>
                 </li>
                 <li>
-                    <strong>Force results:</strong>
-                    By adding a period in front of a tag, the search results will require that tag to be applied.
-                    <ul>
-                        <li><em>Example:</em> <code>.farm</code></li>
-                    </ul>
-                </li>
-                <li>
                     <strong>Attribute Filters:</strong>
                     Use operators to filter specific attributes.
                     <ul>
@@ -78,7 +71,7 @@
                     <strong>Combine Terms:</strong>
                     Mix keywords and operators for precise searches.
                     <ul>
-                        <li><em>Example:</em><code> tech ."awkward aim" -"large sliders" -bursts -streams AR&lt;=9.5 OD&gt;8 CS&gt;4.5 BPM&gt;=190 BPM&lt;=200</code></li>
+                        <li><em>Example:</em><code> tech "awkward aim" -"large sliders" -bursts -streams AR&lt;=9.5 OD&gt;8 CS&gt;4.5 BPM&gt;=190 BPM&lt;=200</code></li>
                     </ul>
                 </li>
             </ul>
@@ -171,6 +164,7 @@
                         {% else %}
                             <span class="no-link">Beatmap set not available on osu!</span>
                         {% endif %}
+                        <a href="{% url 'search_results' %}?query={{ beatmap.tags_query_string|urlencode }}" class="beatmap-link">Find Similar Maps</a>
 
                         <!-- Hidden input to store the current beatmap's ID for JavaScript -->
                         <input type="hidden" class="current_beatmap_id" value="{{ beatmap.beatmap_id }}">
@@ -182,6 +176,7 @@
                                     <span class="tag {% if tag_info.is_applied_by_user %}tag-applied{% else %}tag-unapplied{% endif %}" 
                                         data-tag-name="{{ tag_info.tag.name }}" 
                                         data-applied-by-user="{{ tag_info.is_applied_by_user }}"
+                                        data-beatmap-id="{{ beatmap.beatmap_id }}"
                                         {% if tag_info.tag.description %}
                                             data-description=' "{{ tag_info.tag.description }}" '
                                             data-description-author=" - {{ tag_info.tag.description_author }}"

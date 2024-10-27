@@ -42,9 +42,11 @@
                 {% else %}
                     <span class="no-link">Beatmap set not available on osu!</span>
                 {% endif %}
-                        <!-- Find Similar Maps Button -->
-                <a href="{% url 'search_results' %}?query={{ tags_query_string|urlencode }}" class="beatmap-link">Find Similar Maps</a>
-
+                
+                <!-- Find Similar Maps Button with Star Rating Limits -->
+                <a href="{% url 'search_results' %}?query={{ tags_query_string|urlencode }}&star_min={{ star_min }}&star_max={{ star_max }}" class="beatmap-link">
+                    Find Similar Maps
+                </a>
 
             </div>
         </div>

@@ -121,7 +121,7 @@ $(document).ready(function() {
             data: { 'beatmap_id': beatmapId },
             success: function(tags) {
                 // Remove existing tooltips to prevent orphaned descriptions
-                $('#beatmap-applied-tags .tooltip, #beatmap-applied-tags .description-author').remove();
+                $('.tooltip, .description-author').remove();
                 
                 // Clear any pending tooltip timeouts
                 $('#beatmap-applied-tags').empty().append('Tags: ');
@@ -350,17 +350,17 @@ $(function() {
     $("#star-rating-slider").slider({
         range: true,
         min: 0,
-        max: 10,
+        max: 15,
         step: 0.1,
         values: [
             parseFloat($("#star_min").val()) || 0,
-            parseFloat($("#star_max").val()) >= 10 ? 10 : parseFloat($("#star_max").val()) || 10
+            parseFloat($("#star_max").val()) >= 15 ? 15 : parseFloat($("#star_max").val()) || 15
         ],
         slide: function(event, ui) {
             $("#star_min").val(ui.values[0]);
-            if (ui.values[1] >= 10) {
-                $("#star_max").val(10); // Keep star_max at 10 to indicate "10+"
-                $("#star-rating-max").text("10+");
+            if (ui.values[1] >= 15) {
+                $("#star_max").val(15); // Keep star_max at 15 to indicate "15+"
+                $("#star-rating-max").text("15+");
             } else {
                 $("#star_max").val(ui.values[1]);
                 $("#star-rating-max").text(ui.values[1].toFixed(1));
@@ -371,8 +371,8 @@ $(function() {
             var min = parseFloat($("#star_min").val()) || 0;
             var max = parseFloat($("#star_max").val()) || 10;
 
-            if (max >= 10) {
-                $("#star-rating-max").text("10+");
+            if (max >= 15) {
+                $("#star-rating-max").text("15+");
             } else {
                 $("#star-rating-max").text(max.toFixed(1));
             }
@@ -385,10 +385,10 @@ $(function() {
     var initial_min = parseFloat($("#star_min").val());
     var initial_max = parseFloat($("#star_max").val());
 
-    if (initial_max >= 10) {
-        $("#star-rating-max").text("10+");
+    if (initial_max >= 15) {
+        $("#star-rating-max").text("15+");
     } else {
-        $("#star-rating-max").text(isNaN(initial_max) ? "10+" : initial_max.toFixed(1));
+        $("#star-rating-max").text(isNaN(initial_max) ? "15+" : initial_max.toFixed(1));
     }
 
     if (!isNaN(initial_min)) {
@@ -400,15 +400,15 @@ $(function() {
     // Optional: Update labels if user manually changes hidden inputs
     $("#star_min, #star_max").on('change', function() {
         var min = parseFloat($("#star_min").val()) || 0;
-        var max = parseFloat($("#star_max").val()) || 10;
+        var max = parseFloat($("#star_max").val()) || 15;
 
-        if (max >= 10) {
-            $("#star-rating-max").text("10+");
+        if (max >= 15) {
+            $("#star-rating-max").text("15+");
         } else {
             $("#star-rating-max").text(max.toFixed(1));
         }
 
         $("#star-rating-min").text(min.toFixed(1));
-        $("#star-rating-slider").slider("values", [min, max >= 10 ? 10 : max]);
+        $("#star-rating-slider").slider("values", [min, max >= 15 ? 15 : max]);
     });
 });

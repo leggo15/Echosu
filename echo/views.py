@@ -234,10 +234,17 @@ def beatmap_detail(request, beatmap_id):
     encapsulated_tags = [f'"{tag}"' if ' ' in tag else tag for tag in top_tags]
     tags_query_string = ' '.join(encapsulated_tags)
 
+    # Calculate star_min and star_max based on current beatmap's star rating
+    current_star = beatmap.difficulty_rating
+    star_min = max(0, current_star - 0.6)
+    star_max = min(10, current_star + 0.6)
+
     context = {
         'beatmap': beatmap,
         'tags_with_counts': tags_with_counts,
         'tags_query_string': tags_query_string,
+        'star_min': star_min,
+        'star_max': star_max,
     }
 
     return render(request, 'beatmap_detail.html', context)
@@ -571,9 +578,6 @@ def vote_description(request):
 
 ALLOWED_DESCRIPTION_PATTERN = re.compile(r'^[A-Za-z0-9 .,!?\-_/\'"]{1,255}$')
 
-
-ALLOWED_DESCRIPTION_PATTERN = re.compile(r'^[A-Za-z0-9 .,!?\-_/\'"]{1,255}$')
-
 @login_required
 def update_tag_description(request):
     """
@@ -683,9 +687,10 @@ def search_results(request):
     search_terms = parse_search_terms(query)
     print("Parsed search terms:", search_terms)
 
+    query = request.GET.get('query', '').strip()
     selected_mode = request.GET.get('mode', 'osu').strip().lower()
     star_min = request.GET.get('star_min', '0').strip()
-    star_max = request.GET.get('star_max', '10').strip()
+    star_max = request.GET.get('star_max', '15').strip()
 
     # Get status filter values
     status_ranked = request.GET.get('status_ranked', False)
@@ -702,9 +707,9 @@ def search_results(request):
     try:
         star_max = float(star_max)
         if star_max < star_min:
-            star_max = 10.0
+            star_max = 15.0
     except ValueError:
-        star_max = 10.0
+        star_max = 15.0
 
     MODE_MAPPING = {
         'osu': 'osu',
@@ -713,17 +718,20 @@ def search_results(request):
         'mania': 'mania',
     }
 
-    beatmaps = Beatmap.objects.all()
-
-    # Filter by mode
     if selected_mode not in MODE_MAPPING:
         selected_mode = 'osu'  # Default to 'osu' mode if invalid
 
+    beatmaps = Beatmap.objects.all()
+
+    # Filter by mode
     mapped_mode = MODE_MAPPING[selected_mode]
-    beatmaps = beatmaps.filter(mode__iexact=mapped_mode)
+    if mapped_mode:
+        beatmaps = beatmaps.filter(mode__iexact=mapped_mode)
+    else:
+        beatmaps = beatmaps.filter(mode__iexact='osu')
 
     # Filter by star rating
-    if star_max >= 10:
+    if star_max >= 15:
         beatmaps = beatmaps.filter(difficulty_rating__gte=star_min)
     else:
         beatmaps = beatmaps.filter(difficulty_rating__gte=star_min, difficulty_rating__lte=star_max)

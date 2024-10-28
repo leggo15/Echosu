@@ -303,7 +303,7 @@ $(document).ready(function() {
     // Initialize tooltips on page load
     initializeTooltips();
 
-    // Function to load tags on page load (e.g., Top Tags)
+    // Function to load tags on page load
     function loadInitialTags() {
     }
 
@@ -369,7 +369,7 @@ $(function() {
         },
         change: function(event, ui) {
             var min = parseFloat($("#star_min").val()) || 0;
-            var max = parseFloat($("#star_max").val()) || 10;
+            var max = parseFloat($("#star_max").val()) || 15;
 
             if (max >= 15) {
                 $("#star-rating-max").text("15+");

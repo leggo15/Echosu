@@ -182,6 +182,9 @@ def home(request):
     """Render the home page."""
     return render(request, 'home.html')
 
+def about(request):
+    """Render the about page."""
+    return render(request, 'about.html')
 
 def admin(request):
     """Redirect to the admin panel."""
@@ -237,7 +240,7 @@ def beatmap_detail(request, beatmap_id):
     # Calculate star_min and star_max based on current beatmap's star rating
     current_star = beatmap.difficulty_rating
     star_min = max(0, current_star - 0.6)
-    star_max = min(10, current_star + 0.6)
+    star_max = min(15, current_star + 0.6)
 
     context = {
         'beatmap': beatmap,
@@ -777,6 +780,8 @@ def search_results(request):
     context = {
         'beatmaps': page_obj,
         'query': query,
+        'star_min': star_min,
+        'star_max': star_max,
         # Pass back the status filters to the template to remember the selection
         'status_ranked': status_ranked,
         'status_loved': status_loved,
@@ -983,23 +988,27 @@ def handle_attribute_equal_query(beatmaps, term):
         'CS': 'cs',
         'BPM': 'bpm',
         'OD': 'accuracy',
+        'COUNT': 'playcount',
+        'FAV': 'favourite_count',
     }
 
     field_name = field_map.get(attribute)
     if field_name:
         try:
-            numeric_value = float(value)
+            if field_name in ['playcount', 'favourite_count']:
+                numeric_value = int(value)
+            else:
+                numeric_value = float(value)
             filter_key = f'{field_name}'
             beatmaps = beatmaps.filter(**{filter_key: numeric_value})
         except ValueError:
-            pass  # Handle invalid float conversion if necessary
+            pass  # Handle invalid conversion if necessary
     return beatmaps
 
 #######################################################################################
 
 def handle_attribute_comparison_query(beatmaps, term):
-    # Handle attribute comparison queries
-    match = re.match(r'(AR|CS|BPM|OD)(>=|<=|>|<)(\d+(\.\d+)?)', term, re.IGNORECASE)
+    match = re.match(r'(AR|CS|BPM|OD|COUNT|FAV)(>=|<=|>|<)(\d+(\.\d+)?)', term, re.IGNORECASE)
     if match:
         attribute, operator, value, _ = match.groups()
         attribute = attribute.upper().strip()
@@ -1015,15 +1024,21 @@ def handle_attribute_comparison_query(beatmaps, term):
             'CS': 'cs',
             'BPM': 'bpm',
             'OD': 'accuracy',
+            'COUNT': 'playcount',
+            'FAV': 'favourite_count',
         }
         field_name = field_map.get(attribute)
         if lookup and field_name:
             try:
-                numeric_value = float(value)
+                if field_name in ['playcount', 'favourite_count']:
+                    numeric_value = int(value)
+                else:
+                    numeric_value = float(value)
                 filter_key = f'{field_name}__{lookup}'
                 beatmaps = beatmaps.filter(**{filter_key: numeric_value})
             except ValueError:
-                pass  # Handle invalid float conversion if necessary
+                # Optionally, log the error or inform the user about invalid input
+                pass  # Handle invalid numeric conversion if necessary
     return beatmaps
 
 #######################################################################################
@@ -1246,6 +1261,7 @@ def recommended_maps_view(request):
 
 import re
 
+@login_required
 def home(request):
     user = request.user if request.user.is_authenticated else None
 
@@ -1285,7 +1301,7 @@ def home(request):
                             beatmap.cover_image_url, beatmap.total_length, beatmap.bpm,
                             beatmap.cs, beatmap.drain, beatmap.accuracy, beatmap.ar,
                             beatmap.difficulty_rating, beatmap.mode, beatmap.beatmapset_id,
-                            beatmap.status
+                            beatmap.status, beatmap.playcount, beatmap.favourite_count
                         ]
                     ):
                         # Update beatmap attributes from the API data
@@ -1295,6 +1311,7 @@ def home(request):
                             beatmap.title = getattr(beatmapset, 'title', beatmap.title)
                             beatmap.artist = getattr(beatmapset, 'artist', beatmap.artist)
                             beatmap.creator = getattr(beatmapset, 'creator', beatmap.creator)
+                            beatmap.favourite_count = getattr(beatmapset, 'favourite_count', beatmap.favourite_count)
                             beatmap.cover_image_url = getattr(
                                 getattr(beatmapset, 'covers', {}),
                                 'cover_2x',
@@ -1320,13 +1337,12 @@ def home(request):
                         beatmap.accuracy = getattr(beatmap_data, 'accuracy', beatmap.accuracy)
                         beatmap.ar = getattr(beatmap_data, 'ar', beatmap.ar)
                         beatmap.difficulty_rating = getattr(beatmap_data, 'difficulty_rating', beatmap.difficulty_rating)
-
+                        beatmap.status = status_mapping.get(beatmap_data.status.value, "Unknown")
+                        beatmap.playcount = getattr(beatmap_data, 'playcount', beatmap.playcount)
                         # Map the game mode to the desired string representation
                         api_mode_value = getattr(beatmap_data, 'mode', beatmap.mode)
                         beatmap.mode = GAME_MODE_MAPPING.get(str(api_mode_value), 'unknown')
 
-                        # Map the status
-                        beatmap.status = status_mapping.get(beatmap_data.status.value, "Unknown")
 
                         # Save the updated beatmap to the database
                         beatmap.save()
@@ -1337,7 +1353,7 @@ def home(request):
                     raise ValueError("Invalid input. Please provide a valid beatmap link or ID.")
 
             except Exception as e:
-                context['error'] = f'{beatmap_input} is not a valid beatmap input.'
+                context['error'] = f'Error: {str(e)}'
 
     else:
         beatmap_id = request.GET.get('beatmap_id')

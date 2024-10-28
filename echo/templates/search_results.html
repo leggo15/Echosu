@@ -155,8 +155,9 @@
                             <span>OD: {{ beatmap.accuracy }}</span>
                             <span>AR: {{ beatmap.ar }}</span>
                             <span>SR: {{ beatmap.difficulty_rating }}</span>
-                            <span>Mode: {{ beatmap.mode }}</span>
                             <span>Status: {{ beatmap.status }}</span>
+                            <span>Playcount: {{ beatmap.playcount }}</span>
+                            <span>Favourites: {{ beatmap.favourite_count }}</span>
                         </div>
                         
                         <a href="{% url 'beatmap_detail' beatmap_id=beatmap.beatmap_id %}" class="beatmap-link">View Beatmap</a>
@@ -166,8 +167,11 @@
                         {% else %}
                             <span class="no-link">Beatmap set not available on osu!</span>
                         {% endif %}
-                        <a href="{% url 'search_results' %}?query={{ beatmap.tags_query_string|urlencode }}" class="beatmap-link">Find Similar Maps</a>
 
+                        <!-- Find Similar Maps Button with Star Rating Limits -->
+                        <a href="{% url 'search_results' %}?query={{ tags_query_string|urlencode }}&star_min={{ star_min }}&star_max={{ star_max }}" class="beatmap-link">
+                            Find Similar Maps
+                        </a>
                         <!-- Hidden input to store the current beatmap's ID for JavaScript -->
                         <input type="hidden" class="current_beatmap_id" value="{{ beatmap.beatmap_id }}">
 
@@ -204,8 +208,8 @@
         <div class="pagination">
             <span class="step-links">
                 {% if beatmaps.has_previous %}
-                    <a href="?query={{ query }}&mode={{ request.GET.mode }}&star_min={{ request.GET.star_min }}&star_max={{ request.GET.star_max }}&page=1">&laquo; first</a>
-                    <a href="?query={{ query }}&mode={{ request.GET.mode }}&star_min={{ request.GET.star_min }}&star_max={{ request.GET.star_max }}&page={{ beatmaps.previous_page_number }}">previous</a>
+                    <a href="?query={{ query|urlencode }}&mode={{ request.GET.mode }}&star_min={{ star_min }}&star_max={{ star_max }}{% if status_ranked %}&status_ranked=ranked{% endif %}{% if status_loved %}&status_loved=loved{% endif %}{% if status_unranked %}&status_unranked=unranked{% endif %}&page=1">&laquo; first</a>
+                    <a href="?query={{ query|urlencode }}&mode={{ request.GET.mode }}&star_min={{ star_min }}&star_max={{ star_max }}{% if status_ranked %}&status_ranked=ranked{% endif %}{% if status_loved %}&status_loved=loved{% endif %}{% if status_unranked %}&status_unranked=unranked{% endif %}&page={{ beatmaps.previous_page_number }}">previous</a>
                 {% endif %}
 
                 <span class="current">
@@ -213,11 +217,13 @@
                 </span>
 
                 {% if beatmaps.has_next %}
-                    <a href="?query={{ query }}&mode={{ request.GET.mode }}&star_min={{ request.GET.star_min }}&star_max={{ request.GET.star_max }}&page={{ beatmaps.next_page_number }}">next</a>
-                    <a href="?query={{ query }}&mode={{ request.GET.mode }}&star_min={{ request.GET.star_min }}&star_max={{ request.GET.star_max }}&page={{ beatmaps.paginator.num_pages }}">last &raquo;</a>
+                    <a href="?query={{ query|urlencode }}&mode={{ request.GET.mode }}&star_min={{ star_min }}&star_max={{ star_max }}{% if status_ranked %}&status_ranked=ranked{% endif %}{% if status_loved %}&status_loved=loved{% endif %}{% if status_unranked %}&status_unranked=unranked{% endif %}&page={{ beatmaps.next_page_number }}">next</a>
+                    <a href="?query={{ query|urlencode }}&mode={{ request.GET.mode }}&star_min={{ star_min }}&star_max={{ star_max }}{% if status_ranked %}&status_ranked=ranked{% endif %}{% if status_loved %}&status_loved=loved{% endif %}{% if status_unranked %}&status_unranked=unranked{% endif %}&page={{ beatmaps.paginator.num_pages }}">last &raquo;</a>
                 {% endif %}
             </span>
         </div>
+
+
     </div>
 </body>
 </html>

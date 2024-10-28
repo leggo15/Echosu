@@ -1,0 +1,80 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Beatmap Info</title>
+    <link rel="stylesheet" href="https://echosu-s3.s3.eu-central-1.amazonaws.com/static/css/master.css">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://echosu-s3.s3.eu-central-1.amazonaws.com/static/js/master.js"></script>
+</head>
+<body>
+    {% include '_navbar.html' %}
+    <div class="container">
+        <h1>About echosu</h1>
+        
+        <h2>What is echosu</h2>
+        <p>
+            echosu is a tool for people to find specific types of maps, whether it is a large number of a general mapping type or extremely specific maps.
+        </p>
+
+        <h2>How does it work?</h2>
+        <p>
+            There are two main features to understand: the search function and the tagging system.
+        </p>
+
+        <h3>Search</h3>
+        <p>
+            The search feature allows you to find maps using any tag or map attribute such as approach rate, circle size, or title. The most powerful aspect of the search engine is the tag operators:
+            <ul>
+                <li><strong>Minus symbol (-):</strong> Excludes maps with the specified tag.</li>
+                <li><strong>Dot symbol (.):</strong> Includes only maps with the specified tag.</li>
+                <li><strong>Quotes (" "):</strong> Searches for an exact phrase or a tag consisting of multiple words.</li>
+            </ul>
+        </p>
+
+        <p>
+            The search results are based on how many of the specific tags you search for are applied to the map. 
+            For example:
+            <ul>
+                <li><strong>Map A:</strong> aim(7), farm(6), "high spacing"(2)</li>
+                <li><strong>Map B:</strong> aim(3), farm(6), "bursts"(6)</li>
+                <li><strong>Map C:</strong> aim(11), farm(1), "bursts"(4)</li>
+            </ul>
+            If you search for [aim farm "high spacing"], the results would be:
+            <ul>
+                <li>Map A (15)</li>
+                <li>Map C (12)</li>
+                <li>Map B (9)</li>
+            </ul>
+            These weights determine the ranking based on tag relevance.
+        </p>
+
+        <h3>Tags</h3>
+        <p>
+            Maps are labeled by users through the tagging system. These tags represent mapping genres such as aim, speed, streams, tech, stamina, etc. Users can also create new tags to accommodate emerging terms.
+        </p>
+
+        <p>
+            There are two methods to apply tags to maps:
+            <ul>
+                <li>Clicking on tags already applied to a map.</li>
+                <li>Using the search form found on the home page and the map detail page to search for and apply new tags.</li>
+            </ul>
+            This allows for the addition of both existing and completely new tags.
+        </p>
+
+        <h3>Tag Descriptions</h3>
+        <p>
+            Tags have descriptions that appear when hovering over them. These descriptions are written by users who have been active enough to access the "Edit Tags" page, available in the dropdown menu alongside settings and the logout button. Access is unlocked after tagging a certain number of maps.
+        </p>
+
+        <h2>For Developers</h2>
+        <p>
+            echosu generates labeling data for osu maps, which is valuable for analytics and model training. An API has been set up to fetch this data. Documentation is available <a href="https://github.com/leggo15/echosu_API_Documentation">here</a>.
+            The API is currently not open source due to the need for refactoring. However, requests for repository access can be sent to "The Emperor" on osu or "Leggo15" on Discord.
+        </p>
+    </div>
+</body>
+</html>

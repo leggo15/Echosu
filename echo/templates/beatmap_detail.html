@@ -12,6 +12,7 @@
 <body>
     {% include '_navbar.html' %}    
     <div class="container">
+        <a href="#" id="update-map-info-link" class="update-map">Update Map Info</a>
         {% if beatmap %}
         <div class="beatmap-display">
             {% if beatmap.cover_image_url %}
@@ -38,7 +39,8 @@
                     <span>Playcount: {{ beatmap.playcount }}</span>
                     <span>Favourites: {{ beatmap.favourite_count }}</span>
                 </div>
-                
+
+
                 {% if beatmap.beatmapset_id %}
                 <a href="https://osu.ppy.sh/beatmapsets/{{ beatmap.beatmapset_id }}/#{{ beatmap.mode }}/{{ beatmap.beatmap_id }}" class="beatmap-link" target="_blank">View on osu!</a>
                 {% else %}
@@ -93,5 +95,21 @@
             {% endif %}
         {% endif %}
     </div>  
+    <script>
+        $('#update-map-info-link').click(function(e) {
+            e.preventDefault();
+            const beatmapId = {{ beatmap.beatmap_id }};
+            $.post("{% url 'update_beatmap_info' %}", {
+                'beatmap_id': beatmapId,
+                'csrfmiddlewaretoken': '{{ csrf_token }}'
+            })
+            .done(function(response) {
+                location.reload();
+            })
+            .fail(function(error) {
+                alert("Failed to update: " + error.responseJSON.error);
+            });
+        });
+    </script>
 </body>
 </html>

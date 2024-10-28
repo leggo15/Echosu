@@ -26,6 +26,7 @@ from echo.views import (
     settings,
     error_page_view,
     load_more_recommendations,
+    update_beatmap_info,
 )
 
 
@@ -55,6 +56,7 @@ urlpatterns = [
     path('confirm_data_deletion/', confirm_data_deletion, name='confirm_data_deletion'),
     path('delete_user_data/', delete_user_data, name='delete_user_data'),
     path('load_more_recommendations/', load_more_recommendations, name='load_more_recommendations'),
+     path('update_beatmap_info/', update_beatmap_info, name='update_beatmap_info'),
 
 
 ######### API #########

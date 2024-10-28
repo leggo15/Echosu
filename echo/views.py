@@ -252,6 +252,58 @@ def beatmap_detail(request, beatmap_id):
 
     return render(request, 'beatmap_detail.html', context)
 
+
+
+from django.views.decorators.http import require_POST
+
+
+@require_POST
+def update_beatmap_info(request):
+    beatmap_id = request.POST.get('beatmap_id')
+    status_mapping = {
+        -2: "Graveyard",
+        -1: "WIP",
+        0: "Pending",
+        1: "Ranked",
+        2: "Approved",
+        3: "Qualified",
+        4: "Loved"
+    }
+    try:
+        # Fetch beatmap data from the osu API
+        beatmap_data = api.beatmap(beatmap_id)
+        if not beatmap_data:
+            return JsonResponse({'error': 'Beatmap not found in osu API.'}, status=404)
+
+        # Get or create the beatmap object
+        beatmap, created = Beatmap.objects.get_or_create(beatmap_id=beatmap_id)
+
+        # Update fields with latest data
+        beatmap.title = beatmap_data._beatmapset.title
+        beatmap.artist = beatmap_data._beatmapset.artist
+        beatmap.creator = beatmap_data._beatmapset.creator
+        beatmap.cover_image_url = getattr(beatmap_data._beatmapset.covers, 'cover_2x', None)  # Use getattr to avoid errors
+        beatmap.total_length = beatmap_data.total_length
+        beatmap.bpm = beatmap_data.bpm
+        beatmap.cs = beatmap_data.cs
+        beatmap.drain = beatmap_data.drain
+        beatmap.accuracy = beatmap_data.accuracy
+        beatmap.ar = beatmap_data.ar
+        beatmap.difficulty_rating = beatmap_data.difficulty_rating
+        beatmap.mode = beatmap_data.mode
+        beatmap.status = status_mapping.get(beatmap_data.status.value, "Unknown")
+        beatmap.playcount = beatmap_data.playcount
+        beatmap.favourite_count = getattr(beatmap_data._beatmapset, 'favourite_count', 0)
+
+        beatmap.save()
+
+        return JsonResponse({'message': 'Beatmap info updated successfully.'})
+
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+
 # --------------------------------------------------------------------- #
 
 # ----------------------------- Tag Views ----------------------------- #

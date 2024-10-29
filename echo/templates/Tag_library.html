@@ -1,0 +1,221 @@
+<!-- your_app/templates/tag_library.html -->
+
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tag Library</title>
+    <link rel="stylesheet" href="{% static 'css/master.css' %}">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="{% static 'js/master.js' %}"></script> <!-- Include your master.js -->
+    <style>
+        /* Container Styling */
+        .container {
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 20px;
+            background-color: #fdfdfd;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        
+        /* Search Field Styling */
+        .search-field {
+            width: 100%;
+            padding: 12px 20px;
+            margin-bottom: 20px;
+            box-sizing: border-box;
+            border: 2px solid #ccc;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+        
+        /* Tag List Styling */
+        .tag-list {
+            list-style-type: none;
+            padding: 0;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+        
+        .tag-item {
+            padding: 10px 15px;
+            border-bottom: 1px solid #eaeaea;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: background-color 0.3s;
+        }
+        
+        .tag-item:hover {
+            background-color: #f1f1f1;
+        }
+        
+        /* Tag Link Styling */
+        .tag {
+            font-weight: bold;
+            text-decoration: none;
+            cursor: pointer;
+            position: relative; /* For tooltip positioning */
+            
+        }
+        
+        .tag-count {
+            font-size: 14px;
+            color: #666;
+        }
+        
+        /* No Tags Message */
+        .no-tags-message {
+            text-align: center;
+            color: #999;
+            padding: 20px;
+            font-style: italic;
+        }
+        
+        /* Highlighting */
+        .highlight {
+            background-color: yellow;
+        }
+
+        /* Tooltip Styling */
+        .tooltip {
+            position: absolute;
+            background-color: rgba(0, 0, 0, 0.8);
+            color: #fff;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 14px;
+            max-width: 300px;
+            z-index: 1000;
+            white-space: pre-wrap;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .tooltip-author {
+            margin-top: 4px;
+            font-size: 12px;
+            color: #ccc;
+        }
+    </style>
+</head>
+<body>
+    {% include '_navbar.html' %}
+    <div class="container">
+        <h1>Tag Library</h1>
+        <input type="text" id="tag-search" class="search-field" placeholder="Search tags..." aria-label="Search Tags" />
+        <ul class="tag-list" id="tag-list">
+            {% for tag in tags %}
+                <li class="tag-item">
+                    <a href="{% url 'search_results' %}?query={{ '"'|add:tag.name|add:'"'|urlencode }}" 
+                       class="tag" 
+                       data-tag-name="{{ tag.name }}" 
+                       data-description="{{ tag.description|escapejs }}" 
+                       data-description-author="{{ tag.description_author|escapejs }}">
+                        {{ tag.name }}
+                    </a>
+                    <span class="tag-count">
+                        {% if tag.beatmap_count > 0 %}
+                            {{ tag.beatmap_count }} {{ tag.beatmap_count|pluralize:"beatmap,beatmaps" }}
+                        {% else %}
+                            No beatmaps
+                        {% endif %}
+                    </span>
+                </li>
+            {% empty %}
+                <li class="no-tags-message">No tags available.</li>
+            {% endfor %}
+        </ul>
+    </div>
+
+    <script>
+        $(document).ready(function(){
+            // Function to highlight matching text
+            function highlightMatch(text, query) {
+                if (!query) return text;
+                var regex = new RegExp('(' + query + ')', 'gi');
+                return text.replace(regex, '<span class="highlight">$1</span>');
+            }
+
+            // Event listener for search input
+            $('#tag-search').on('input', function(){
+                var query = $(this).val().toLowerCase();
+                var hasVisibleTags = false;
+
+                $('#tag-list .tag-item').each(function(){
+                    var tagElement = $(this).find('.tag');
+                    var tagName = tagElement.text().toLowerCase();
+
+                    if(tagName.includes(query)){
+                        // Highlight the matching part
+                        var originalText = tagElement.text();
+                        var highlightedText = highlightMatch(originalText, query);
+                        tagElement.html(highlightedText);
+                        $(this).show();
+                        hasVisibleTags = true;
+                    } else {
+                        // Remove any existing highlights and hide the tag
+                        var originalText = tagElement.text();
+                        tagElement.text(originalText);
+                        $(this).hide();
+                    }
+                });
+
+                // Show 'No matching tags found.' message if applicable
+                if(query.length > 0 && !hasVisibleTags){
+                    if($('#tag-list .no-results').length === 0){
+                        $('#tag-list').append('<li class="no-tags-message no-results">No matching tags found.</li>');
+                    }
+                } else {
+                    $('#tag-list .no-tags-message.no-results').remove();
+                }
+            });
+
+            // Tooltip functionality
+            function initializeTooltips() {
+                // Event delegation for mouseenter and mouseleave on .tag elements
+                $(document).on('mouseenter', '.tag', function(e) {
+                    var tag = $(this);
+                    var description = tag.data('description') || 'No description available.';
+                    var descriptionAuthor = tag.data('description-author') || '';
+
+                    // Create tooltip element
+                    var $tooltip = $('<div class="tooltip"></div>').text(description).appendTo('body');
+
+                    if(descriptionAuthor) {
+                        var $author = $('<div class="tooltip-author"></div>').text(descriptionAuthor).appendTo($tooltip);
+                    }
+
+                    // Position the tooltip above the tag
+                    var tagOffset = tag.offset();
+                    var tagWidth = tag.outerWidth();
+                    var tooltipWidth = $tooltip.outerWidth();
+                    var tooltipHeight = $tooltip.outerHeight();
+
+                    var tooltipLeft = tagOffset.left + (tagWidth / 2) - (tooltipWidth / 2);
+                    var tooltipTop = tagOffset.top - tooltipHeight - 8; // 8px gap
+
+                    // Ensure tooltip doesn't go off the left or right edge
+                    tooltipLeft = Math.max(tooltipLeft, 10); // 10px from left
+                    tooltipLeft = Math.min(tooltipLeft, $(window).width() - tooltipWidth - 10); // 10px from right
+
+                    $tooltip.css({
+                        left: tooltipLeft + 'px',
+                        top: tooltipTop + 'px',
+                        opacity: '1'
+                    });
+                }).on('mouseleave', '.tag', function() {
+                    // Remove the tooltip when mouse leaves
+                    $('.tooltip').remove();
+                });
+            }
+
+            // Initialize tooltips
+            initializeTooltips();
+        });
+    </script>
+</body>
+</html>

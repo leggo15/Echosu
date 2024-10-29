@@ -176,7 +176,7 @@ def api_token(request):
 
 # ------------------------------------------------------------------------------- #
 
-# ----------------------------- Home and Admin Views ----------------------------- #
+# ----------------------------- Home, tag_library, and Admin Views ----------------------------- #
 
 def home(request):
     """Render the home page."""
@@ -195,6 +195,15 @@ def error_page_view(request):
     Render the error_page template.
     """
     return render(request, 'error_page.html')
+
+def tag_library(request):
+    # Retrieve all tags ordered alphabetically and annotate with beatmap count
+    tags = Tag.objects.annotate(beatmap_count=Count('beatmaps')).order_by('name')
+    
+    context = {
+        'tags': tags
+    }
+    return render(request, 'tag_library.html', context)
 
 # ------------------------------------------------------------------------ #
 
@@ -253,7 +262,6 @@ def beatmap_detail(request, beatmap_id):
     return render(request, 'beatmap_detail.html', context)
 
 
-
 from django.views.decorators.http import require_POST
 
 
@@ -290,11 +298,13 @@ def update_beatmap_info(request):
         beatmap.accuracy = beatmap_data.accuracy
         beatmap.ar = beatmap_data.ar
         beatmap.difficulty_rating = beatmap_data.difficulty_rating
-        beatmap.mode = beatmap_data.mode
         beatmap.status = status_mapping.get(beatmap_data.status.value, "Unknown")
         beatmap.playcount = beatmap_data.playcount
         beatmap.favourite_count = getattr(beatmap_data._beatmapset, 'favourite_count', 0)
 
+
+        api_mode_value = getattr(beatmap_data, 'mode', beatmap.mode)
+        beatmap.mode = GAME_MODE_MAPPING.get(str(api_mode_value), 'unknown')
         beatmap.save()
 
         return JsonResponse({'message': 'Beatmap info updated successfully.'})
@@ -1048,7 +1058,7 @@ def handle_attribute_equal_query(beatmaps, term):
     if field_name:
         try:
             if field_name in ['playcount', 'favourite_count']:
-                numeric_value = int(value)
+                numeric_value = float(value)
             else:
                 numeric_value = float(value)
             filter_key = f'{field_name}'
@@ -1097,7 +1107,7 @@ def handle_attribute_comparison_query(beatmaps, term):
 
 def build_exclusion_q(term):
     # Handle exclusion terms
-    exclude_term = term.lstrip('-').strip('"').strip()
+    exclude_term = term.strip('"').strip()
     # Apply stemming to the exclude term
     stem_exclude_term = stem_word(exclude_term.lower())
     return Q(

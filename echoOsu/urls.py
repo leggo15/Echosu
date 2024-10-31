@@ -58,7 +58,7 @@ urlpatterns = [
     path('delete_user_data/', delete_user_data, name='delete_user_data'),
     path('load_more_recommendations/', load_more_recommendations, name='load_more_recommendations'),
     path('update_beatmap_info/', update_beatmap_info, name='update_beatmap_info'),
-    path('tags/', tag_library, name='tag_library'),
+    path('tag_library/', tag_library, name='tag_library'),
     
     
 

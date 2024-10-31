@@ -41,30 +41,41 @@
         }
         
         .tag-item {
-            padding: 10px 15px;
+            padding: 0; /* Remove padding to let <a> handle it */
             border-bottom: 1px solid #eaeaea;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            transition: background-color 0.3s;
-        }
-        
-        .tag-item:hover {
-            background-color: #f1f1f1;
         }
         
         /* Tag Link Styling */
-        .tag {
-            font-weight: bold;
+        .tag-link {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 15px;
             text-decoration: none;
-            cursor: pointer;
-            position: relative; /* For tooltip positioning */
-            
+            color: inherit; /* Inherit color from parent */
+            transition: background-color 0.3s;
         }
         
+        .tag-link:hover {
+            background-color: #f1f1f1;
+        }
+        
+        /* Tag Name Styling */
+        .tag-name {
+            font-weight: bold;
+            color: #3e3e3e;
+            cursor: pointer; /* Indicate interactivity */
+            flex-grow: 1;
+            position: relative; /* For tooltip positioning */
+        }
+        
+
+        /* Beatmap Count Styling */
         .tag-count {
             font-size: 14px;
             color: #666;
+            flex-shrink: 0;
+            margin-left: auto;
         }
         
         /* No Tags Message */
@@ -111,19 +122,21 @@
             {% for tag in tags %}
                 <li class="tag-item">
                     <a href="{% url 'search_results' %}?query={{ '"'|add:tag.name|add:'"'|urlencode }}" 
-                       class="tag" 
-                       data-tag-name="{{ tag.name }}" 
-                       data-description="{{ tag.description|escapejs }}" 
-                       data-description-author="{{ tag.description_author|escapejs }}">
-                        {{ tag.name }}
+                       class="tag-link" 
+                       aria-label="Search results for tag {{ tag.name }}">
+                        <span class="tag-name" 
+                              data-description="{{ tag.description|escapejs }}" 
+                              data-description-author="{{ tag.description_author|escapejs }}">
+                            {{ tag.name }}
+                        </span>
+                        <span class="tag-count">
+                            {% if tag.beatmap_count > 0 %}
+                                {{ tag.beatmap_count }} {{ tag.beatmap_count|pluralize:"beatmap,beatmaps" }}
+                            {% else %}
+                                No beatmaps
+                            {% endif %}
+                        </span>
                     </a>
-                    <span class="tag-count">
-                        {% if tag.beatmap_count > 0 %}
-                            {{ tag.beatmap_count }} {{ tag.beatmap_count|pluralize:"beatmap,beatmaps" }}
-                        {% else %}
-                            No beatmaps
-                        {% endif %}
-                    </span>
                 </li>
             {% empty %}
                 <li class="no-tags-message">No tags available.</li>
@@ -140,26 +153,38 @@
                 return text.replace(regex, '<span class="highlight">$1</span>');
             }
 
-            // Event listener for search input
-            $('#tag-search').on('input', function(){
+            // Debounce function to limit the rate of function execution
+            function debounce(func, delay) {
+                let debounceTimer;
+                return function() {
+                    const context = this;
+                    const args = arguments;
+                    clearTimeout(debounceTimer);
+                    debounceTimer = setTimeout(() => func.apply(context, args), delay);
+                }
+            }
+
+            // Event listener for search input with debounce
+            $('#tag-search').on('input', debounce(function(){
                 var query = $(this).val().toLowerCase();
                 var hasVisibleTags = false;
 
                 $('#tag-list .tag-item').each(function(){
-                    var tagElement = $(this).find('.tag');
-                    var tagName = tagElement.text().toLowerCase();
+                    var tagLink = $(this).find('.tag-link');
+                    var tagNameElement = tagLink.find('.tag-name');
+                    var tagName = tagNameElement.text().toLowerCase();
 
                     if(tagName.includes(query)){
                         // Highlight the matching part
-                        var originalText = tagElement.text();
+                        var originalText = tagNameElement.text();
                         var highlightedText = highlightMatch(originalText, query);
-                        tagElement.html(highlightedText);
+                        tagNameElement.html(highlightedText);
                         $(this).show();
                         hasVisibleTags = true;
                     } else {
                         // Remove any existing highlights and hide the tag
-                        var originalText = tagElement.text();
-                        tagElement.text(originalText);
+                        var originalText = tagNameElement.text();
+                        tagNameElement.text(originalText);
                         $(this).hide();
                     }
                 });
@@ -172,12 +197,12 @@
                 } else {
                     $('#tag-list .no-tags-message.no-results').remove();
                 }
-            });
+            }, 300)); // 300ms delay
 
             // Tooltip functionality
             function initializeTooltips() {
-                // Event delegation for mouseenter and mouseleave on .tag elements
-                $(document).on('mouseenter', '.tag', function(e) {
+                // Event delegation for mouseenter and mouseleave on .tag-name elements
+                $(document).on('mouseenter', '.tag-name', function(e) {
                     var tag = $(this);
                     var description = tag.data('description') || 'No description available.';
                     var descriptionAuthor = tag.data('description-author') || '';
@@ -207,7 +232,7 @@
                         top: tooltipTop + 'px',
                         opacity: '1'
                     });
-                }).on('mouseleave', '.tag', function() {
+                }).on('mouseleave', '.tag-name', function() {
                     // Remove the tooltip when mouse leaves
                     $('.tooltip').remove();
                 });

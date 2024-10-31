@@ -739,12 +739,7 @@ from django.contrib.auth.models import User
 from .models import Beatmap, TagApplication, Tag
 import re
 from collections import defaultdict
-from nltk.stem import PorterStemmer
 
-stemmer = PorterStemmer()
-
-def stem_word(word):
-    return stemmer.stem(word)
 
 def search_results(request):
     query = request.GET.get('query', '').strip()
@@ -897,246 +892,57 @@ def parse_search_terms(query):
 
 #######################################################################################
 
-def is_exclusion_term(term):
-    return term.startswith('-')
-
-#######################################################################################
-
-def is_required_term(term):
-    return term.startswith('.')
-
-#######################################################################################
-
-from django.db.models import OuterRef, Subquery, Count, IntegerField, FloatField, Value, F, Case, When, Max
-from django.db.models.functions import Coalesce, Cast
+from .operators import (
+    handle_quotes,
+    handle_exclusion,
+    handle_inclusion,
+    handle_attribute_queries,
+    handle_general_inclusion
+)
+from .utils import QueryContext
 
 def build_query_conditions(beatmaps, search_terms):
     """
     Build inclusion, exclusion, and required tag conditions based on the search terms.
     """
-    include_q = Q()
-    exclude_q = Q()
-    include_tag_names = set()
-    exclude_tag_names = set()
-    required_tag_names = set()
-
-    for term in search_terms:
-        term = term.strip()
-        # Handle attribute=value queries
-        if is_attribute_equal_query(term):
-            beatmaps = handle_attribute_equal_query(beatmaps, term)
-        elif is_attribute_comparison_query(term):
-            beatmaps = handle_attribute_comparison_query(beatmaps, term)
-        elif is_exclusion_term(term):
-            exclude_term = term.lstrip('-').strip('"').strip()
-            # Fuzzy match tags
-            matching_tags = Tag.objects.filter(name__icontains=exclude_term)
-            if matching_tags.exists():
-                exclude_tag_names.update([tag.name for tag in matching_tags])
-            else:
-                exclude_q |= build_exclusion_q(exclude_term)
-        elif is_required_term(term):
-            required_term = term.lstrip('.').strip('"').strip()
-            # Fuzzy match tags
-            matching_tags = Tag.objects.filter(name__icontains=required_term)
-            if matching_tags.exists():
-                required_tag_names.update([tag.name for tag in matching_tags])
-            else:
-                # No matching required tags, return no results
-                return beatmaps.none(), include_tag_names
-        else:
-            include_term = term.strip('"').strip()
-            # Fuzzy match tags
-            matching_tags = Tag.objects.filter(name__icontains=include_term)
-            if matching_tags.exists():
-                # Exclude tags that are already required
-                for tag in matching_tags:
-                    if tag.name not in required_tag_names:
-                        include_tag_names.add(tag.name)
-            else:
-                include_q &= build_inclusion_q(include_term)
-
-    # Apply inclusion filters (e.g., artist, title, etc.)
-    if include_q:
-        beatmaps = beatmaps.filter(include_q)
-
-    # Apply exclusion filters (e.g., artist, title, etc.)
-    if exclude_q:
-        beatmaps = beatmaps.exclude(exclude_q)
-
+    context = QueryContext(beatmaps)
+    
+    # Define the order of operations
+    query_operations = [
+        handle_attribute_queries,
+        handle_quotes,
+        handle_exclusion,
+        handle_inclusion,
+        handle_general_inclusion
+    ]
+    
+    # Apply each operator function in order
+    for operation in query_operations:
+        search_terms = operation(context, search_terms)
+        if context.beatmaps is None or not context.beatmaps.exists():
+            break  # Early exit if no beatmaps match
+    
+    # Apply inclusion Q objects
+    if context.include_q:
+        context.beatmaps = context.beatmaps.filter(context.include_q)
+    
+    # Apply exclusion Q objects
+    if context.exclude_q:
+        context.beatmaps = context.beatmaps.exclude(context.exclude_q)
+    
     # Apply required tags filter
-    if required_tag_names:
-        for tag_name in required_tag_names:
-            beatmaps = beatmaps.filter(tags__name=tag_name)
-
+    if context.required_tags:
+        context.beatmaps = context.beatmaps.filter(tags__name__in=context.required_tags)
+    
     # Apply inclusion tags filter
-    if include_tag_names:
-        beatmaps = beatmaps.filter(tags__name__in=include_tag_names).distinct()
-
-    # Apply modified tag exclusion logic
-    if exclude_tag_names:
-        # Subquery to get counts of each tag applied to the beatmap
-        tag_counts_subquery = TagApplication.objects.filter(
-            beatmap=OuterRef('pk')
-        ).values('tag').annotate(
-            tag_count=Count('id')
-        ).order_by('-tag_count')
-
-        # Subquery to get the maximum tag count
-        max_tag_count_subquery = tag_counts_subquery.values('tag_count')[:1]
-
-        # Annotate the beatmap with max_tag_count
-        beatmaps = beatmaps.annotate(
-            max_tag_count=Coalesce(
-                Subquery(max_tag_count_subquery, output_field=IntegerField()),
-                Value(0)
-            )
-        )
-
-        # Subquery to get the total count of the excluded tags applied to the beatmap
-        exclude_tag_count_subquery = TagApplication.objects.filter(
-            beatmap=OuterRef('pk'),
-            tag__name__in=exclude_tag_names
-        ).values('beatmap').annotate(
-            exclude_count=Count('id')
-        ).values('exclude_count')[:1]
-
-        # Annotate the beatmap with exclude_tag_count
-        beatmaps = beatmaps.annotate(
-            exclude_tag_count=Coalesce(
-                Subquery(exclude_tag_count_subquery, output_field=IntegerField()),
-                Value(0)
-            )
-        )
-
-        # Compute the exclude_ratio
-        beatmaps = beatmaps.annotate(
-            exclude_ratio=Case(
-                When(
-                    max_tag_count__gt=0,
-                    then=Cast(F('exclude_tag_count'), FloatField()) / Cast(F('max_tag_count'), FloatField())
-                ),
-                default=Value(0.0),
-                output_field=FloatField()
-            )
-        )
-
-        # Exclude beatmaps where the exclude_ratio is greater than or equal to 0.15
-        beatmaps = beatmaps.exclude(exclude_ratio__gte=0.15)
-
-    return beatmaps, include_tag_names
-
-
-#######################################################################################
-
-def is_attribute_equal_query(term):
-    return '=' in term and not any(op in term for op in ['>=', '<=', '>', '<'])
-
-#######################################################################################
-
-def is_attribute_comparison_query(term):
-    return any(op in term for op in ['>=', '<=', '>', '<'])
-
-#######################################################################################
-
-def handle_attribute_equal_query(beatmaps, term):
-    attribute, value = term.split('=', 1)
-    attribute = attribute.upper().strip()
-    value = value.strip()
-
-    # Map attribute to field name
-    field_map = {
-        'AR': 'ar',
-        'CS': 'cs',
-        'BPM': 'bpm',
-        'OD': 'accuracy',
-        'COUNT': 'playcount',
-        'FAV': 'favourite_count',
-    }
-
-    field_name = field_map.get(attribute)
-    if field_name:
-        try:
-            if field_name in ['playcount', 'favourite_count']:
-                numeric_value = float(value)
-            else:
-                numeric_value = float(value)
-            filter_key = f'{field_name}'
-            beatmaps = beatmaps.filter(**{filter_key: numeric_value})
-        except ValueError:
-            pass  # Handle invalid conversion if necessary
-    return beatmaps
-
-#######################################################################################
-
-def handle_attribute_comparison_query(beatmaps, term):
-    match = re.match(r'(AR|CS|BPM|OD|COUNT|FAV)(>=|<=|>|<)(\d+(\.\d+)?)', term, re.IGNORECASE)
-    if match:
-        attribute, operator, value, _ = match.groups()
-        attribute = attribute.upper().strip()
-        lookup_map = {
-            '>': 'gt',
-            '<': 'lt',
-            '>=': 'gte',
-            '<=': 'lte',
-        }
-        lookup = lookup_map.get(operator)
-        field_map = {
-            'AR': 'ar',
-            'CS': 'cs',
-            'BPM': 'bpm',
-            'OD': 'accuracy',
-            'COUNT': 'playcount',
-            'FAV': 'favourite_count',
-        }
-        field_name = field_map.get(attribute)
-        if lookup and field_name:
-            try:
-                if field_name in ['playcount', 'favourite_count']:
-                    numeric_value = int(value)
-                else:
-                    numeric_value = float(value)
-                filter_key = f'{field_name}__{lookup}'
-                beatmaps = beatmaps.filter(**{filter_key: numeric_value})
-            except ValueError:
-                # Optionally, log the error or inform the user about invalid input
-                pass  # Handle invalid numeric conversion if necessary
-    return beatmaps
-
-#######################################################################################
-
-def build_exclusion_q(term):
-    # Handle exclusion terms
-    exclude_term = term.strip('"').strip()
-    # Apply stemming to the exclude term
-    stem_exclude_term = stem_word(exclude_term.lower())
-    return Q(
-        Q(tags__name__iexact=exclude_term) |
-        Q(title__icontains=exclude_term) |
-        Q(creator__icontains=exclude_term) |
-        Q(artist__icontains=exclude_term) |
-        Q(version__icontains=exclude_term)
-    )
-
-#######################################################################################
-
-def build_inclusion_q(term):
-    # Handle inclusion terms
-    include_term = term.strip('"').strip()
-    # Apply stemming to the include term
-    stem_include_term = stem_word(include_term.lower())
-    return Q(
-        Q(tags__name__iexact=include_term) |
-        Q(title__icontains=include_term) |
-        Q(creator__icontains=include_term) |
-        Q(artist__icontains=include_term) |
-        Q(version__icontains=include_term) |
-        Q(total_length__icontains=include_term) |
-        Q(drain__icontains=include_term) |
-        Q(accuracy__icontains=include_term) |
-        Q(difficulty_rating__icontains=include_term)
-    )
-
+    if context.include_tag_names:
+        context.beatmaps = context.beatmaps.filter(tags__name__in=context.include_tag_names).distinct()
+    
+    # Apply exclusion tags filter
+    if context.exclude_tags:
+        context.beatmaps = context.beatmaps.exclude(tags__name__in=context.exclude_tags)
+    
+    return context.beatmaps, context.include_tag_names
 
 
 # ------------------------------------------------------------------------ #
@@ -1323,7 +1129,6 @@ def recommended_maps_view(request):
 
 import re
 
-@login_required
 def home(request):
     user = request.user if request.user.is_authenticated else None
 

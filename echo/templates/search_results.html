@@ -14,7 +14,6 @@
     <script src="https://echosu-s3.s3.eu-central-1.amazonaws.com/static/js/master.js"></script>
     <script src="https://echosu-s3.s3.eu-central-1.amazonaws.com/static/js/collapsible_descriptions.js"></script>
     <meta name="csrf-token" content="{{ csrf_token }}">
-
 </head>
 <body>
     {% include '_navbar.html' %}
@@ -145,6 +144,14 @@
                 {% if beatmap.cover_image_url %}
                 <div class="beatmap-cover-container">
                     <img class="beatmap-cover" src="{{ beatmap.cover_image_url }}" alt="Cover Image">
+                    <!-- Audio Preview Section -->
+                    {% if beatmap.beatmapset_id %}
+                        <audio controls class="audio" >
+                            <source src="//b.ppy.sh/preview/{{ beatmap.beatmapset_id }}.mp3" type="audio/mpeg">
+                        </audio>
+                    {% else %}
+                        <span>No preview available.</span>
+                    {% endif %}
                 </div>
                 {% endif %}
                 <div class="beatmap-details-container">
@@ -166,7 +173,7 @@
                             <span>Playcount: {{ beatmap.playcount }}</span>
                             <span>Favourites: {{ beatmap.favourite_count }}</span>
                         </div>
-                        
+
                         <a href="{% url 'beatmap_detail' beatmap_id=beatmap.beatmap_id %}" class="beatmap-link">View Beatmap</a>
 
                         {% if beatmap.beatmapset_id %}
@@ -197,8 +204,8 @@
                                         {% if tag_info.tag.description %}
                                             data-description=' "{{ tag_info.tag.description }}" '
                                             data-description-author=" - {{ tag_info.tag.description_author }}"
-                                        {% else %}
-                                        {% endif %}>
+                                        {% endif %}
+                                    >
                                         {{ tag_info.tag.name }} ({{ tag_info.apply_count }})
                                     </span>
                                 {% endfor %}
@@ -236,5 +243,19 @@
 
 
     </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Select all audio elements
+            const audioElements = document.querySelectorAll('audio');
+        
+            audioElements.forEach(function(audio) {
+                // Set initial volume to 50%
+                audio.volume = 0.33;
+        
+                // Optionally, you can listen for volume changes or other events
+            });
+        });
+    </script>
 </body>
 </html>

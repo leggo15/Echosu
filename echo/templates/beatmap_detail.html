@@ -18,7 +18,16 @@
             {% if beatmap.cover_image_url %}
             <div class="beatmap-cover-container">
                 <img class="beatmap-cover" src="{{ beatmap.cover_image_url }}" alt="Cover Image">
+                <!-- Audio Preview Section -->
+                {% if beatmap.beatmapset_id %}
+                    <audio controls class="audio">
+                        <source src="//b.ppy.sh/preview/{{ beatmap.beatmapset_id }}.mp3" type="audio/mpeg">
+                    </audio>
+                {% else %}
+                    <span>No preview available.</span>
+                {% endif %}
             </div>
+            
             {% endif %}
             <div class="beatmap-details-container">
                 <div class="beatmap-title-artist">

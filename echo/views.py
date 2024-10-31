@@ -742,9 +742,129 @@ from collections import defaultdict
 
 
 def search_results(request):
+
+    ############################################
+    from nltk.stem import PorterStemmer
+    import shlex
+
+    # Initialize the stemmer
+    stemmer = PorterStemmer()
+
+    def stem_word(word):
+        """Stems a single word."""
+        return stemmer.stem(word.lower())
+
+    def stem_phrase(phrase):
+        """Stems each word in a multi-word phrase."""
+        return ' '.join(stem_word(word) for word in phrase.split())
+
+    def parse_query_with_quotes(raw_query):
+        """
+        Parses the raw query string into search terms, handling quotes.
+
+        Returns:
+            list of tuples: Each tuple contains (term, is_quoted)
+        """
+        # Use shlex to split the query, respecting quotes
+        lexer = shlex.shlex(raw_query, posix=True)
+        lexer.whitespace_split = True
+        lexer.quotes = '"\''
+        tokens = []
+        for token in lexer:
+            # Determine if the token was quoted
+            if (token.startswith('"') and token.endswith('"')) or (token.startswith("'") and token.endswith("'")):
+                is_quoted = True
+            else:
+                is_quoted = False
+            tokens.append((token, is_quoted))
+        return tokens
+
+    def process_search_terms(parsed_terms):
+        """
+        Processes parsed search terms by sanitizing and stemming.
+
+        Args:
+            parsed_terms (list of tuples): List of (term, is_quoted).
+
+        Returns:
+            set: Set of stemmed sanitized search terms.
+        """
+        stemmed_search_terms = set()
+        for term, is_quoted in parsed_terms:
+            # Sanitize the term by stripping quotes
+            sanitized_term = term.strip('"\'')
+            if ' ' in sanitized_term:
+                # If multi-word, stem each word
+                stemmed_term = stem_phrase(sanitized_term)
+            else:
+                # If single-word, stem directly
+                stemmed_term = stem_word(sanitized_term)
+            stemmed_search_terms.add(stemmed_term)
+        return stemmed_search_terms
+
+    def identify_exact_match_tags(include_tag_names, stemmed_search_terms):
+        """
+        Identifies exact match tag names based on stemmed search terms.
+
+        Args:
+            include_tag_names (set): Set of tag names to include.
+            stemmed_search_terms (set): Set of stemmed search terms.
+
+        Returns:
+            set: Set of exact match tag names.
+        """
+        exact_match_tag_names = set()
+        for tag in include_tag_names:
+            sanitized_tag = tag.strip('"\'')
+            if ' ' in sanitized_tag:
+                # Stem each word in the tag
+                stemmed_tag = stem_phrase(sanitized_tag)
+            else:
+                stemmed_tag = stem_word(sanitized_tag)
+            if stemmed_tag in stemmed_search_terms:
+                exact_match_tag_names.add(tag)
+            else:
+                # Additionally, check if any word in the tag matches
+                for word in sanitized_tag.split():
+                    if stem_word(word) in stemmed_search_terms:
+                        exact_match_tag_names.add(tag)
+                        break
+        return exact_match_tag_names
+
+    def annotate_and_order_beatmaps(beatmaps, include_tag_names, exact_match_tag_names):
+        """
+        Annotates the beatmaps queryset with exact and non-exact tag counts, then calculates weight.
+
+        Args:
+            beatmaps (QuerySet): The beatmaps queryset.
+            include_tag_names (set): Set of tag names to include.
+            exact_match_tag_names (set): Set of exact match tag names.
+
+        Returns:
+            QuerySet: Annotated and ordered queryset.
+        """
+        return beatmaps.annotate(
+            # Count exact tag applications
+            exact_match_count=Count(
+                'tagapplication',
+                filter=Q(tagapplication__tag__name__in=exact_match_tag_names)
+            ),
+            # Count non-exact tag applications
+            tag_apply_count=Count(
+                'tagapplication',
+                filter=Q(tagapplication__tag__name__in=include_tag_names) & ~Q(tagapplication__tag__name__in=exact_match_tag_names)
+            )
+        ).annotate(
+            # Define weight as the sum of exact and non-exact tag applications
+            weight=F('exact_match_count') + F('tag_apply_count')
+        ).order_by('-weight')  # Order by weight descending
+    ############################################
+
+
+    # Start of the function
     query = request.GET.get('query', '').strip()
-    print("Raw query string:", query) #debug
-    
+    print("Raw query string:", query)  # Debug
+
     selected_mode = request.GET.get('mode', 'osu').strip().lower()
     star_min = request.GET.get('star_min', '0').strip()
     star_max = request.GET.get('star_max', '15').strip()
@@ -807,58 +927,30 @@ def search_results(request):
         beatmaps = beatmaps.filter(status_filters)
 
     # Process query
-    search_terms = parse_search_terms(query)
-    print("Parsed search terms:", search_terms) #debug
+    # Replace the existing parse_search_terms with enhanced parsing
+    parsed_terms = parse_query_with_quotes(query)
+    print("Parsed search terms:", parsed_terms)  # Debug
 
+    # Extract just the terms without the quoted status
+    search_terms = [term for term, is_quoted in parsed_terms]
+    print("Search terms:", search_terms)  # Debug
+
+    # Build query conditions
     beatmaps, include_tag_names = build_query_conditions(beatmaps, search_terms)
 
+    # Sanitize and stem the search terms
+    stemmed_search_terms = process_search_terms(parsed_terms)
 
-    ############ - This is to check for fuzzy similar terms 
-    from nltk.stem import PorterStemmer
-    from django.db.models import Count, Q, F
+    # Identify exact match tag names based on stemming
+    exact_match_tag_names = identify_exact_match_tags(include_tag_names, stemmed_search_terms)
 
-    # Initialize the stemmer
-    stemmer = PorterStemmer()
-
-    def stem_word(word):
-        return stemmer.stem(word)
-
-    def stem_tag(tag):
-        # Split the tag into words, stem each word, and join them back
-        return ' '.join(stem_word(word) for word in tag.split())
-    
-    stemmed_search_terms = set(stem_word(term) for term in search_terms)
-
-    exact_match_tag_names = {
-    tag for tag in include_tag_names if stem_word(tag) in stemmed_search_terms
-    }
-    ############
-
-    # Annotate beatmaps with tag_match_count, tag_apply_count, and weight
+    # Annotate beatmaps with exact_match_count and tag_apply_count, then calculate weight
     if include_tag_names:
         print("include_tag_names:", include_tag_names)
         print("exact_match_tag_names:", exact_match_tag_names)
 
-        # Annotate beatmaps with counts
-        beatmaps = beatmaps.annotate(
-            tag_match_count=Count(
-                'tags',
-                filter=Q(tags__name__in=include_tag_names),
-                distinct=True
-            ),
-            tag_apply_count=Count(
-                'tagapplication',
-                filter=Q(tags__name__in=include_tag_names)
-            ),
-            exact_match_count=Count(
-                'tags',
-                filter=Q(tags__name__in=exact_match_tag_names),
-                distinct=True
-            )
-        ).annotate(
-            # Define weight with higher priority for exact matches
-            weight=F('exact_match_count') * 1.0 + F('tag_match_count') * 0.5 + F('tag_apply_count') * 0.01
-        ).order_by('-weight')  # Order by weight descending
+        # Annotate and order the queryset
+        beatmaps = annotate_and_order_beatmaps(beatmaps, include_tag_names, exact_match_tag_names)
     else:
         beatmaps = beatmaps.annotate(
             total_tag_apply_count=Count('tagapplication'),
@@ -885,7 +977,6 @@ def search_results(request):
     }
 
     return render(request, 'search_results.html', context)
-
 
 #######################################################################################
 
@@ -971,7 +1062,10 @@ def build_query_conditions(beatmaps, search_terms):
     
     # Apply required tags filter
     if context.required_tags:
-        context.beatmaps = context.beatmaps.filter(tags__name__in=context.required_tags)
+        # Ensure beatmaps have **all** required tags by counting distinct required tags
+        context.beatmaps = context.beatmaps.annotate(
+            num_required_tags=Count('tags', filter=Q(tags__name__in=context.required_tags), distinct=True)
+        ).filter(num_required_tags=len(context.required_tags))
     
     # Apply inclusion tags filter
     if context.include_tag_names:

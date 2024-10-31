@@ -8,6 +8,9 @@ body {
     background-color: rgb(29, 23, 25);
 }
 
+.audio {
+    width: 100%;
+}
 
 .tag {
     display: inline-block;
@@ -385,7 +388,7 @@ nav {
 .beatmap-link:hover {
     background-color: #8ec0f5;
 }
- /* for update map info button*/
+ /* for update map info*/
 .update-map{
     display: inline-block;
     background-color: #649bd6;

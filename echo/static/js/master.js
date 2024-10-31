@@ -412,3 +412,13 @@ $(function() {
         $("#star-rating-slider").slider("values", [min, max >= 15 ? 15 : max]);
     });
 });
+
+
+// Audio volum initially to 30%
+document.addEventListener('DOMContentLoaded', function() {
+    const audioElements = document.querySelectorAll('audio');
+
+    audioElements.forEach(function(audio) {
+        audio.volume = 0.33;
+    });
+});

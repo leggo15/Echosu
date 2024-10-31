@@ -66,9 +66,9 @@
                             <span>SR: {{ beatmap.difficulty_rating }}</span>
                             <span>Status: {{ beatmap.status }}</span>
                         </div>
+                        <a href="{% url 'beatmap_detail' beatmap_id=beatmap.beatmap_id %}" class="beatmap-link">View Details</a>
                     </div>
                 </div>
-                
                 <!-- Hidden field to store the current beatmap's ID -->
                 <input type="hidden" id="current_beatmap_id" value="{{ beatmap.beatmap_id }}">
 

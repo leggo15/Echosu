@@ -812,17 +812,57 @@ def search_results(request):
 
     beatmaps, include_tag_names = build_query_conditions(beatmaps, search_terms)
 
+
+    ############ - This is to check for fuzzy similar terms 
+    from nltk.stem import PorterStemmer
+    from django.db.models import Count, Q, F
+
+    # Initialize the stemmer
+    stemmer = PorterStemmer()
+
+    def stem_word(word):
+        return stemmer.stem(word)
+
+    def stem_tag(tag):
+        # Split the tag into words, stem each word, and join them back
+        return ' '.join(stem_word(word) for word in tag.split())
+    
+    stemmed_search_terms = set(stem_word(term) for term in search_terms)
+
+    exact_match_tag_names = {
+    tag for tag in include_tag_names if stem_word(tag) in stemmed_search_terms
+    }
+    ############
+
     # Annotate beatmaps with tag_match_count, tag_apply_count, and weight
     if include_tag_names:
+        print("include_tag_names:", include_tag_names)
+        print("exact_match_tag_names:", exact_match_tag_names)
+
+        # Annotate beatmaps with counts
         beatmaps = beatmaps.annotate(
-            tag_match_count=Count('tags', filter=Q(tags__name__in=include_tag_names), distinct=True),
-            tag_apply_count=Count('tagapplication', filter=Q(tags__name__in=include_tag_names)),
-            weight=F('tag_match_count') + F('tag_apply_count')  # Define weight
+            tag_match_count=Count(
+                'tags',
+                filter=Q(tags__name__in=include_tag_names),
+                distinct=True
+            ),
+            tag_apply_count=Count(
+                'tagapplication',
+                filter=Q(tags__name__in=include_tag_names)
+            ),
+            exact_match_count=Count(
+                'tags',
+                filter=Q(tags__name__in=exact_match_tag_names),
+                distinct=True
+            )
+        ).annotate(
+            # Define weight with higher priority for exact matches
+            weight=F('exact_match_count') * 1.0 + F('tag_match_count') * 0.5 + F('tag_apply_count') * 0.01
         ).order_by('-weight')  # Order by weight descending
     else:
         beatmaps = beatmaps.annotate(
             total_tag_apply_count=Count('tagapplication'),
-            weight=F('total_tag_apply_count')  # Define weight
+            weight=F('total_tag_apply_count') * 0.01  # Define weight
         ).order_by('-weight')  # Order by weight descending
 
     # Pagination

@@ -743,11 +743,8 @@ from collections import defaultdict
 
 def search_results(request):
     query = request.GET.get('query', '').strip()
-    print("Raw query string:", query)
-    search_terms = parse_search_terms(query)
-    print("Parsed search terms:", search_terms)
-
-    query = request.GET.get('query', '').strip()
+    print("Raw query string:", query) #debug
+    
     selected_mode = request.GET.get('mode', 'osu').strip().lower()
     star_min = request.GET.get('star_min', '0').strip()
     star_max = request.GET.get('star_max', '15').strip()
@@ -807,24 +804,26 @@ def search_results(request):
             status_filters |= (
                 Q(status='Graveyard') | Q(status='WIP') | Q(status='Pending') | Q(status='Qualified')
             )
-
         beatmaps = beatmaps.filter(status_filters)
 
     # Process query
     search_terms = parse_search_terms(query)
+    print("Parsed search terms:", search_terms) #debug
+
     beatmaps, include_tag_names = build_query_conditions(beatmaps, search_terms)
 
-    # Annotate beatmaps with tag_match_count and tag_apply_count
+    # Annotate beatmaps with tag_match_count, tag_apply_count, and weight
     if include_tag_names:
         beatmaps = beatmaps.annotate(
             tag_match_count=Count('tags', filter=Q(tags__name__in=include_tag_names), distinct=True),
-            tag_apply_count=Count('tagapplication', filter=Q(tags__name__in=include_tag_names))
-        ).order_by('-tag_match_count', '-tag_apply_count')
+            tag_apply_count=Count('tagapplication', filter=Q(tags__name__in=include_tag_names)),
+            weight=F('tag_match_count') + F('tag_apply_count')  # Define weight
+        ).order_by('-weight')  # Order by weight descending
     else:
-        # When there is no inclusion tag query, order by total_tag_apply_count
         beatmaps = beatmaps.annotate(
-            total_tag_apply_count=Count('tagapplication')
-        ).order_by('-total_tag_apply_count')
+            total_tag_apply_count=Count('tagapplication'),
+            weight=F('total_tag_apply_count')  # Define weight
+        ).order_by('-weight')  # Order by weight descending
 
     # Pagination
     paginator = Paginator(beatmaps, 10)

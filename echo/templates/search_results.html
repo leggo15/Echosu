@@ -184,6 +184,10 @@
 
                         <div class="applied-tags"> 
                             Tags:
+                            <!-- Display Weight for Admins -->
+                            {% if user.is_staff %}
+                                <span>[{{ beatmap.weight }}]</span>
+                            {% endif %}
                             {% if beatmap.tags_with_counts %}
                                 {% for tag_info in beatmap.tags_with_counts %}
                                     <span class="tag {% if tag_info.is_applied_by_user %}tag-applied{% else %}tag-unapplied{% endif %}" 

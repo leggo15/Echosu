@@ -47,7 +47,7 @@
                 <div class="beatmap-display">
                     {% if beatmap.cover_image_url %}
                     <div class="beatmap-cover-container">
-                        <img class="beatmap-cover" src="{{ beatmap.cover_image_url }}" alt="Cover Image">
+                        <a href="{% url 'beatmap_detail' beatmap_id=beatmap.beatmap_id %}"><img class="beatmap-cover" src="{{ beatmap.cover_image_url }}" alt="Cover Image"></a>
                     </div>
                     {% endif %}
                     <div class="beatmap-details-container">

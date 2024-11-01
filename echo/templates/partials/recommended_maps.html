@@ -3,7 +3,7 @@
     <div class="beatmap-display">
         {% if map.cover_image_url %}
             <div class="beatmap-cover-container">
-                <img class="beatmap-cover" src="{{ map.cover_image_url }}" alt="Cover Image">
+                <a href="{% url 'beatmap_detail' beatmap_id=map.beatmap_id %}"><img class="beatmap-cover" src="{{ map.cover_image_url }}" alt="Cover Image"></a>
                 <!-- Audio Preview Section -->
                 {% if map.beatmapset_id %}
                 <audio controls class="audio">

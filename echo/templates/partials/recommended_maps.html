@@ -5,9 +5,9 @@
             <div class="beatmap-cover-container">
                 <img class="beatmap-cover" src="{{ map.cover_image_url }}" alt="Cover Image">
                 <!-- Audio Preview Section -->
-                {% if beatmap.beatmapset_id %}
-                <audio controls class="audio" Volume="50%">
-                    <source src="//b.ppy.sh/preview/{{ beatmap.beatmapset_id }}.mp3" type="audio/mpeg">
+                {% if map.beatmapset_id %}
+                <audio controls class="audio">
+                    <source src="//b.ppy.sh/preview/{{ map.beatmapset_id }}.mp3" type="audio/mpeg">
                 </audio>
                 {% else %}
                     <span>No Audio preview available.</span>
@@ -21,7 +21,7 @@
                 <h3 class="mapper">Mapper: {{ map.creator }}</h3>
             </div>
             <div class="beatmap-stats">
-                <span>Length: {{ map.total_length }} </span>
+                <span class="beatmap-length">Length: {{ map.total_length }}</span>
                 <span>BPM: {{ map.bpm }} </span>
                 <span>CS: {{ map.cs }} </span>
                 <span>HP: {{ map.drain }}</span>

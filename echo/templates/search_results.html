@@ -36,7 +36,7 @@
             <ul>
                 <li>
                     <strong>Keywords:</strong>
-                    Keywords consist of words the search engine can recognize, including <strong>tags</strong>, <strong>song name</strong>, <strong>diffulty name</strong>, <strong>mapper</strong>, <strong>artist</strong>, <strong>AR, CS, OD, HP, BPM</strong>.
+                    Keywords consist of words the search engine can recognize, including <strong>tags</strong>, <strong>song name</strong>, <strong>diffulty name</strong>, <strong>mapper</strong>, <strong>artist</strong>, <strong>length</strong>, <strong>favorite- & play-counts as fav & count</strong>, <strong>AR, CS, OD, HP, BPM</strong>.
                 </li>
                 <li>
                     <strong>Multi-Word Tags:</strong>
@@ -53,7 +53,7 @@
                     </ul>
                 </li>
                 <li>
-                    <strong>Remove from Search:</strong>
+                    <strong>Add Required Tag:</strong>
                     By adding a dot symbol in front of a tag, the search engine will guarantee that all results contain this tag.
                     <ul>
                         <li><em>Example:</em> <code>.farm</code></li>
@@ -162,7 +162,7 @@
                             <h3 class="mapper">Mapper: {{ beatmap.creator }}</h3>
                         </div>
                         <div class="beatmap-stats">
-                            <span>Length: {{ beatmap.total_length }} </span>
+                            <span class="beatmap-length">Length: {{ beatmap.total_length }}</span>
                             <span>BPM: {{ beatmap.bpm }} </span>
                             <span>CS: {{ beatmap.cs }} </span>
                             <span>HP: {{ beatmap.drain }}</span>
@@ -240,22 +240,43 @@
                 {% endif %}
             </span>
         </div>
-
-
     </div>
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            // Select all audio elements
-            const audioElements = document.querySelectorAll('audio');
+            // Select all span elements with the class 'beatmap-length'
+            const lengthSpans = document.querySelectorAll('span.beatmap-length');
         
-            audioElements.forEach(function(audio) {
-                // Set initial volume to 50%
-                audio.volume = 0.33;
-        
-                // Optionally, you can listen for volume changes or other events
+            lengthSpans.forEach(function(span) {
+                // Get the current text content, e.g., "Length: 60"
+                const text = span.textContent.trim();
+                const prefix = 'Length: ';
+                
+                // Check if the span's text starts with the prefix
+                if (text.startsWith(prefix)) {
+                    // Extract the numerical value after the prefix
+                    const totalSecondsStr = text.substring(prefix.length).trim();
+                    const totalSeconds = parseInt(totalSecondsStr, 10);
+                    
+                    // Ensure the extracted value is a valid number
+                    if (!isNaN(totalSeconds)) {
+                        // Convert total seconds to minutes and seconds
+                        const minutes = Math.floor(totalSeconds / 60);
+                        const seconds = totalSeconds % 60;
+                        
+                        // Format seconds to always have two digits
+                        const formattedSeconds = seconds.toString().padStart(2, '0');
+                        
+                        // Create the formatted time string
+                        const formattedTime = `${minutes}:${formattedSeconds}`;
+                        
+                        // Update the span's content to include the formatted time
+                        span.textContent = `${prefix}${formattedTime} (${totalSeconds})`;
+                    }
+                }
             });
         });
+        
     </script>
 </body>
 </html>

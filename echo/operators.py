@@ -136,6 +136,7 @@ def handle_attribute_equal_query(beatmaps, term):
         'CS': 'cs',
         'BPM': 'bpm',
         'OD': 'accuracy',
+        'LENGTH': 'total_length',
         'COUNT': 'playcount',
         'FAV': 'favourite_count',
     }
@@ -156,7 +157,7 @@ def handle_attribute_equal_query(beatmaps, term):
 #----------#
 
 def handle_attribute_comparison_query(beatmaps, term):
-    match = re.match(r'(AR|CS|BPM|OD|COUNT|FAV)(>=|<=|>|<)(\d+(\.\d+)?)', term, re.IGNORECASE)
+    match = re.match(r'(AR|CS|BPM|OD|LENGTH|COUNT|FAV)(>=|<=|>|<)(\d+(\.\d+)?)', term, re.IGNORECASE)
     if match:
         attribute, operator, value, _ = match.groups()
         attribute = attribute.upper().strip()
@@ -172,6 +173,7 @@ def handle_attribute_comparison_query(beatmaps, term):
             'CS': 'cs',
             'BPM': 'bpm',
             'OD': 'accuracy',
+            'LENGTH': 'total_length',
             'COUNT': 'playcount',
             'FAV': 'favourite_count',
         }

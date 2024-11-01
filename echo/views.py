@@ -745,6 +745,7 @@ def search_results(request):
 
     ############################################
     from nltk.stem import PorterStemmer
+    from django.db.models import Count, Q, F
     import shlex
 
     # Initialize the stemmer
@@ -772,7 +773,7 @@ def search_results(request):
         tokens = []
         for token in lexer:
             # Determine if the token was quoted
-            if (token.startswith('"') and token.endswith('"')) or (token.startswith("'") and token.endswith("'")):
+            if token.startswith('"') and token.endswith('"') or token.startswith("'") and token.endswith("'"):
                 is_quoted = True
             else:
                 is_quoted = False
@@ -833,7 +834,7 @@ def search_results(request):
 
     def annotate_and_order_beatmaps(beatmaps, include_tag_names, exact_match_tag_names):
         """
-        Annotates the beatmaps queryset with exact and non-exact tag counts, then calculates weight.
+        Annotates the beatmaps queryset with tag counts and weights, then orders them.
 
         Args:
             beatmaps (QuerySet): The beatmaps queryset.
@@ -844,19 +845,21 @@ def search_results(request):
             QuerySet: Annotated and ordered queryset.
         """
         return beatmaps.annotate(
-            # Count exact tag applications
-            exact_match_count=Count(
-                'tagapplication',
-                filter=Q(tagapplication__tag__name__in=exact_match_tag_names)
+            tag_match_count=Count(
+                'tags',
+                filter=Q(tags__name__in=include_tag_names),
             ),
-            # Count non-exact tag applications
             tag_apply_count=Count(
                 'tagapplication',
-                filter=Q(tagapplication__tag__name__in=include_tag_names) & ~Q(tagapplication__tag__name__in=exact_match_tag_names)
+                filter=Q(tags__name__in=include_tag_names)
+            ),
+            exact_match_count=Count(
+                'tags',
+                filter=Q(tags__name__in=exact_match_tag_names),
             )
         ).annotate(
-            # Define weight as the sum of exact and non-exact tag applications
-            weight=F('exact_match_count') + F('tag_apply_count')
+            # Define weight with higher priority for exact matches
+            weight=F('exact_match_count') * 1.0 + F('tag_match_count') * 0.5 + F('tag_apply_count') * 0.01
         ).order_by('-weight')  # Order by weight descending
     ############################################
 
@@ -944,7 +947,7 @@ def search_results(request):
     # Identify exact match tag names based on stemming
     exact_match_tag_names = identify_exact_match_tags(include_tag_names, stemmed_search_terms)
 
-    # Annotate beatmaps with exact_match_count and tag_apply_count, then calculate weight
+    # Annotate beatmaps with tag_match_count, tag_apply_count, and weight
     if include_tag_names:
         print("include_tag_names:", include_tag_names)
         print("exact_match_tag_names:", exact_match_tag_names)
@@ -1062,10 +1065,7 @@ def build_query_conditions(beatmaps, search_terms):
     
     # Apply required tags filter
     if context.required_tags:
-        # Ensure beatmaps have **all** required tags by counting distinct required tags
-        context.beatmaps = context.beatmaps.annotate(
-            num_required_tags=Count('tags', filter=Q(tags__name__in=context.required_tags), distinct=True)
-        ).filter(num_required_tags=len(context.required_tags))
+        context.beatmaps = context.beatmaps.filter(tags__name__in=context.required_tags)
     
     # Apply inclusion tags filter
     if context.include_tag_names:

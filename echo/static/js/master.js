@@ -422,3 +422,39 @@ document.addEventListener('DOMContentLoaded', function() {
         audio.volume = 0.33;
     });
 });
+
+
+//map length to min and sec
+document.addEventListener('DOMContentLoaded', function() {
+    // Select all span elements with the class 'beatmap-length'
+    const lengthSpans = document.querySelectorAll('span.beatmap-length');
+
+    lengthSpans.forEach(function(span) {
+        // Get the current text content, e.g., "Length: 60"
+        const text = span.textContent.trim();
+        const prefix = 'Length: ';
+        
+        // Check if the span's text starts with the prefix
+        if (text.startsWith(prefix)) {
+            // Extract the numerical value after the prefix
+            const totalSecondsStr = text.substring(prefix.length).trim();
+            const totalSeconds = parseInt(totalSecondsStr, 10);
+            
+            // Ensure the extracted value is a valid number
+            if (!isNaN(totalSeconds)) {
+                // Convert total seconds to minutes and seconds
+                const minutes = Math.floor(totalSeconds / 60);
+                const seconds = totalSeconds % 60;
+                
+                // Format seconds to always have two digits
+                const formattedSeconds = seconds.toString().padStart(2, '0');
+                
+                // Create the formatted time string
+                const formattedTime = `${minutes}:${formattedSeconds}`;
+                
+                // Update the span's content to include the formatted time
+                span.textContent = `${prefix}${formattedTime} (${totalSeconds})`;
+            }
+        }
+    });
+});

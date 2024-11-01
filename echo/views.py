@@ -1414,22 +1414,25 @@ def home(request):
     if 'beatmap' in context:
         beatmap = context['beatmap']
 
-        # Query for user's tags for this beatmap
-        user_tag_applications = TagApplication.objects.filter(
-            beatmap=beatmap, user=request.user
+        # Aggregate tag applications for the beatmap
+        beatmap_tags_with_counts = (
+            TagApplication.objects
+            .filter(beatmap=beatmap)
+            .values('tag__id', 'tag__name', 'tag__description', 'tag__description_author')
+            .annotate(apply_count=Count('id'))
         )
-        user_tags = [tag_app.tag for tag_app in user_tag_applications]
 
-        # Prepare tags with counts and is_applied_by_user flag
-        beatmap_tags_with_counts = []
-        for tag in beatmap.tags.all():
-            tag_count = TagApplication.objects.filter(tag=tag, beatmap=beatmap).count()
-            is_applied_by_user = tag in user_tags
-            beatmap_tags_with_counts.append({
-                'tag': tag,  # Include the actual tag object
-                'apply_count': tag_count,
-                'is_applied_by_user': is_applied_by_user
-            })
+        # Get the set of tag IDs that the current user has applied
+        if request.user.is_authenticated:
+            user_tag_ids = set(
+                TagApplication.objects.filter(beatmap=beatmap, user=request.user).values_list('tag__id', flat=True)
+            )
+        else:
+            user_tag_ids = set()
+
+        # Add is_applied_by_user flag to each tag
+        for tag_info in beatmap_tags_with_counts:
+            tag_info['is_applied_by_user'] = tag_info['tag__id'] in user_tag_ids
 
         context['beatmap_tags_with_counts'] = beatmap_tags_with_counts
 

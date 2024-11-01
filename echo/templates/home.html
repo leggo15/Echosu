@@ -80,22 +80,22 @@
                 <div class="applied-tags" id="beatmap-applied-tags">
                     Tags:
                     {% if beatmap_tags_with_counts %}
-                        {% for tag_info in beatmap_tags_with_counts %}
-                            <span class="tag {% if tag_info.is_applied_by_user %}tag-applied{% else %}tag-unapplied{% endif %}"
-                                  data-tag-name="{{ tag_info.tag.name }}" 
-                                  data-applied-by-user="{{ tag_info.is_applied_by_user }}"
-                                  data-beatmap-id="{{ beatmap.beatmap_id }}"
-                                  {% if tag_info.tag.description %}
-                                      data-description="{{ tag_info.tag.description|escapejs }}"
-                                      data-description-author=" - {{ tag_info.tag.description_author|escapejs }}"
-                                  {% endif %}
-                            >
-                                {{ tag_info.tag.name }} ({{ tag_info.apply_count }})
-                            </span>
-                        {% endfor %}
-                    {% else %}
-                        <span>No Tags associated.</span>
-                    {% endif %}
+                    {% for tag_info in beatmap_tags_with_counts %}
+                        <span class="tag {% if tag_info.is_applied_by_user %}tag-applied{% else %}tag-unapplied{% endif %}"
+                              data-tag-name="{{ tag_info.tag__name }}" 
+                              data-applied-by-user="{{ tag_info.is_applied_by_user }}"
+                              data-beatmap-id="{{ beatmap.beatmap_id }}"
+                              {% if tag_info.tag__description %}
+                                  data-description="{{ tag_info.tag__description|escapejs }}"
+                                  data-description-author="{{ tag_info.tag__description_author|escapejs }}"
+                              {% endif %}
+                        >
+                            {{ tag_info.tag__name }} ({{ tag_info.apply_count }})
+                        </span>
+                    {% endfor %}
+                {% else %}
+                    <span>No Tags associated.</span>
+                {% endif %}
                 </div>
                 
             {% endif %}

@@ -138,6 +138,29 @@
             <button type="submit" class="generic_btn">Search</button>
         </form>
 
+        <form method="get" action="{% url 'search_results' %}" class="sorting-form">
+            <!-- Preserve existing GET parameters -->
+            <input type="hidden" name="query" value="{{ query }}">
+            <input type="hidden" name="mode" value="{{ request.GET.mode }}">
+            <input type="hidden" name="star_min" value="{{ star_min }}">
+            <input type="hidden" name="star_max" value="{{ star_max }}">
+            {% if status_ranked %}
+                <input type="hidden" name="status_ranked" value="ranked">
+            {% endif %}
+            {% if status_loved %}
+                <input type="hidden" name="status_loved" value="loved">
+            {% endif %}
+            {% if status_unranked %}
+                <input type="hidden" name="status_unranked" value="unranked">
+            {% endif %}
+            
+            <label for="sort">Sort by:</label>
+            <select name="sort" id="sort" onchange="this.form.submit()">
+                <option value="tag_weight" {% if sort == 'tag_weight' %}selected{% endif %}>Tag Weight</option>
+                <option value="popularity" {% if sort == 'popularity' %}selected{% endif %}>Popularity</option>
+            </select>
+        </form>
+
         <div class="search-results">
             {% for beatmap in beatmaps %}
             <div class="beatmap-display" id="beatmap-{{ beatmap.beatmap_id }}">
@@ -173,7 +196,7 @@
                             <span>Playcount: {{ beatmap.playcount }}</span>
                             <span>Favourites: {{ beatmap.favourite_count }}</span>
                             {% if user.is_staff %}
-                            <span>[{{ beatmap.order }}]</span>
+                            <span>[{{ beatmap.popularity }}]</span>
                         {% endif %}
                         </div>
 
@@ -192,7 +215,7 @@
                             Tags:
                             <!-- Display Weight for Admins -->
                             {% if user.is_staff %}
-                                <span>[{{ beatmap.weight }}]</span>
+                                <span>[{{ beatmap.tag_weight }}]</span>
                             {% endif %}
                             {% if beatmap.tags_with_counts %}
                                 {% for tag_info in beatmap.tags_with_counts %}
@@ -221,25 +244,25 @@
             {% endfor %}
         </div>
 
-        <!-- Pagination Controls -->
-        <div class="pagination">
-            <span class="step-links">
-                {% if beatmaps.has_previous %}
-                    <a href="?query={{ query|urlencode }}&mode={{ request.GET.mode }}&star_min={{ star_min }}&star_max={{ star_max }}{% if status_ranked %}&status_ranked=ranked{% endif %}{% if status_loved %}&status_loved=loved{% endif %}{% if status_unranked %}&status_unranked=unranked{% endif %}&page=1">&laquo; first</a>
-                    <a href="?query={{ query|urlencode }}&mode={{ request.GET.mode }}&star_min={{ star_min }}&star_max={{ star_max }}{% if status_ranked %}&status_ranked=ranked{% endif %}{% if status_loved %}&status_loved=loved{% endif %}{% if status_unranked %}&status_unranked=unranked{% endif %}&page={{ beatmaps.previous_page_number }}">previous</a>
-                {% endif %}
+    <!-- Pagination Controls -->
+    <div class="pagination">
+        <span class="step-links">
+            {% if beatmaps.has_previous %}
+                <a href="?query={{ query|urlencode }}&mode={{ request.GET.mode }}&star_min={{ star_min }}&star_max={{ star_max }}&sort={{ sort }}{% if status_ranked %}&status_ranked=ranked{% endif %}{% if status_loved %}&status_loved=loved{% endif %}{% if status_unranked %}&status_unranked=unranked{% endif %}&page=1">&laquo; first</a>
+                <a href="?query={{ query|urlencode }}&mode={{ request.GET.mode }}&star_min={{ star_min }}&star_max={{ star_max }}&sort={{ sort }}{% if status_ranked %}&status_ranked=ranked{% endif %}{% if status_loved %}&status_loved=loved{% endif %}{% if status_unranked %}&status_unranked=unranked{% endif %}&page={{ beatmaps.previous_page_number }}">previous</a>
+            {% endif %}
 
-                <span class="current">
-                    Page {{ beatmaps.number }} of {{ beatmaps.paginator.num_pages }}.
-                </span>
-
-                {% if beatmaps.has_next %}
-                    <a href="?query={{ query|urlencode }}&mode={{ request.GET.mode }}&star_min={{ star_min }}&star_max={{ star_max }}{% if status_ranked %}&status_ranked=ranked{% endif %}{% if status_loved %}&status_loved=loved{% endif %}{% if status_unranked %}&status_unranked=unranked{% endif %}&page={{ beatmaps.next_page_number }}">next</a>
-                    <a href="?query={{ query|urlencode }}&mode={{ request.GET.mode }}&star_min={{ star_min }}&star_max={{ star_max }}{% if status_ranked %}&status_ranked=ranked{% endif %}{% if status_loved %}&status_loved=loved{% endif %}{% if status_unranked %}&status_unranked=unranked{% endif %}&page={{ beatmaps.paginator.num_pages }}">last &raquo;</a>
-                {% endif %}
+            <span class="current">
+                Page {{ beatmaps.number }} of {{ beatmaps.paginator.num_pages }}.
             </span>
-        </div>
+
+            {% if beatmaps.has_next %}
+                <a href="?query={{ query|urlencode }}&mode={{ request.GET.mode }}&star_min={{ star_min }}&star_max={{ star_max }}&sort={{ sort }}{% if status_ranked %}&status_ranked=ranked{% endif %}{% if status_loved %}&status_loved=loved{% endif %}{% if status_unranked %}&status_unranked=unranked{% endif %}&page={{ beatmaps.next_page_number }}">next</a>
+                <a href="?query={{ query|urlencode }}&mode={{ request.GET.mode }}&star_min={{ star_min }}&star_max={{ star_max }}&sort={{ sort }}{% if status_ranked %}&status_ranked=ranked{% endif %}{% if status_loved %}&status_loved=loved{% endif %}{% if status_unranked %}&status_unranked=unranked{% endif %}&page={{ beatmaps.paginator.num_pages }}">last &raquo;</a>
+            {% endif %}
+        </span>
     </div>
+
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {

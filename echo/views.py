@@ -839,7 +839,7 @@ def search_results(request):
                         break
         return exact_match_tag_names
 
-    def annotate_and_order_beatmaps(beatmaps, include_tag_names, exact_match_tag_names):
+    def annotate_and_order_beatmaps(beatmaps, include_tag_names, exact_match_tag_names, sort_method):
         """
         Annotates the beatmaps queryset with tag counts and weights, then orders them.
 
@@ -851,23 +851,47 @@ def search_results(request):
         Returns:
             QuerySet: Annotated and ordered queryset.
         """
-        return beatmaps.annotate(
-            tag_match_count=Count(
-                'tags',
-                filter=Q(tags__name__in=include_tag_names),
-            ),
-            tag_apply_count=Count(
-                'tagapplication',
-                filter=Q(tags__name__in=include_tag_names)
-            ),
-            exact_match_count=Count(
-                'tags',
-                filter=Q(tags__name__in=exact_match_tag_names),
-            )
-        ).annotate(
-            # Define weight with higher priority for exact matches
-            weight=F('exact_match_count') * 1.0 + F('tag_match_count') * 0.5 + F('tag_apply_count') * 0.01
-        ).order_by('-weight')  # Order by weight descending
+        if sort_method == 'tag_weight':
+            return beatmaps.annotate(
+                tag_match_count=Count(
+                    'tags',
+                    filter=Q(tags__name__in=include_tag_names),
+                ),
+                tag_apply_count=Count(
+                    'tagapplication',
+                    filter=Q(tags__name__in=include_tag_names)
+                ),
+                exact_match_count=Count(
+                    'tags',
+                    filter=Q(tags__name__in=exact_match_tag_names),
+                )
+            ).annotate(
+                # Define weight with higher priority for exact matches
+                tag_weight=F('exact_match_count') * 1.0 + F('tag_match_count') * 0.5 + F('tag_apply_count') * 0.01,
+                popularity=F('favourite_count') * 0.5 + F('playcount') * 0.001,
+            ).order_by('-tag_weight')  # Order by weight descending
+        elif sort_method == 'popularity':
+            return beatmaps.annotate(
+                tag_match_count=Count(
+                    'tags',
+                    filter=Q(tags__name__in=include_tag_names),
+                ),
+                tag_apply_count=Count(
+                    'tagapplication',
+                    filter=Q(tags__name__in=include_tag_names)
+                ),
+                exact_match_count=Count(
+                    'tags',
+                    filter=Q(tags__name__in=exact_match_tag_names),
+                )
+            ).annotate(
+                # Define weight with higher priority for exact matches
+                tag_weight=F('exact_match_count') * 1.0 + F('tag_match_count') * 0.5 + F('tag_apply_count') * 0.0,
+                popularity=F('favourite_count') * 0.5 + F('playcount') * 0.001,
+            ).order_by('-popularity')  # Order by popularity descending
+        else:
+            # Default sorting
+            return beatmaps.order_by('-favourite_count', '-playcount')
     ############################################
 
 
@@ -878,6 +902,7 @@ def search_results(request):
     selected_mode = request.GET.get('mode', 'osu').strip().lower()
     star_min = request.GET.get('star_min', '0').strip()
     star_max = request.GET.get('star_max', '15').strip()
+    sort = request.GET.get('sort', '')
 
     # Get status filter values
     status_ranked = request.GET.get('status_ranked', False)
@@ -954,19 +979,35 @@ def search_results(request):
     # Identify exact match tag names based on stemming
     exact_match_tag_names = identify_exact_match_tags(include_tag_names, stemmed_search_terms)
 
+    # Determine sort method
+    if sort not in ['tag_weight', 'popularity']:
+        if query:
+            sort = 'tag_weight'
+        else:
+            sort = 'popularity'
+
     # Annotate beatmaps with tag_match_count, tag_apply_count, and weight
     if include_tag_names:
         print("include_tag_names:", include_tag_names)
         print("exact_match_tag_names:", exact_match_tag_names)
 
         # Annotate and order the queryset
-        beatmaps = annotate_and_order_beatmaps(beatmaps, include_tag_names, exact_match_tag_names)
+        beatmaps = annotate_and_order_beatmaps(beatmaps, include_tag_names, exact_match_tag_names, sort)
     else:
+        # Critical Code Segment: Preserve this block as per user instruction
         beatmaps = beatmaps.annotate(
             total_tag_apply_count=Count('tagapplication'),
-            weight=F('total_tag_apply_count'),  # Define weight
-            order=F('favourite_count') * 0.5 + F('playcount') * 0.001
-        ).order_by('-order') # Order by fav and playcount when no search query is given
+            tag_weight=F('total_tag_apply_count'),  # Define weight
+            popularity=F('favourite_count') * 0.5 + F('playcount') * 0.001,
+        )
+        # Apply sorting based on user preference
+        if sort == 'tag_weight':
+            beatmaps = beatmaps.order_by('-tag_weight')
+        elif sort == 'popularity':
+            beatmaps = beatmaps.order_by('-popularity')
+        else:
+            # Default sorting if sort parameter is invalid
+            beatmaps = beatmaps.order_by('-favourite_count', '-playcount')
 
     # Pagination
     paginator = Paginator(beatmaps, 10)
@@ -981,6 +1022,7 @@ def search_results(request):
         'query': query,
         'star_min': star_min,
         'star_max': star_max,
+        'sort': sort,
         # Pass back the status filters to the template to remember the selection
         'status_ranked': status_ranked,
         'status_loved': status_loved,

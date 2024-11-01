@@ -3,13 +3,94 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" type="image/x-icon" sizes="32x32" href="https://echosu-s3.s3.eu-central-1.amazonaws.com/static/orange_32x32.ico">
     <link rel="icon" type="image/x-icon" sizes="16x16" href="https://echosu-s3.s3.eu-central-1.amazonaws.com/static/orange_16x16.ico">
 </head>
+<style>
+    /* Base styles for the navbar */
+    .nav-content {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+    
+    /* Styles for the navigation links */
+    .nav-links {
+        display: flex;
+        align-items: center;
+    }
+    
+    /* Styles for the hamburger menu icon */
+    .hamburger-menu {
+        display: none; /* Hidden on larger screens */
+        flex-direction: column;
+        cursor: pointer;
+        padding: 10px;
+    }
+    
+    .hamburger-menu span {
+        width: 25px;
+        height: 3px;
+        background-color: #f1ecee;
+        margin: 4px 0;
+    }
+    
+    /* Hide the search input field on small screens */
+    @media (max-width: 900px) {
+        /* Show the hamburger menu */
+        .hamburger-menu {
+            display: flex;
+        }
+        /* Hide the nav links by default */
+        .nav-links {
+            display: none;
+            flex-direction: column;
+            width: 55%;
+            position: absolute;
+            top: 75px; /* Adjust based on your nav height */
+            left: 20%;
+            padding: 20;
+            margin: 0;
+            font-size:32px;
+            z-index: 2000;
+        }
+        /* Show the nav links when active */
+        .nav-links.active {
+            display: flex;
+        }
+        /* Style nav links */
+        .nav-links a {
+            padding: 12px;
+            text-align: center;
+        }
+        /* Adjust the user section */
+        .user-section {
+            order: -1; /* Move user section above nav links */
+        }
+        /* Hide the search input field */
+        .quick-search-form input[type="text"] {
+            display: none;
+        }
+        /* Adjust search button */
+        .quick-search-form button {
+            width: 100%;
+            padding: 12px;
+        }
+    }
+    
+</style>
 <body>
     <nav>
         <div class="nav-content">
-            <div class="nav-links">
+            <!-- Hamburger menu icon -->
+            <div class="hamburger-menu" id="hamburgerMenu">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
+            <!-- Navigation links and search form -->
+            <div class="nav-links" id="navLinks">
                 <a href="{% url 'home' %}" class="generic-nav-btn">Home</a>
                 <a href="{% url 'about' %}" class="generic-nav-btn">About</a>
                 <a href="{% url 'tag_library' %}" class="generic-nav-btn">Tag Library</a>
@@ -47,5 +128,16 @@
             </div>
         </div>
     </nav>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const hamburgerMenu = document.getElementById('hamburgerMenu');
+    const navLinks = document.getElementById('navLinks');
+
+    hamburgerMenu.addEventListener('click', function() {
+        navLinks.classList.toggle('active');
+    });
+});
+
+</script>
 </body>
 </html>

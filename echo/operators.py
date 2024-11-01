@@ -71,7 +71,7 @@ def handle_inclusion(context, search_terms):
     for term in search_terms:
         if term.startswith('.'):
             required_term = term.lstrip('.').strip('"').strip()
-            matching_tags = Tag.objects.filter(name__icontains=required_term)
+            matching_tags = Tag.objects.filter(name__iexact=required_term)
             if matching_tags.exists():
                 context.required_tags.update(tag.name for tag in matching_tags)
             else:

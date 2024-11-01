@@ -994,7 +994,6 @@ def search_results(request):
         # Annotate and order the queryset
         beatmaps = annotate_and_order_beatmaps(beatmaps, include_tag_names, exact_match_tag_names, sort)
     else:
-        # Critical Code Segment: Preserve this block as per user instruction
         beatmaps = beatmaps.annotate(
             total_tag_apply_count=Count('tagapplication'),
             tag_weight=F('total_tag_apply_count'),  # Define weight

@@ -280,6 +280,12 @@ nav {
     text-decoration: none; /* Remove underline from <a> elements */
 }
 
+.generic-nav-btn:hover {
+    background-color: #880d51;
+    color: #f6c578;
+    text-shadow: 1px #f6c578;
+}
+
 .generic-nav-:hover {
     background-color: #880d51;
     color: #f6c578;

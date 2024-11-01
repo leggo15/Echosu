@@ -9,7 +9,7 @@
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://echosu-s3.s3.eu-central-1.amazonaws.com/static/js/master.js"></script>
 </head>
-<body>
+<body class="page-beatmap-detail">
     {% include '_navbar.html' %}    
     <div class="container">
         <a href="#" id="update-map-info-link" class="update-map">Update Map Info</a>
@@ -57,7 +57,7 @@
                 {% endif %}
                 
                 <!-- Find Similar Maps Button with Star Rating Limits -->
-                <a href="{% url 'search_results' %}?query={{ tags_query_string|urlencode }}&star_min={{ star_min }}&star_max={{ star_max }}" class="beatmap-link">
+                <a href="{% url 'search_results' %}?query=bpm>={{ bpm_min }} bpm<={{ bpm_max }} + {{ tags_query_string|urlencode}}&star_min={{ star_min }}&star_max={{ star_max }}" class="beatmap-link">
                     Find Similar Maps
                 </a>
 
@@ -65,7 +65,7 @@
         </div>
 
         <!-- Hidden field to store the current beatmap's ID -->
-        <input type="hidden" id="current_beatmap_id" value="{{ beatmap.beatmap_id }}">
+        <input type="hidden" id="current_beatmap_id" data-beatmap-id="{{ beatmap.beatmap_id }}" value="{{ beatmap.beatmap_id }}">
 
         <!-- Tag input field and suggestions list -->
         <button type="button" class="apply-tag-btn">Apply Tag</button>

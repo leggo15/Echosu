@@ -1,7 +1,13 @@
 $(document).ready(function() { 
     var selectedTag;
 
-    // Tag input functionality
+    // Determine the current page based on body classes
+    var body = $('body');
+    var isSearchResultsPage = body.hasClass('page-search-results');
+    var isBeatmapDetailPage = body.hasClass('page-beatmap-detail'); // Also home.. lol
+
+    // COMMON FUNCTIONALITY
+    // Tag input functionality (common to all pages)
     $('#tag-input').on('input', function() {
         var inputVal = $(this).val();
         if (inputVal.length > 0) {
@@ -24,41 +30,74 @@ $(document).ready(function() {
         }
     });
 
-    // Tag suggestion click
+    // Tag suggestion click (common to all pages)
     $('#tag-list').on('click', 'li', function() {
         selectedTag = $(this).text().split(' (')[0];
         $('#tag-input').val(selectedTag);
         $('#tag-list').empty();
     });
 
-    // Apply tag button click
-    $('.apply-tag-btn').on('click', function() {
-        var tagName = $('#tag-input').val();
-        if (tagName) {
-            var beatmapId = $('#current_beatmap_id').val();
-            if (beatmapId) {
-                // Find the tag element in the Beatmap Info section
-                var $tagElement = $('#beatmap-applied-tags .tag[data-tag-name="' + tagName + '"]');
-                if ($tagElement.length === 0) {
-                    // If the tag doesn't exist yet, create a new tag element
-                    $tagElement = $('<span></span>')
-                        .addClass('tag tag-applied')
-                        .attr('data-tag-name', tagName)
-                        .attr('data-applied-by-user', true)
-                        .attr('data-beatmap-id', beatmapId)
-                        .text(`${tagName} (1)`)
-                        .appendTo('#beatmap-applied-tags');
+    // APPLY TAG FUNCTIONALITY FOR SEARCH RESULTS PAGE
+    if (isSearchResultsPage) {
+        // Apply tag button click specific to search_results
+        $('.apply-tag-btn').on('click', function() {
+            var tagName = $('#tag-input').val();
+            if (tagName) {
+                // Find the nearest beatmap-display container
+                var $beatmapDisplay = $(this).closest('.beatmap-display');
+                var beatmapId = $beatmapDisplay.find('.current_beatmap_id').data('beatmap-id');
+                if (beatmapId) {
+                    // Find the tag element in the Beatmap Info section
+                    var $tagElement = $beatmapDisplay.find('.applied-tags .tag[data-tag-name="' + tagName + '"]');
+                    if ($tagElement.length === 0) {
+                        // If the tag doesn't exist yet, create a new tag element
+                        $tagElement = $('<span></span>')
+                            .addClass('tag tag-applied')
+                            .attr('data-tag-name', tagName)
+                            .attr('data-applied-by-user', true)
+                            .attr('data-beatmap-id', beatmapId)
+                            .text(`${tagName} (1)`)
+                            .appendTo($beatmapDisplay.find('.applied-tags'));
+                    }
+                    modifyTag($tagElement, tagName, beatmapId, 'apply');
+                } else {
+                    alert('No beatmap selected.');
                 }
-                modifyTag($tagElement, tagName, beatmapId, 'apply');
             } else {
-                alert('No beatmap selected.');
+                alert('Please enter a tag name.');
             }
-        } else {
-            alert('Please enter a tag name.');
-        }
-    });
+        });
+    }
 
-    // Attach click event to all tags within .applied-tags using event delegation
+    // APPLY TAG FUNCTIONALITY FOR BEATMAP DETAIL PAGE
+    if (isBeatmapDetailPage) {
+        // Apply tag button click specific to beatmap_detail
+        $('.apply-tag-btn').on('click', function() {
+            var tagName = $('#tag-input').val();
+            if (tagName) {
+                var beatmapId = $('#current_beatmap_id').val();
+                if (beatmapId) {
+                    var $tagElement = $('#beatmap-applied-tags .tag[data-tag-name="' + tagName + '"]');
+                    if ($tagElement.length === 0) {
+                        $tagElement = $('<span></span>')
+                            .addClass('tag tag-applied')
+                            .attr('data-tag-name', tagName)
+                            .attr('data-applied-by-user', true)
+                            .attr('data-beatmap-id', beatmapId)
+                            .text(`${tagName} (1)`)
+                            .appendTo('#beatmap-applied-tags');
+                    }
+                    modifyTag($tagElement, tagName, beatmapId, 'apply');
+                } else {
+                    alert('No beatmap selected.');
+                }
+            } else {
+                alert('Please enter a tag name.');
+            }
+        });
+    }
+
+    // ATTACH CLICK EVENT TO ALL TAGS (COMMON)
     $(document).on('click', '.applied-tags .tag', function() {
         var $this = $(this);
         var tagName = $this.data('tag-name');
@@ -68,7 +107,7 @@ $(document).ready(function() {
         modifyTag($this, tagName, beatmapId, action);
     });
 
-    // Modify tag function
+    // MODIFY TAG FUNCTION (COMMON)
     function modifyTag($tagElement, tagName, beatmapId, action) {
         $.ajax({
             type: 'POST',
@@ -99,9 +138,11 @@ $(document).ready(function() {
                     $tagElement.text(`${tagName} (${applyCount})`);
                 }
 
-                // If this is the current beatmap in Beatmap Info Section, refresh tags to get accurate counts
-                if (beatmapId == $('#current_beatmap_id').val()) {
-                    refreshTags();
+                // Refresh tags based on the page
+                if (isSearchResultsPage) {
+                    refreshTags(beatmapId);
+                } else if (isBeatmapDetailPage) {
+                    refreshTags(beatmapId);
                 }
             },
             error: function(xhr, status, error) {
@@ -110,38 +151,68 @@ $(document).ready(function() {
         });
     }
 
-    // Refresh tags in the Beatmap Info section
-    function refreshTags() {
-        var beatmapId = $('#current_beatmap_id').val();
-        if (!beatmapId) return;
-
+    // REFRESH TAGS FUNCTION (COMMON)
+    function refreshTags(beatmapId) {
         $.ajax({
             type: 'GET',
             url: '/get_tags/',
             data: { 'beatmap_id': beatmapId },
             success: function(tags) {
-                // Remove existing tooltips to prevent orphaned descriptions
-                $('.tooltip, .description-author').remove();
-                
-                // Clear any pending tooltip timeouts
-                $('#beatmap-applied-tags').empty().append('Tags: ');
+                if (isSearchResultsPage) {
+                    // Find the specific beatmap's applied-tags container
+                    var $beatmapDisplay = $('#beatmap-' + beatmapId);
+                    var $appliedTags = $beatmapDisplay.find('.applied-tags');
 
-                tags.forEach(function(tag) {
-                    // Assign class based on whether the user has applied the tag
-                    var tagClass = tag.is_applied_by_user ? 'tag-applied' : 'tag-unapplied';
-                    
-                    // Append the tag with the appropriate class and data attributes
-                    $('#beatmap-applied-tags').append(`
-                        <span class="tag ${tagClass}" 
-                              data-tag-name="${tag.name}" 
-                              data-applied-by-user="${tag.is_applied_by_user}" 
-                              data-description="${tag.description || ''}"
-                              data-description-author="${tag.description_author || ''}"
-                              data-beatmap-id="${beatmapId}">
-                            ${tag.name} (${tag.apply_count})
-                        </span>
-                    `);
-                });
+                    // Remove existing tooltips to prevent orphaned descriptions
+                    $('.tooltip, .description-author').remove();
+
+                    // Clear the existing tags
+                    $appliedTags.empty().append('Tags: ');
+
+                    tags.forEach(function(tag) {
+                        // Assign class based on whether the user has applied the tag
+                        var tagClass = tag.is_applied_by_user ? 'tag-applied' : 'tag-unapplied';
+                        
+                        // Append the tag with the appropriate class and data attributes
+                        var tagHtml = `
+                            <span class="tag ${tagClass}" 
+                                  data-tag-name="${tag.name}" 
+                                  data-applied-by-user="${tag.is_applied_by_user}" 
+                                  data-description="${tag.description || ''}"
+                                  data-description-author="${tag.description_author || ''}"
+                                  data-beatmap-id="${beatmapId}">
+                                ${tag.name} (${tag.apply_count})
+                            </span>
+                        `;
+                        $appliedTags.append(tagHtml);
+                    });
+                } else if (isBeatmapDetailPage) {
+                    var $appliedTags = $('#beatmap-applied-tags');
+
+                    // Remove existing tooltips to prevent orphaned descriptions
+                    $('.tooltip, .description-author').remove();
+
+                    // Clear the existing tags
+                    $appliedTags.empty().append('Tags: ');
+
+                    tags.forEach(function(tag) {
+                        // Assign class based on whether the user has applied the tag
+                        var tagClass = tag.is_applied_by_user ? 'tag-applied' : 'tag-unapplied';
+                        
+                        // Append the tag with the appropriate class and data attributes
+                        var tagHtml = `
+                            <span class="tag ${tagClass}" 
+                                  data-tag-name="${tag.name}" 
+                                  data-applied-by-user="${tag.is_applied_by_user}" 
+                                  data-description="${tag.description || ''}"
+                                  data-description-author="${tag.description_author || ''}"
+                                  data-beatmap-id="${beatmapId}">
+                                ${tag.name} (${tag.apply_count})
+                            </span>
+                        `;
+                        $appliedTags.append(tagHtml);
+                    });
+                }
             },
             error: function(xhr, status, error) {
                 console.error('AJAX error:', status, error);
@@ -149,12 +220,8 @@ $(document).ready(function() {
         });
     }
 
-    // Initial call to load the tags
-    refreshTags();
-
-    // NAVBAR FUNCTIONALITY
+    // NAVBAR FUNCTIONALITY (COMMON)
     // For the nav bar
-    // Vanilla JavaScript to toggle the dropdown menu
     var profileMenuButton = document.getElementById('profileMenuButton');
     if (profileMenuButton) {
         profileMenuButton.onclick = function() {
@@ -163,7 +230,7 @@ $(document).ready(function() {
         };
     }
 
-    // Close the dropdown if the user clicks outside of it
+    // Close the dropdown if the user clicks outside of it (COMMON)
     window.onclick = function(event) {
         if (!event.target.matches('#profileMenuButton')) {
             var dropdowns = document.getElementsByClassName('dropdown-content');
@@ -176,7 +243,7 @@ $(document).ready(function() {
         }
     };
 
-    // COLLAPSIBLE PANELS FUNCTIONALITY
+    // COLLAPSIBLE PANELS FUNCTIONALITY (COMMON)
     // Initialize collapsible panels
     function initializeCollapsiblePanels() {
         var coll = document.getElementsByClassName('collapsible-description-header');
@@ -193,7 +260,7 @@ $(document).ready(function() {
     // Call the function to initialize collapsible panels
     initializeCollapsiblePanels();
 
-    // Initialize tooltips using event delegation
+    // TOOLTIP FUNCTIONALITY (COMMON)
     function initializeTooltips() {
         // Event delegation for mouseenter and mouseleave on .tag elements within .applied-tags and .tags-usage
         $(document).on('mouseenter', '.applied-tags .tag, .tags-usage .tag', function() {
@@ -300,7 +367,7 @@ $(document).ready(function() {
         });
     }
 
-    // Initialize tooltips on page load
+    // Initialize tooltips on page load (COMMON)
     initializeTooltips();
 
     // Function to load tags on page load
@@ -397,7 +464,7 @@ $(function() {
         $("#star-rating-min").text("0.0");
     }
 
-    // Optional: Update labels if user manually changes hidden inputs
+    // Update labels if user manually changes hidden inputs
     $("#star_min, #star_max").on('change', function() {
         var min = parseFloat($("#star_min").val()) || 0;
         var max = parseFloat($("#star_max").val()) || 15;

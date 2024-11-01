@@ -15,7 +15,7 @@
     <script src="https://echosu-s3.s3.eu-central-1.amazonaws.com/static/js/collapsible_descriptions.js"></script>
     <meta name="csrf-token" content="{{ csrf_token }}">
 </head>
-<body>
+<body class="page-search-results">
     {% include '_navbar.html' %}
     <div class="container">
 
@@ -172,6 +172,9 @@
                             <span>Status: {{ beatmap.status }}</span>
                             <span>Playcount: {{ beatmap.playcount }}</span>
                             <span>Favourites: {{ beatmap.favourite_count }}</span>
+                            {% if user.is_staff %}
+                            <span>[{{ beatmap.order }}]</span>
+                        {% endif %}
                         </div>
 
                         <a href="{% url 'beatmap_detail' beatmap_id=beatmap.beatmap_id %}" class="beatmap-link">View Beatmap</a>
@@ -182,12 +185,8 @@
                             <span class="no-link">Beatmap set not available on osu!</span>
                         {% endif %}
 
-                        <!-- Find Similar Maps Button with Star Rating Limits -->
-                        <a href="{% url 'search_results' %}?query={{ tags_query_string|urlencode }}&star_min={{ star_min }}&star_max={{ star_max }}" class="beatmap-link">
-                            Find Similar Maps
-                        </a>
                         <!-- Hidden input to store the current beatmap's ID for JavaScript -->
-                        <input type="hidden" class="current_beatmap_id" value="{{ beatmap.beatmap_id }}">
+                        <input type="hidden" class="current_beatmap_id" data-beatmap-id="{{ beatmap.beatmap_id }}" value="{{ beatmap.beatmap_id }}">
 
                         <div class="applied-tags"> 
                             Tags:

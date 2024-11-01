@@ -246,10 +246,15 @@ def beatmap_detail(request, beatmap_id):
     encapsulated_tags = [f'"{tag}"' if ' ' in tag else tag for tag in top_tags]
     tags_query_string = ' '.join(encapsulated_tags)
 
-    # Calculate star_min and star_max based on current beatmap's star rating
+    # Calculate star_min and star_max based on current beatmap's star rating for "Find Similar Maps" link
     current_star = beatmap.difficulty_rating
     star_min = max(0, current_star - 0.6)
     star_max = min(15, current_star + 0.6)
+
+    # Calculate bpm_min and bpm_max based on current beatmap's bpm for "Find Similar Maps" link
+    current_bpm = beatmap.bpm
+    bpm_min = (current_bpm - 10)
+    bpm_max = (current_bpm + 10)
 
     context = {
         'beatmap': beatmap,
@@ -257,6 +262,8 @@ def beatmap_detail(request, beatmap_id):
         'tags_query_string': tags_query_string,
         'star_min': star_min,
         'star_max': star_max,
+        'bpm_min': bpm_min,
+        'bpm_max': bpm_max,
     }
 
     return render(request, 'beatmap_detail.html', context)
@@ -957,8 +964,9 @@ def search_results(request):
     else:
         beatmaps = beatmaps.annotate(
             total_tag_apply_count=Count('tagapplication'),
-            weight=F('total_tag_apply_count') * 0.01  # Define weight
-        ).order_by('-weight')  # Order by weight descending
+            weight=F('total_tag_apply_count'),  # Define weight
+            order=F('favourite_count') * 0.5 + F('playcount') * 0.001
+        ).order_by('-order') # Order by fav and playcount when no search query is given
 
     # Pagination
     paginator = Paginator(beatmaps, 10)

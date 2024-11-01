@@ -10,6 +10,7 @@ body {
 
 .audio {
     width: 100%;
+    background-color: #f1ecee;
 }
 
 .tag {
@@ -64,7 +65,7 @@ body {
     max-width: 1200px;
     margin: 20px auto;
     padding: 20px;
-    background-color: #f1ecee;
+    background-color: #f1eeec;
     color: #1f1f1f;
     box-shadow: 0 4px 8px rgba(0,0,0,0.1);
     border-radius: 10px;

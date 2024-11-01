@@ -15,6 +15,35 @@
     <script src="https://echosu-s3.s3.eu-central-1.amazonaws.com/static/js/collapsible_descriptions.js"></script>
     <meta name="csrf-token" content="{{ csrf_token }}">
 </head>
+<style>
+    /* Base styles for the beatmap display */
+    .search-results .beatmap-display {
+        padding: 15px;
+        border-radius: 10px;
+    }
+    
+    /* Apply background color to odd-numbered results */
+    .search-results .beatmap-display:nth-child(even) {
+        background-color: #f1ecee;
+    }
+    
+    /* Apply background color to even-numbered results */
+    .search-results .beatmap-display:nth-child(odd) {
+        background-color: #E9DDE2;
+    }
+    /* Apply background color to audio in odd-numbered beatmap displays */
+    .search-results .beatmap-display:nth-child(even) .audio::-webkit-media-controls-panel {
+        background-color: #f1ecee; /* Light pink */
+    }
+    
+    /* Apply background color to audio in even-numbered beatmap displays */
+    .search-results .beatmap-display:nth-child(odd) .audio::-webkit-media-controls-panel {
+        background-color: #E9DDE2; /* Lighter pink */
+    }
+    .sorting-form {
+        padding-bottom: 5px;
+    }
+</style>
 <body class="page-search-results">
     {% include '_navbar.html' %}
     <div class="container">
@@ -168,11 +197,11 @@
             <div class="beatmap-display" id="beatmap-{{ beatmap.beatmap_id }}">
                 {% if beatmap.cover_image_url %}
                 <div class="beatmap-cover-container">
-                    <img class="beatmap-cover" src="{{ beatmap.cover_image_url }}" alt="Cover Image">
+                    <a href="{% url 'beatmap_detail' beatmap_id=beatmap.beatmap_id %}"><img class="beatmap-cover" src="{{ beatmap.cover_image_url }}" alt="Cover Image">
                     <!-- Audio Preview Section -->
                     {% if beatmap.beatmapset_id %}
                         <audio controls class="audio" >
-                            <source src="//b.ppy.sh/preview/{{ beatmap.beatmapset_id }}.mp3" type="audio/mpeg">
+                            <source src="//b.ppy.sh/preview/{{ beatmap.beatmapset_id }}.mp3" type="audio/mpeg"></a>
                         </audio>
                     {% else %}
                         <span>No preview available.</span>

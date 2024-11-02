@@ -524,9 +524,6 @@ def sanitize_description(description):
     # Step 6: Remove leading and trailing non-alphanumeric characters
     description = re.sub(r'^[^A-Za-z0-9]+', '', description)
     
-    # Step 7: Convert to lowercase
-    description = description.lower()
-    
     return description
 
 ALLOWED_DESCRIPTION_PATTERN = re.compile(r'^[A-Za-z0-9 .,!?\-_/\'"]{1,255}$')
@@ -670,9 +667,9 @@ def vote_description(request):
             new_vote = True
 
         # Check if the vote causes the description to be locked
-        if (tag.upvotes - tag.downvotes) >= 25:
+        if (tag.upvotes - tag.downvotes) >= 10:
             tag.is_locked = True
-        elif (tag.upvotes - tag.downvotes) < 25 and tag.is_locked:
+        elif (tag.upvotes - tag.downvotes) < 10 and tag.is_locked:
             tag.is_locked = False  # Optionally unlock if score drops below threshold
 
         tag.save()

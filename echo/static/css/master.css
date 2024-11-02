@@ -1306,6 +1306,10 @@ nav {
     }
     .vote-section {
         margin-top: 10px;
+        display: flex;
+        flex-direction: column;
+        align-items: center; /* Centers the elements horizontally */
+        gap: 5px; /* Adds space between elements */
     }
     .vote-section button {
         margin-right: 5px;
@@ -1316,6 +1320,11 @@ nav {
     .disabled-btn {
         background-color: #6c757d !important;
         cursor: not-allowed !important;
+    }
+
+    .narrow-column {
+        width: 30px; /* Adjust this to the minimum width needed for your content */
+        text-align: center; /* Center-align the header text */
     }
 
     /* centers the load more maps under recomendations in home*/

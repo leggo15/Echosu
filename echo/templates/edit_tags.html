@@ -39,6 +39,7 @@
                 <thead>
                     <tr>
                         <th>Tag Name</th>
+                        <th class="narrow-column">Votes</th>
                         <th>Description</th>
                         <th>Edited By</th>
                     </tr>
@@ -48,10 +49,13 @@
                     <tr>
                         <td>{{ tag.name }}</td>
                         <td>
-                            <textarea class="tag-description" data-tag-id="{{ tag.id }}" rows="2" cols="50" {% if tag.is_locked %}disabled{% endif %}>{{ tag.description }}</textarea>
                             {% if not tag.is_locked %}
                             <div class="vote-section" data-tag-id="{{ tag.id }}">
+
+                                {% if user.is_staff %}
                                 <span class="vote-count upvote-count">{{ tag.upvotes }}</span>
+                                {% endif %}
+
                                 <button class="upvote-btn generic_btn {% if tag.is_locked %}disabled-btn{% endif %}"
                                         {% if tag.is_locked or user_votes|get_item:tag.id %}
                                         disabled
@@ -59,7 +63,7 @@
                                         {% if user_votes|get_item:tag.id == 'upvote' %}
                                         style="background-color: green;"
                                         {% endif %}>
-                                    Upvote
+                                        ▲
                                 </button>
                                 <button class="downvote-btn generic_btn {% if tag.is_locked %}disabled-btn{% endif %}"
                                         {% if tag.is_locked or user_votes|get_item:tag.id %}
@@ -68,13 +72,20 @@
                                         {% if user_votes|get_item:tag.id == 'downvote' %}
                                         style="background-color: red;"
                                         {% endif %}>
-                                    Downvote
+                                        ▼
                                 </button>
+
+                                {% if user.is_staff %}
                                 <span class="vote-count downvote-count">{{ tag.downvotes }}</span>
+                                {% endif %}
                             </div>
                             {% else %}
                                 <p> Vote is locked. </p>
                             {% endif %}
+                        </td>
+                        
+                        <td>
+                            <textarea class="tag-description" data-tag-id="{{ tag.id }}" rows="2" cols="50" {% if tag.is_locked %}disabled{% endif %}>{{ tag.description }}</textarea>
                         </td>
                         <td>
                             {% if tag.description_author %}

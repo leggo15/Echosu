@@ -4,7 +4,7 @@
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Edit Tags</title>
+        <title>Edit Tags Descriptions</title>
         <link rel="stylesheet" href="https://echosu-s3.s3.eu-central-1.amazonaws.com/static/css/master.css">
         <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
         <script src="https://echosu-s3.s3.eu-central-1.amazonaws.com/static/js/master.js"></script>
@@ -27,12 +27,6 @@
                 <p>Here anyone can write a description for any tag. Then people can vote for these tags, where downvotes count negativly and upvotes count positivly, if a description reaches 10 total votes, it locks and can no longer be edited.</p>
             </div>
             <p>(Page is still under construction and far from final.)</p>
-            <!-- Display Django Messages -->
-            {% if messages %}
-                {% for message in messages %}
-                    <p class="message {{ message.tags }}">{{ message }}</p>
-                {% endfor %}
-            {% endif %}
             
             <!-- Search Form -->
             <form method="get" action="{% url 'edit_tags' %}" class="tag-search-form">

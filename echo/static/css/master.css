@@ -1231,8 +1231,20 @@ nav {
 
 /*EDIT TAG Page*/
             /* Styles for success and error messages */
+    .messages .success, .error {
+        color: white; /* Change text color to contrast the background */
+        background-color: #E9DDE2;
+        padding: 10px;
+        width: 100%;
+        position: fixed;
+        top: 0;
+        left: 0;
+        z-index: 1000; /* Ensures the message is above other content */
+        text-align: center;
+        font-weight: bold;
+    }
     .success {
-        color: lightgreen;
+        color: rgb(126, 192, 126);
     }
     .error {
         color: lightcoral;

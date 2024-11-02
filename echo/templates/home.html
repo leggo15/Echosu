@@ -86,7 +86,7 @@
                               data-applied-by-user="{{ tag_info.is_applied_by_user }}"
                               data-beatmap-id="{{ beatmap.beatmap_id }}"
                               {% if tag_info.tag__description %}
-                                  data-description="{{ tag_info.tag__description|escapejs }}"
+                                  data-description='"{{ tag_info.tag__description|escapejs }}"'
                                   data-description-author="{{ tag_info.tag__description_author|escapejs }}"
                               {% endif %}
                         >
@@ -117,7 +117,7 @@
                         data-tag-name="{{ tag.name }}" 
                         data-applied-by-user="{{ tag.is_applied_by_user }}"
                         {% if tag.description %}
-                            data-description="{{ tag.description|escapejs }}"
+                            data-description='"{{ tag.description|escapejs }}"'
                             data-description-author=" - {{ tag.description_author|escapejs }}"
                         {% endif %}
                     >

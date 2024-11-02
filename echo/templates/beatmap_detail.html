@@ -11,6 +11,7 @@
 </head>
 <body class="page-beatmap-detail">
     {% include '_navbar.html' %}    
+
     <div class="container">
         <a href="#" id="update-map-info-link" class="update-map">Update Map Info</a>
         {% if beatmap %}
@@ -82,7 +83,7 @@
                               data-applied-by-user="{{ tag_info.is_applied_by_user }}"
                               data-beatmap-id="{{ beatmap.beatmap_id }}"
                               {% if tag_info.tag__description %}
-                                  data-description="{{ tag_info.tag__description|escapejs }}"
+                                  data-description='"{{ tag_info.tag__description|escapejs }}"'
                                   data-description-author=" - {{ tag_info.tag__description_author|escapejs }}"
                               {% endif %}
                         >

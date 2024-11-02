@@ -150,7 +150,6 @@ $(document).ready(function() {
             }
         });
     }
-
     // REFRESH TAGS FUNCTION (COMMON)
     function refreshTags(beatmapId) {
         $.ajax({
@@ -172,20 +171,17 @@ $(document).ready(function() {
                     tags.forEach(function(tag) {
                         // Assign class based on whether the user has applied the tag
                         var tagClass = tag.is_applied_by_user ? 'tag-applied' : 'tag-unapplied';
-                        
-                        // Append the tag with the appropriate class and data attributes
-                        var tagHtml = `
-                            <span class="tag ${tagClass}" 
-                                  data-tag-name="${tag.name}" 
-                                  data-applied-by-user="${tag.is_applied_by_user}" 
-                                  data-description="${tag.description || ''}"
-                                  data-description-author="${tag.description_author || ''}"
-                                  data-beatmap-id="${beatmapId}">
-                                ${tag.name} (${tag.apply_count})
-                            </span>
-                        `;
-                        $appliedTags.append(tagHtml);
+
+                        var $tagSpan = $('<span>').addClass('tag ' + tagClass)
+                            .attr('data-tag-name', tag.name)
+                            .attr('data-applied-by-user', tag.is_applied_by_user)
+                            .attr('data-description', tag.description || '')
+                            .attr('data-description-author', tag.description_author || '')
+                            .attr('data-beatmap-id', beatmapId)
+                            .text(tag.name + ' (' + tag.apply_count + ')');
+                        $appliedTags.append($tagSpan);
                     });
+
                 } else if (isBeatmapDetailPage) {
                     var $appliedTags = $('#beatmap-applied-tags');
 
@@ -198,20 +194,17 @@ $(document).ready(function() {
                     tags.forEach(function(tag) {
                         // Assign class based on whether the user has applied the tag
                         var tagClass = tag.is_applied_by_user ? 'tag-applied' : 'tag-unapplied';
-                        
-                        // Append the tag with the appropriate class and data attributes
-                        var tagHtml = `
-                            <span class="tag ${tagClass}" 
-                                  data-tag-name="${tag.name}" 
-                                  data-applied-by-user="${tag.is_applied_by_user}" 
-                                  data-description="${tag.description || ''}"
-                                  data-description-author="${tag.description_author || ''}"
-                                  data-beatmap-id="${beatmapId}">
-                                ${tag.name} (${tag.apply_count})
-                            </span>
-                        `;
-                        $appliedTags.append(tagHtml);
+
+                        var $tagSpan = $('<span>').addClass('tag ' + tagClass)
+                            .attr('data-tag-name', tag.name)
+                            .attr('data-applied-by-user', tag.is_applied_by_user)
+                            .attr('data-description', tag.description || '')
+                            .attr('data-description-author', tag.description_author || '')
+                            .attr('data-beatmap-id', beatmapId)
+                            .text(tag.name + ' (' + tag.apply_count + ')');
+                        $appliedTags.append($tagSpan);
                     });
+
                 }
             },
             error: function(xhr, status, error) {
@@ -219,6 +212,7 @@ $(document).ready(function() {
             }
         });
     }
+
 
     // NAVBAR FUNCTIONALITY (COMMON)
     // For the nav bar

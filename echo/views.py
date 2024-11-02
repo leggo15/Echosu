@@ -341,10 +341,13 @@ def get_tags(request):
         apply_count=Count('user', distinct=True)
     ).order_by('-apply_count')
 
-    # Fetch all TagApplication instances for the current user and this beatmap
-    user_tag_names = set(TagApplication.objects.filter(
-        user=user, beatmap=beatmap
-    ).values_list('tag__name', flat=True))
+    if request.user.is_authenticated:
+        # Fetch all TagApplication instances for the current user and this beatmap
+        user_tag_names = set(TagApplication.objects.filter(
+            user=user, beatmap=beatmap
+        ).values_list('tag__name', flat=True))
+    else:
+        user_tag_names = []
 
     # Construct the list of dictionaries
     tags_with_counts_list = [
@@ -383,8 +386,6 @@ def sanitize_tag(tag):
     4. Normalize Unicode characters to NFC form.
     5. Remove non-printable and control characters.
     6. Prevent leading or trailing non-alphanumeric characters.
-    7. (Optional) Limit the number of words.
-    8. (Optional) Exclude reserved words or patterns.
     """
     # Step 1: Trim leading and trailing spaces
     tag = tag.strip()
@@ -407,21 +408,19 @@ def sanitize_tag(tag):
     tag = re.sub(r'^[^A-Za-z0-9]+', '', tag)
     # Remove trailing non-alphanumeric characters
     tag = re.sub(r'[^A-Za-z0-9]+$', '', tag)
-    
-    # Step 7: (Optional) Limit the number of words
-    # For example, limit to a maximum of 3 words
+
+    # limit to a maximum of 3 words
     max_words = 3
     words = tag.split()
     if len(words) > max_words:
         tag = ' '.join(words[:max_words])
     
-    # Step 8: (Optional) Exclude reserved words or patterns
-    # Define a set of reserved words
+    # Define a set of reserved words. might use this later
+    """
     reserved_words = {'admin', 'null', 'undefined'}
     if tag.lower() in reserved_words:
-        # Handle as needed, e.g., raise an exception or modify the tag
-        # For this example, we'll append a suffix to make it unique
         tag += '_tag'
+    """
     
     return tag
 
@@ -505,8 +504,35 @@ def count_word_differences(old_desc, new_desc):
     changes = sum(1 for word in diff if word.startswith('- ') or word.startswith('+ '))
     return changes
 
+
+def sanitize_description(description):
+    # Step 1: Trim leading and trailing spaces
+    description = description.strip()
+    
+    # Step 2: Collapse multiple consecutive spaces into one
+    description = ' '.join(description.split())
+    
+    # Step 3: Reduce consecutive identical characters to two
+    description = re.sub(r'(.)\1{2,}', r'\1\1', description)
+    
+    # Step 4: Unicode normalization to NFC form
+    description = unicodedata.normalize('NFC', description)
+    
+    # Step 5: Remove non-printable and control characters
+    description = re.sub(r'[^\x20-\x7E]', '', description)
+    
+    # Step 6: Remove leading and trailing non-alphanumeric characters
+    description = re.sub(r'^[^A-Za-z0-9]+', '', description)
+    
+    # Step 7: Convert to lowercase
+    description = description.lower()
+    
+    return description
+
+ALLOWED_DESCRIPTION_PATTERN = re.compile(r'^[A-Za-z0-9 .,!?\-_/\'"]{1,255}$')
+
 @login_required
-def edit_tags(request):
+def edit_tags(request):  # Description editing
     user = request.user
 
     # Check if the user has permission to edit tags
@@ -520,12 +546,32 @@ def edit_tags(request):
             new_description = request.POST.get('description', '').strip()
             
             if tag_id and new_description:
+                # Sanitize the description
+                processed_description = sanitize_description(new_description)
+                
+                # Validate Description Length
+                if len(processed_description) == 0:
+                    return JsonResponse({'status': 'error', 'message': 'Description cannot be empty.'}, status=400)
+                if len(processed_description) > 100:
+                    return JsonResponse({'status': 'error', 'message': 'Description cannot exceed 100 characters.'}, status=400)
+                
+                # Validate Allowed Characters using Regex
+                if not ALLOWED_DESCRIPTION_PATTERN.match(processed_description):
+                    error_message = 'Description contains invalid characters. Allowed characters are letters, numbers, spaces, and basic punctuation (. , ! ? - _ / \' ").'
+                    return JsonResponse({'status': 'error', 'message': error_message}, status=400)
+
+
+                # Check the entire description for profanity
+                if profanity.contains_profanity(processed_description):
+                    error_message = 'Description contains inappropriate language.'
+                    return JsonResponse({'status': 'error', 'message': error_message}, status=400)
+                
                 tag = get_object_or_404(Tag, id=tag_id)
                 old_description = tag.description
-                word_diff_count = count_word_differences(old_description, new_description)
+                word_diff_count = count_word_differences(old_description, processed_description)
                 
                 # Update the description
-                tag.description = new_description
+                tag.description = processed_description
                 
                 # Update description_author if at least 3 words have changed
                 if word_diff_count >= 3:
@@ -556,7 +602,7 @@ def edit_tags(request):
             tags = Tag.objects.all().order_by('name')
 
         # Paginate tags
-        paginator = Paginator(tags, 10)  # Show 25 tags per page
+        paginator = Paginator(tags, 20)  # Show 10 tags per page
         page_number = request.GET.get('page')
         page_obj = paginator.get_page(page_number)
 
@@ -647,8 +693,9 @@ def vote_description(request):
     else:
         return JsonResponse({'status': 'error', 'message': 'Invalid request.'}, status=400)
 
-
 ALLOWED_DESCRIPTION_PATTERN = re.compile(r'^[A-Za-z0-9 .,!?\-_/\'"]{1,255}$')
+
+from better_profanity import profanity
 
 @login_required
 def update_tag_description(request):
@@ -678,16 +725,10 @@ def update_tag_description(request):
             error_message = 'Description contains invalid characters. Allowed characters are letters, numbers, spaces, and basic punctuation (. , ! ? - _ / \' ").'
             return JsonResponse({'status': 'error', 'message': error_message}, status=400)
 
-        # Check each word in the description for profanity
-        words = new_description.split()  # Split description into words
-        for word in words:
-            if profanity.contains_profanity(word):  # Check each word
-                return JsonResponse({'status': 'error', 'message': 'Description contains inappropriate language.'}, status=400)
-            
-        for i in range(len(new_description) - 3):
-            substring = new_description[i:i+4]  # Check substrings of length 4
-            if profanity.contains_profanity(substring):
-                return JsonResponse({'status': 'error', 'message': 'Description contains inappropriate language.'}, status=400)
+        # Check the entire description for profanity
+        if profanity.contains_profanity(new_description):
+            error_message = 'Tag contains inappropriate language.'
+            return JsonResponse({'status': 'error', 'message': error_message}, status=400)
 
         # Update Description
         try:
@@ -700,6 +741,7 @@ def update_tag_description(request):
             return JsonResponse({'status': 'error', 'message': 'Internal server error.'}, status=500)
     else:
         return JsonResponse({'status': 'error', 'message': 'Invalid request.'}, status=400)
+
 
 
 # ------------------------------------------------------------------------------ #

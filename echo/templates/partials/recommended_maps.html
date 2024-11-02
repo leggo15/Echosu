@@ -28,6 +28,8 @@
                 <span>OD: {{ map.accuracy }}</span>
                 <span>AR: {{ map.ar }}</span>
                 <span>SR: {{ map.difficulty_rating }}</span>
+                <span>Mode: {{ beatmap.mode }}</span>
+                <span>Status: {{ beatmap.status }}</span>
             </div>
             <div class="applied-tags">
                 Tags:
@@ -38,7 +40,7 @@
                         data-applied-by-user="{{ tag_info.is_applied_by_user }}"
                         data-beatmap-id="{{ map.beatmap_id }}"
                         {% if tag_info.tag.description %}
-                            data-description="{{ tag_info.tag.description|escapejs }}"
+                            data-description='"{{ tag_info.tag.description|escapejs }}"'
                             data-description-author=" - {{ tag_info.tag.description_author|escapejs }}"
                         {% endif %}
                     >

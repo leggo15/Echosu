@@ -391,22 +391,26 @@ nav {
     margin-top: 10px;
 }
 
+.link {
+    margin-left: 5px;
+    font-size: 12px;
+    float: right;
+}
+
 .beatmap-link:hover {
     background-color: #8ec0f5;
 }
  /* for update map info*/
-.update-map{
+.mini-map-links{
     display: inline-block;
     background-color: #649bd6;
     color: #ffffff;
     padding: 5px 7px;
     border-radius: 3px;
     text-decoration: none;
-    margin-top: 10px;
-    font-size: 12px;
-    float: right;
+
 }
-.update-map:hover {
+.mini-map-links:hover {
     background-color: #8ec0f5;
 }
 

@@ -13,7 +13,10 @@
     {% include '_navbar.html' %}    
 
     <div class="container">
-        <a href="#" id="update-map-info-link" class="update-map">Update Map Info</a>
+        <span class="link"><a href="#" id="update-map-info-link" class="mini-map-links">Update Map Info</a></span>
+        <span class="link"><a href="https://osu.ppy.sh/beatmapsets/{{ beatmap.beatmapset_id }}/download" class="mini-map-links">Download</a></span>
+        <span class="link"><a href="osu://b/{{ beatmap.beatmapset_id }}"class="mini-map-links">Direct</a></span>
+        <span class="link"><a href="https://beatconnect.io/b/{{ beatmap.beatmapset_id }}" class="mini-map-links">beatconnect</a></span>
         {% if beatmap %}
         <div class="beatmap-display">
             {% if beatmap.cover_image_url %}

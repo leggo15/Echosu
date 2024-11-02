@@ -906,7 +906,7 @@ def search_results(request):
                 )
             ).annotate(
                 # Define weight with higher priority for exact matches
-                tag_weight=F('exact_match_count') * 1.0 + F('tag_match_count') * 0.5 + F('tag_apply_count') * 0.01,
+                tag_weight=F('exact_match_count') * F('exact_match_count') + F('tag_match_count') * 0.5 + F('tag_apply_count') * 0.01,
                 popularity=F('favourite_count') * 0.5 + F('playcount') * 0.001,
             ).order_by('-tag_weight')  # Order by weight descending
         elif sort_method == 'popularity':

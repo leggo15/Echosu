@@ -1518,7 +1518,7 @@ def home(request):
             .filter(beatmap=beatmap)
             .values('tag__id', 'tag__name', 'tag__description', 'tag__description_author')
             .annotate(apply_count=Count('id'))
-        )
+        ).order_by('-apply_count')
 
         # Get the set of tag IDs that the current user has applied
         if request.user.is_authenticated:

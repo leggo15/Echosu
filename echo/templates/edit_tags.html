@@ -169,7 +169,7 @@
                         if (data.status === 'success') {
                             showMessage(`${data.message} Author: ${data.description_author}`, 'success');
                             // Update the author display in the table
-                            const authorCell = field.closest('tr').querySelector('td:nth-child(3)');
+                            const authorCell = field.closest('tr').querySelector('td:nth-child(4)');
                             authorCell.textContent = data.description_author;
                             // Reset vote counts in the UI
                             const voteSection = field.closest('td').querySelector('.vote-section');

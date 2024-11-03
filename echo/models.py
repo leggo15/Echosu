@@ -2,12 +2,19 @@ from django.db import models
 from django.conf import settings
 from django.db.models import Count
 
+class Genre(models.Model):
+    name = models.CharField(max_length=255, unique=True)
+
+    def __str__(self):
+        return self.name
+
 class Beatmap(models.Model):
     beatmap_id = models.CharField(max_length=255, unique=True, db_index=True)
     beatmapset_id = models.CharField(max_length=100, blank=True, null=True)
     title = models.CharField(max_length=1000, null=False, blank=True)
     version = models.CharField(max_length=1000, null=False, blank=True)
     artist = models.CharField(max_length=1000, null=False, blank=True)
+    genres = models.ManyToManyField(Genre, blank=True)
     creator = models.CharField(max_length=255, null=False, blank=True)
     cover_image_url = models.URLField(max_length=1000, null=True, blank=True)
     total_length = models.IntegerField(null=True, blank=True)
@@ -28,9 +35,10 @@ class Beatmap(models.Model):
         ).order_by('-num_users')
         return tags
 
-
     def __str__(self):
         return self.beatmap_id or "Unknown id"
+
+
 
 def get_default_user():
     # Try to get the user with the username 'The Emperor'

@@ -270,7 +270,7 @@ def beatmap_detail(request, beatmap_id):
 
 
 from django.views.decorators.http import require_POST
-
+from .fetch_genre import fetch_genres, get_or_create_genres
 
 @require_POST
 def update_beatmap_info(request):
@@ -284,14 +284,20 @@ def update_beatmap_info(request):
         3: "Qualified",
         4: "Loved"
     }
+    
     try:
-        # Fetch beatmap data from the osu API
-        beatmap_data = api.beatmap(beatmap_id)
+        # Fetch beatmap data from the osu! API
+        beatmap_data = api.beatmap(beatmap_id)  # Ensure 'api' is imported correctly
         if not beatmap_data:
-            return JsonResponse({'error': 'Beatmap not found in osu API.'}, status=404)
+            logger.warning(f"Beatmap ID {beatmap_id} not found in osu! API.")
+            return JsonResponse({'error': 'Beatmap not found in osu! API.'}, status=404)
 
         # Get or create the beatmap object
         beatmap, created = Beatmap.objects.get_or_create(beatmap_id=beatmap_id)
+        if created:
+            logger.info(f"Created new Beatmap with ID: {beatmap_id}")
+        else:
+            logger.info(f"Updating existing Beatmap with ID: {beatmap_id}")
 
         # Update fields with latest data
         beatmap.title = beatmap_data._beatmapset.title
@@ -309,14 +315,30 @@ def update_beatmap_info(request):
         beatmap.playcount = beatmap_data.playcount
         beatmap.favourite_count = getattr(beatmap_data._beatmapset, 'favourite_count', 0)
 
-
+        # Map the game mode to the desired string representation
         api_mode_value = getattr(beatmap_data, 'mode', beatmap.mode)
         beatmap.mode = GAME_MODE_MAPPING.get(str(api_mode_value), 'unknown')
+
+        # Save the updated beatmap to the database
         beatmap.save()
+        logger.info(f"Saved Beatmap with ID: {beatmap_id}")
+
+        # Fetch and associate genres
+        genres = fetch_genres(beatmap.artist, beatmap.title)
+        logger.debug(f"Fetched genres for Beatmap '{beatmap_id}': {genres}")
+
+        if genres:
+            genre_objects = get_or_create_genres(genres)
+            beatmap.genres.set(genre_objects)  # Replace existing genres with new ones
+            logger.info(f"Associated genres {genres} with Beatmap '{beatmap_id}'.")
+        else:
+            logger.info(f"No genres found for Beatmap '{beatmap_id}'. Clearing existing genres.")
+            beatmap.genres.clear()  # Optionally clear existing genres if none are fetched
 
         return JsonResponse({'message': 'Beatmap info updated successfully.'})
 
     except Exception as e:
+        logger.error(f"Error updating Beatmap '{beatmap_id}': {e}")
         return JsonResponse({'error': str(e)}, status=500)
 
 
@@ -1289,6 +1311,37 @@ def get_recommendations(user=None, limit=5, offset=0):
     return recommended_maps
 
 
+def annotate_beatmaps_with_tags(beatmaps, user):
+    beatmap_ids = beatmaps.values_list('id', flat=True)
+    # Fetch all TagApplications related to the beatmaps
+    tag_apps = TagApplication.objects.filter(beatmap_id__in=beatmap_ids).select_related('tag')
+    # Mapping from beatmap_id to a dictionary of tags and counts
+    beatmap_tag_counts = defaultdict(lambda: defaultdict(int))
+    user_applied_tags = defaultdict(set)
+
+    for tag_app in tag_apps:
+        beatmap_id = tag_app.beatmap_id
+        tag = tag_app.tag
+        beatmap_tag_counts[beatmap_id][tag] += 1
+        if user and user.is_authenticated and tag_app.user_id == user.id:
+            user_applied_tags[beatmap_id].add(tag)
+
+    # Attach the tags and counts to the beatmaps
+    for beatmap in beatmaps:
+        tags_with_counts = []
+        beatmap_tags = beatmap_tag_counts.get(beatmap.id, {})
+        for tag, count in beatmap_tags.items():
+            is_applied_by_user = tag in user_applied_tags.get(beatmap.id, set())
+            tags_with_counts.append({
+                'tag': tag,
+                'apply_count': count,
+                'is_applied_by_user': is_applied_by_user,
+            })
+        beatmap.tags_with_counts = sorted(tags_with_counts, key=lambda x: -x['apply_count'])
+
+    return beatmaps
+
+
 def load_more_recommendations(request):
     # Check if the request is an AJAX request
     if request.headers.get('x-requested-with') == 'XMLHttpRequest':
@@ -1306,38 +1359,6 @@ def load_more_recommendations(request):
         return JsonResponse({'error': 'Invalid request'}, status=400)
 
 
-
-def annotate_beatmaps_with_tags(beatmaps, user):
-    beatmap_ids = beatmaps.values_list('beatmap_id', flat=True)
-    # Fetch all TagApplications related to the beatmaps using beatmap__beatmap_id
-    tag_apps = TagApplication.objects.filter(beatmap__beatmap_id__in=beatmap_ids).select_related('tag')
-    # Mapping from beatmap.beatmap_id to a dictionary of tags and counts
-    beatmap_tag_counts = defaultdict(lambda: defaultdict(int))
-    user_applied_tags = defaultdict(set)
-
-    for tag_app in tag_apps:
-        beatmap_id = tag_app.beatmap.beatmap_id  # Use osu! beatmap ID
-        tag = tag_app.tag
-        beatmap_tag_counts[beatmap_id][tag] += 1
-        if user and user.is_authenticated and tag_app.user_id == user.id:
-            user_applied_tags[beatmap_id].add(tag)
-
-    # Attach the tags and counts to the beatmaps
-    for beatmap in beatmaps:
-        tags_with_counts = []
-        beatmap_tags = beatmap_tag_counts.get(beatmap.beatmap_id, {})
-        for tag, count in beatmap_tags.items():
-            is_applied_by_user = tag in user_applied_tags.get(beatmap.beatmap_id, set())
-            tags_with_counts.append({
-                'tag': tag,
-                'apply_count': count,
-                'is_applied_by_user': is_applied_by_user,
-            })
-        beatmap.tags_with_counts = sorted(tags_with_counts, key=lambda x: -x['apply_count'])
-
-    return beatmaps
-
-
 def recommended_maps_view(request):
     user = request.user
     recommended_maps = get_recommendations(user=user)
@@ -1350,6 +1371,9 @@ def recommended_maps_view(request):
 
 
 import re
+from .models import Genre
+from .fetch_genre import fetch_genres, get_or_create_genres 
+
 
 def home(request):
     user = request.user if request.user.is_authenticated else None
@@ -1373,6 +1397,7 @@ def home(request):
                 match = re.search(r'(\d+)$', beatmap_input)
                 if match:
                     beatmap_id_request = match.group(1)  # Get the beatmap ID as a string
+                    print(f"Processing beatmap ID: {beatmap_id_request}")
 
                     # Attempt to fetch beatmap data from the osu! API
                     beatmap_data = api.beatmap(beatmap_id_request)
@@ -1382,6 +1407,7 @@ def home(request):
 
                     # Get or create the beatmap object in the database
                     beatmap, created = Beatmap.objects.get_or_create(beatmap_id=beatmap_id_request)
+                    print(f"Beatmap created: {created}")
 
                     # Check if beatmap data needs to be updated
                     if created or any(
@@ -1432,9 +1458,20 @@ def home(request):
                         api_mode_value = getattr(beatmap_data, 'mode', beatmap.mode)
                         beatmap.mode = GAME_MODE_MAPPING.get(str(api_mode_value), 'unknown')
 
-
                         # Save the updated beatmap to the database
                         beatmap.save()
+                        print("Beatmap attributes updated and saved.")
+
+                        # Fetch and associate genres
+                        # Assuming 'title' is the song name
+                        genres = fetch_genres(beatmap.artist, beatmap.title)
+                        print(f"Fetched genres: {genres}")
+                        if genres:
+                            genre_objects = get_or_create_genres(genres)
+                            beatmap.genres.set(genre_objects)  # Associate genres with the beatmap
+                            print(f"Associated genres {genres} with beatmap '{beatmap_id_request}'.")
+                        else:
+                            print(f"No genres found for beatmap '{beatmap_id_request}'.")
 
                     # Add the beatmap to the context to display its information
                     context['beatmap'] = beatmap
@@ -1443,6 +1480,8 @@ def home(request):
 
             except Exception as e:
                 context['error'] = f'Error: {str(e)}'
+                logger.error(f"Error processing beatmap input '{beatmap_input}': {e}")
+                print(f"Error: {str(e)}")
 
     else:
         beatmap_id = request.GET.get('beatmap_id')
@@ -1477,9 +1516,6 @@ def home(request):
         context['beatmap_tags_with_counts'] = beatmap_tags_with_counts
 
     return render(request, 'home.html', context)
-
-
-
 
 
 # ------------------------------------------------------------------------ #

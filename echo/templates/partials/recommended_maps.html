@@ -19,6 +19,18 @@
                 <h2 class="title">{{ map.title }} - [{{ map.version }}] | {{ map.beatmap_id }}</h2>
                 <h3 class="artist">Artist: {{ map.artist }}</h3>
                 <h3 class="mapper">Mapper: {{ map.creator }}</h3>
+
+                <!-- Genres Display -->
+                <i class="genres">Genres:
+                    {% if beatmap.genres.all %}
+                        {% for genre in beatmap.genres.all %}
+                            {{ genre.name }}{% if not forloop.last %}, {% endif %}
+                        {% endfor %}
+                    {% else %}
+                        <span>No genres associated.</span>
+                    {% endif %}
+                </i>
+                
             </div>
             <div class="beatmap-stats">
                 <span class="beatmap-length">Length: {{ map.total_length }}</span>
@@ -28,8 +40,8 @@
                 <span>OD: {{ map.accuracy }}</span>
                 <span>AR: {{ map.ar }}</span>
                 <span>SR: {{ map.difficulty_rating }}</span>
-                <span>Mode: {{ beatmap.mode }}</span>
-                <span>Status: {{ beatmap.status }}</span>
+                <span>Mode: {{ map.mode }}</span>
+                <span>Status: {{ map.status }}</span>
             </div>
             <div class="applied-tags">
                 Tags:
@@ -40,7 +52,7 @@
                         data-applied-by-user="{{ tag_info.is_applied_by_user }}"
                         data-beatmap-id="{{ map.beatmap_id }}"
                         {% if tag_info.tag.description %}
-                            data-description='"{{ tag_info.tag.description|escapejs }}"'
+                            data-description=' "{{ tag_info.tag.description|escapejs }}" '
                             data-description-author=" - {{ tag_info.tag.description_author|escapejs }}"
                         {% endif %}
                     >

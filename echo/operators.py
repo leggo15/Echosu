@@ -101,6 +101,7 @@ def build_exclusion_q(term):
     # Handle exclusion terms
     return Q(
         Q(tags__name__iexact=term) |
+        Q(genres__name__iexact=term) |
         Q(title__icontains=term) |
         Q(creator__icontains=term) |
         Q(artist__icontains=term) |
@@ -113,6 +114,7 @@ def build_inclusion_q(term):
     # Handle inclusion terms
     return Q(
         Q(tags__name__iexact=term) |
+        Q(genres__name__iexact=term) |
         Q(title__icontains=term) |
         Q(creator__icontains=term) |
         Q(artist__icontains=term) |

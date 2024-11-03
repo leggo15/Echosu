@@ -38,6 +38,18 @@
                     <h2 class="title">{{ beatmap.title }} - [{{ beatmap.version }}] | {{ beatmap.beatmap_id }}</h2>
                     <h3 class="artist">Artist: {{ beatmap.artist }}</h3>
                     <h3 class="mapper">Mapper: {{ beatmap.creator }}</h3>
+
+                    <!-- Genres Display -->
+                    <i class="genres">Genres:
+                        {% if beatmap.genres.all %}
+                            {% for genre in beatmap.genres.all %}
+                                {{ genre.name }}{% if not forloop.last %}, {% endif %}
+                            {% endfor %}
+                        {% else %}
+                            <span>No genres associated.</span>
+                        {% endif %}
+                    </i>
+                    
                 </div>
                 <div class="beatmap-stats">
                     <span class="beatmap-length">Length: {{ beatmap.total_length }}</span>
@@ -70,11 +82,14 @@
 
         <!-- Hidden field to store the current beatmap's ID -->
         <input type="hidden" id="current_beatmap_id" data-beatmap-id="{{ beatmap.beatmap_id }}" value="{{ beatmap.beatmap_id }}">
-
+        {% if user.is_authenticated %}
         <!-- Tag input field and suggestions list -->
         <button type="button" class="apply-tag-btn">Apply Tag</button>
         <input type="text" id="tag-input" placeholder="Enter tag"> 
         <ul id="tag-list"></ul>
+        {% else %}
+        <span>Log in to apply or create tags.</span>
+        {% endif %}
 
         <div class="applied-tags" id="beatmap-applied-tags">
             Tags:
@@ -86,7 +101,7 @@
                               data-applied-by-user="{{ tag_info.is_applied_by_user }}"
                               data-beatmap-id="{{ beatmap.beatmap_id }}"
                               {% if tag_info.tag__description %}
-                                  data-description='"{{ tag_info.tag__description|escapejs }}"'
+                                  data-description=' "{{ tag_info.tag__description|escapejs }}" '
                                   data-description-author=" - {{ tag_info.tag__description_author|escapejs }}"
                               {% endif %}
                         >

@@ -217,6 +217,18 @@
                             <h2 class="title">{{ beatmap.title }} - [{{ beatmap.version }}]</h2>
                             <h3 class="artist">Artist: {{ beatmap.artist }}</h3>
                             <h3 class="mapper">Mapper: {{ beatmap.creator }}</h3>
+
+                            <!-- Genres Display -->
+                            <i class="genres">Genres:
+                                {% if beatmap.genres.all %}
+                                    {% for genre in beatmap.genres.all %}
+                                        {{ genre.name }}{% if not forloop.last %}, {% endif %}
+                                    {% endfor %}
+                                {% else %}
+                                    <span>No genres associated.</span>
+                                {% endif %}
+                            </i>
+
                         </div>
                         <div class="beatmap-stats">
                             <span class="beatmap-length">Length: {{ beatmap.total_length }}</span>
@@ -266,7 +278,7 @@
                                     </span>
                                 {% endfor %}
                             {% else %}
-                                <span>No genres associated.</span>
+                                <span>No tags associated.</span>
                             {% endif %}
                         </div>
 

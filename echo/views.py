@@ -925,7 +925,7 @@ def search_results(request):
                 )
             ).annotate(
                 # Define weight with higher priority for exact matches
-                tag_weight=F('exact_match_count') * 1.0 + F('tag_match_count') * 0.5 + F('tag_apply_count') * 0.0,
+                tag_weight=F('exact_match_count') * F('exact_match_count') + F('tag_match_count') * 0.5 + F('tag_apply_count') * 0.0,
                 popularity=F('favourite_count') * 0.5 + F('playcount') * 0.001,
             ).order_by('-popularity')  # Order by popularity descending
         else:
@@ -1053,7 +1053,7 @@ def search_results(request):
     page_obj = paginator.get_page(page_number)
 
     # Annotate beatmaps with tag details
-    annotate_beatmaps_with_tags(page_obj.object_list, request.user)
+    annotate_search_results_with_tags(page_obj.object_list, request.user)
 
     context = {
         'beatmaps': page_obj,
@@ -1073,7 +1073,7 @@ def search_results(request):
 
 from collections import defaultdict
 
-def annotate_beatmaps_with_tags(beatmaps, user):
+def annotate_search_results_with_tags(beatmaps, user):
     beatmap_ids = beatmaps.values_list('id', flat=True)
     # Fetch all TagApplications related to the beatmaps
     tag_apps = TagApplication.objects.filter(beatmap_id__in=beatmap_ids).select_related('tag')
@@ -1308,15 +1308,15 @@ def load_more_recommendations(request):
 
 
 def annotate_beatmaps_with_tags(beatmaps, user):
-    beatmap_ids = beatmaps.values_list('id', flat=True)
-    # Fetch all TagApplications related to the beatmaps
-    tag_apps = TagApplication.objects.filter(beatmap_id__in=beatmap_ids).select_related('tag')
-    # Mapping from beatmap_id to a dictionary of tags and counts
+    beatmap_ids = beatmaps.values_list('beatmap_id', flat=True)
+    # Fetch all TagApplications related to the beatmaps using beatmap__beatmap_id
+    tag_apps = TagApplication.objects.filter(beatmap__beatmap_id__in=beatmap_ids).select_related('tag')
+    # Mapping from beatmap.beatmap_id to a dictionary of tags and counts
     beatmap_tag_counts = defaultdict(lambda: defaultdict(int))
     user_applied_tags = defaultdict(set)
 
     for tag_app in tag_apps:
-        beatmap_id = tag_app.beatmap_id
+        beatmap_id = tag_app.beatmap.beatmap_id  # Use osu! beatmap ID
         tag = tag_app.tag
         beatmap_tag_counts[beatmap_id][tag] += 1
         if user and user.is_authenticated and tag_app.user_id == user.id:
@@ -1325,9 +1325,9 @@ def annotate_beatmaps_with_tags(beatmaps, user):
     # Attach the tags and counts to the beatmaps
     for beatmap in beatmaps:
         tags_with_counts = []
-        beatmap_tags = beatmap_tag_counts.get(beatmap.id, {})
+        beatmap_tags = beatmap_tag_counts.get(beatmap.beatmap_id, {})
         for tag, count in beatmap_tags.items():
-            is_applied_by_user = tag in user_applied_tags.get(beatmap.id, set())
+            is_applied_by_user = tag in user_applied_tags.get(beatmap.beatmap_id, set())
             tags_with_counts.append({
                 'tag': tag,
                 'apply_count': count,
@@ -1336,6 +1336,7 @@ def annotate_beatmaps_with_tags(beatmaps, user):
         beatmap.tags_with_counts = sorted(tags_with_counts, key=lambda x: -x['apply_count'])
 
     return beatmaps
+
 
 def recommended_maps_view(request):
     user = request.user

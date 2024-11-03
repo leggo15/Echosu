@@ -217,17 +217,36 @@
                             <h2 class="title">{{ beatmap.title }} - [{{ beatmap.version }}]</h2>
                             <h3 class="artist">Artist: {{ beatmap.artist }}</h3>
                             <h3 class="mapper">Mapper: {{ beatmap.creator }}</h3>
-
+                            
                             <!-- Genres Display -->
-                            <i class="genres">Genres:
-                                {% if beatmap.genres.all %}
-                                    {% for genre in beatmap.genres.all %}
-                                        {{ genre.name }}{% if not forloop.last %}, {% endif %}
-                                    {% endfor %}
+                            {% with genres_list=beatmap.genres.all %}
+                                {% if genres_list %}
+                                    {% if genres_list|length > 10 %}
+                                        <!-- Collapsible Genres Section -->
+                                        <h4 class="genres" aria-expanded="false" aria-controls="genres-content-{{ beatmap.beatmap_id }}" role="button" tabindex="0">
+                                            Genres
+                                            <span class="arrow">&#9660;</span> <!-- Down arrow -->
+                                        </h4>
+                                        <div class="genres" id="genres-content-{{ beatmap.beatmap_id }}" aria-hidden="true" style="display: none;">
+                                            <i class="genres">
+                                                {% for genre in genres_list %}
+                                                    {{ genre.name }}{% if not forloop.last %}, {% endif %}
+                                                {% endfor %}
+                                            </i>
+                                        </div>
+                                    {% else %}
+                                        <!-- Display genres normally if count <= 5 -->
+                                        <i class="genres">
+                                            Genres:
+                                            {% for genre in genres_list %}
+                                                {{ genre.name }}{% if not forloop.last %}, {% endif %}
+                                            {% endfor %}
+                                        </i>
+                                    {% endif %}
                                 {% else %}
-                                    <span>No genres associated.</span>
+                                <i class="genres">No genres associated.</i>
                                 {% endif %}
-                            </i>
+                            {% endwith %}
 
                         </div>
                         <div class="beatmap-stats">
@@ -308,5 +327,28 @@
             {% endif %}
         </span>
     </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            // Handle collapsible descriptions
+            var collapsibleHeaders = document.querySelectorAll('.genres');
+            collapsibleHeaders.forEach(function (header) {
+                header.addEventListener('click', function () {
+                    var expanded = this.getAttribute('aria-expanded') === 'true';
+                    this.setAttribute('aria-expanded', !expanded);
+                    var contentId = this.getAttribute('aria-controls');
+                    var content = document.getElementById(contentId);
+                    if (content) {
+                        content.setAttribute('aria-hidden', expanded);
+                        content.style.display = expanded ? 'none' : 'block';
+                        var arrow = this.querySelector('.arrow');
+                        if (arrow) {
+                            arrow.innerHTML = expanded ? '&#9660;' : '&#9650;'; // Toggle arrow direction
+                        }
+                    }
+                });
+            });
+        });
+    </script>
 </body>
 </html>

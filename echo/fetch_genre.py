@@ -17,10 +17,33 @@ HEADERS = {
 }
 
 # Rate limiting: one request per second
+import requests
+import time
+import urllib.parse
+import logging
+
+from .models import Genre, Beatmap
+
+# Configure logging
+logger = logging.getLogger(__name__)
+
+# === MusicBrainz Configuration ===
+MB_BASE_URL = "https://musicbrainz.org/ws/2/"
+
+# Headers/User-Agent for MusicBrainz
+MB_HEADERS = {
+    "User-Agent": "echosu/0.9 (Richardhansen.no@outlook.com)"
+}
+
+# === Last.fm Configuration ===
+LASTFM_API_KEY = 'f802dffb47a4ee8ffb0ae803a000dcdf'  # Replace with your Last.fm API key
+LASTFM_BASE_URL = "http://ws.audioscrobbler.com/2.0/"
+
+# Rate limiting: one request per second
 RATE_LIMIT = 1  # seconds
 last_request_time = 0
 
-def rate_limited_request(url, params=None):
+def rate_limited_request(url, params=None, headers=None):
     """
     Perform a GET request to the specified URL with rate limiting.
     """
@@ -29,7 +52,7 @@ def rate_limited_request(url, params=None):
     if elapsed < RATE_LIMIT:
         time.sleep(RATE_LIMIT - elapsed)
     try:
-        response = requests.get(url, headers=HEADERS, params=params)
+        response = requests.get(url, headers=headers, params=params)
         last_request_time = time.time()
         response.raise_for_status()
         return response.json()
@@ -37,12 +60,74 @@ def rate_limited_request(url, params=None):
         logger.error(f"HTTP Request failed: {e} for URL: {url} with params: {params}")
         return None
 
+# === Last.fm Functions ===
+
+def fetch_genres_lastfm(artist, song):
+    """
+    Fetch genres (tags) for a given artist and song using the Last.fm API.
+    """
+    # First, try to get tags for the track
+    track_tags = get_track_tags_lastfm(artist, song)
+    if track_tags:
+        print(f"Found tags for track '{song}' by '{artist}': {track_tags}")
+        return track_tags
+
+    # If no track tags, try to get tags for the artist
+    artist_tags = get_artist_tags_lastfm(artist)
+    if artist_tags:
+        print(f"Found tags for artist '{artist}': {artist_tags}")
+        return artist_tags
+
+    # If no tags found, return empty list
+    print(f"No tags found for '{song}' by '{artist}' using Last.fm.")
+    return []
+
+def get_track_tags_lastfm(artist, track):
+    """
+    Get top tags for a track using Last.fm API.
+    """
+    print(f"Fetching tags for track '{track}' by artist '{artist}' from Last.fm.")
+    params = {
+        'method': 'track.getTopTags',
+        'artist': artist,
+        'track': track,
+        'api_key': LASTFM_API_KEY,
+        'format': 'json'
+    }
+    data = rate_limited_request(LASTFM_BASE_URL, params=params)
+    if data and 'toptags' in data and 'tag' in data['toptags']:
+        tags = [tag['name'] for tag in data['toptags']['tag']]
+        return tags
+    else:
+        print(f"No tags found for track '{track}' by '{artist}' on Last.fm.")
+        return []
+
+def get_artist_tags_lastfm(artist):
+    """
+    Get top tags for an artist using Last.fm API.
+    """
+    print(f"Fetching tags for artist '{artist}' from Last.fm.")
+    params = {
+        'method': 'artist.getTopTags',
+        'artist': artist,
+        'api_key': LASTFM_API_KEY,
+        'format': 'json'
+    }
+    data = rate_limited_request(LASTFM_BASE_URL, params=params)
+    if data and 'toptags' in data and 'tag' in data['toptags']:
+        tags = [tag['name'] for tag in data['toptags']['tag']]
+        return tags
+    else:
+        print(f"No tags found for artist '{artist}' on Last.fm.")
+        return []
+
+
 def search_artist(artist_name):
     """
     Search for an artist by name and return their MusicBrainz ID (MBID).
     """
     print(f"Searching for artist: {artist_name}")
-    url = urllib.parse.urljoin(BASE_URL, "artist/")
+    url = urllib.parse.urljoin(MB_BASE_URL, "artist/")
     params = {
         "query": f'artist:"{artist_name}"',
         "fmt": "json",
@@ -62,7 +147,7 @@ def search_recording(song_name, artist_mbid):
     Search for a recording by song name and artist MBID, return recording MBID.
     """
     print(f"Searching for recording: {song_name} by artist MBID: {artist_mbid}")
-    url = urllib.parse.urljoin(BASE_URL, "recording/")
+    url = urllib.parse.urljoin(MB_BASE_URL, "recording/")
     params = {
         "query": f'recording:"{song_name}" AND arid:{artist_mbid}',
         "fmt": "json",
@@ -82,7 +167,7 @@ def get_release_groups_from_recording(recording_mbid):
     Fetch release groups associated with a recording.
     """
     print(f"Fetching release groups for recording MBID: {recording_mbid}")
-    url = urllib.parse.urljoin(BASE_URL, f"recording/{recording_mbid}")
+    url = urllib.parse.urljoin(MB_BASE_URL, f"recording/{recording_mbid}")
     params = {
         "inc": "release-groups",
         "fmt": "json"
@@ -102,7 +187,7 @@ def get_genres_from_release_group(release_group_mbid):
     Fetch genres associated with a release group using its MBID.
     """
     print(f"Fetching genres for release group MBID: {release_group_mbid}")
-    url = urllib.parse.urljoin(BASE_URL, f"release-group/{release_group_mbid}")
+    url = urllib.parse.urljoin(MB_BASE_URL, f"release-group/{release_group_mbid}")
     params = {
         "inc": "genres",
         "fmt": "json"
@@ -119,47 +204,7 @@ def get_genres_from_release_group(release_group_mbid):
     else:
         print(f"No data received for release group MBID '{release_group_mbid}'.")
         return []
-
-def fetch_genres(artist, song):
-    """
-    Fetch genres for a given artist and song.
-    This function fetches genres from the release groups associated with the recording.
-    If no genres are found at the release group level, it falls back to artist genres.
-    """
-    genres = set()  # Use a set to avoid duplicate genres
-
-    # Search for the artist
-    artist_mbid = search_artist(artist)
-    if not artist_mbid:
-        print("No artist MBID found. Returning empty genres list.")
-        return list(genres)  # Return empty list if artist not found
-
-    # Search for the recording
-    recording_mbid = search_recording(song, artist_mbid)
-    if not recording_mbid:
-        print("No recording MBID found. Returning empty genres list.")
-        return list(genres)  # Return empty list if recording not found
-
-    # Get release groups from the recording
-    release_group_ids = get_release_groups_from_recording(recording_mbid)
-    if not release_group_ids:
-        print("No release groups found. Attempting to fetch artist genres as fallback.")
-        # Fallback to artist genres
-        genres = get_genres_from_artist(artist_mbid)
-        return list(genres)
-
-    # Fetch genres from each release group
-    for rg_id in release_group_ids:
-        rg_genres = get_genres_from_release_group(rg_id)
-        genres.update(rg_genres)
-
-    if not genres:
-        print("No genres found in release groups. Attempting to fetch artist genres as fallback.")
-        # Fallback to artist genres
-        genres = get_genres_from_artist(artist_mbid)
-
-    return list(genres)
-
+    
 def get_genres_from_artist(artist_mbid):
     """
     Fetch genres associated with an artist using their MBID.
@@ -182,6 +227,59 @@ def get_genres_from_artist(artist_mbid):
     else:
         print(f"No data received for artist MBID '{artist_mbid}'.")
         return []
+
+def fetch_genres(artist, song):
+    """
+    Fetch genres for a given artist and song.
+    First, attempt to fetch genres using the Last.fm API.
+    If that fails, fall back to using MusicBrainz.
+    """
+    genres = set()  # Use a set to avoid duplicate genres
+
+    # === Attempt to fetch genres from Last.fm ===
+    lastfm_genres = fetch_genres_lastfm(artist, song)
+    if lastfm_genres:
+        genres.update(lastfm_genres)
+        print(f"Genres found using Last.fm: {genres}")
+        return list(genres)
+    else:
+        print("No genres found using Last.fm. Falling back to MusicBrainz.")
+
+    # === Fallback to MusicBrainz ===
+
+    # Search for the artist
+    artist_mbid = search_artist(artist)
+    if not artist_mbid:
+        print("No artist MBID found in MusicBrainz. Returning empty genres list.")
+        return list(genres)  # Return empty list if artist not found
+
+    # Search for the recording
+    recording_mbid = search_recording(song, artist_mbid)
+    if not recording_mbid:
+        print("No recording MBID found in MusicBrainz. Returning empty genres list.")
+        return list(genres)  # Return empty list if recording not found
+
+    # Get release groups from the recording
+    release_group_ids = get_release_groups_from_recording(recording_mbid)
+    if not release_group_ids:
+        print("No release groups found in MusicBrainz. Attempting to fetch artist genres as fallback.")
+        # Fallback to artist genres
+        mb_genres = get_genres_from_artist(artist_mbid)
+        genres.update(mb_genres)
+        return list(genres)
+
+    # Fetch genres from each release group
+    for rg_id in release_group_ids:
+        rg_genres = get_genres_from_release_group(rg_id)
+        genres.update(rg_genres)
+
+    if not genres:
+        print("No genres found in release groups in MusicBrainz. Attempting to fetch artist genres as fallback.")
+        # Fallback to artist genres
+        mb_genres = get_genres_from_artist(artist_mbid)
+        genres.update(mb_genres)
+
+    return list(genres)
 
 def get_or_create_genres(genre_names):
     """

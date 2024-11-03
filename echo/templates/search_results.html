@@ -167,7 +167,7 @@
                 </div>
 
             </div>
-            <input type="text" name="query" id="tag-input" placeholder="Search by Tags, name, mapper, or artist" value="{{ request.GET.query }}">
+            <input type="text" name="query" id="tag-input" placeholder="Search by Tags, song genre, name, mapper, or artist" value="{{ request.GET.query }}">
             <button type="submit" class="generic_btn">Search</button>
         </form>
 
@@ -217,7 +217,7 @@
                             <h2 class="title">{{ beatmap.title }} - [{{ beatmap.version }}]</h2>
                             <h3 class="artist">Artist: {{ beatmap.artist }}</h3>
                             <h3 class="mapper">Mapper: {{ beatmap.creator }}</h3>
-                            
+
                             <!-- Genres Display -->
                             {% with genres_list=beatmap.genres.all %}
                                 {% if genres_list %}

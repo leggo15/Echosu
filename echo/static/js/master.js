@@ -480,7 +480,27 @@ document.addEventListener('DOMContentLoaded', function() {
     const audioElements = document.querySelectorAll('audio');
 
     audioElements.forEach(function(audio) {
+        // Set initial volume to approximately 30%
         audio.volume = 0.33;
+
+        // Add a 'play' event listener to each audio element
+        audio.addEventListener('play', function() {
+            // When this audio starts playing, pause all other audios
+            audioElements.forEach(function(otherAudio) {
+                if (otherAudio !== audio && !otherAudio.paused) {
+                    otherAudio.pause();
+                }
+            });
+        });
+
+        // Reset the play button state when the audio is paused or ended
+        audio.addEventListener('pause', function() {
+            // You can add code here if you want to update UI elements when audio is paused
+        });
+
+        audio.addEventListener('ended', function() {
+            // You can add code here if you want to perform actions when audio playback ends
+        });
     });
 });
 

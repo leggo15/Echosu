@@ -1498,7 +1498,7 @@ def home(request):
                     raise ValueError("Invalid input. Please provide a valid beatmap link or ID.")
 
             except Exception as e:
-                context['error'] = f'Error: {str(e)}'
+                messages.error(request, f'Error: {str(e)}')
                 logger.error(f"Error processing beatmap input '{beatmap_input}': {e}")
                 print(f"Error: {str(e)}")
 

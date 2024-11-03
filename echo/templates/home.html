@@ -40,10 +40,6 @@
                 </div>
             </form>
 
-            {% if error %}
-                <p class="error">{{ error }}</p>
-            {% endif %}
-
             {% if beatmap %}
                 <div class="beatmap-display">
                     {% if beatmap.cover_image_url %}
@@ -194,6 +190,5 @@
                 });
             });
         });
-    </script>
 </body>
 </html>

@@ -220,11 +220,6 @@ body {
     color: #666;
 }
 
-.error {
-    color: red;
-    font-weight: bold;
-}
-
 .tags-display,
 .all-tags-display {
     margin-top: 20px;
@@ -1195,28 +1190,6 @@ nav {
     }
 }
 
-/* Styles for messages */
-.messages {
-    list-style: none;
-    padding: 0;
-    margin: 10px 0;
-}
-
-.messages li {
-    padding: 10px;
-    margin-bottom: 5px;
-    border-radius: 4px;
-}
-
-.messages li.success {
-    background-color: #d4edda;
-    color: #155724;
-}
-
-.messages li.error {
-    background-color: #f8d7da;
-    color: #721c24;
-}
 
 /* Styles for Data Deletion Section */
 .data-deletion-section {
@@ -1246,26 +1219,45 @@ nav {
     background-color: #a30000;
 }
 
+/* Styles for success and error messages */
+
+/* Styles for messages */
+.messages {
+    list-style-type: none;
+    padding: 0;
+    margin: 10px;
+}
+
+.messages li {
+    color: #767676;
+    background-color: #E9DDE2;
+    padding: 10px;
+    width: 100%;
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 1000;
+    text-align: center;
+    font-weight: bold;
+    opacity: 1;
+    transition: opacity 1s ease-out;
+}
+
+.messages li.success {
+    background-color: #d4edda;
+    color: #155724;
+}
+
+.messages li.error {
+    background-color: #f8d7da;
+    color: #721c24;
+}
+
+.messages li.fade-out {
+    opacity: 0;
+}
+
 /*EDIT TAG Page*/
-            /* Styles for success and error messages */
-    .messages .success, .error {
-        color: white; /* Change text color to contrast the background */
-        background-color: #E9DDE2;
-        padding: 10px;
-        width: 100%;
-        position: fixed;
-        top: 0;
-        left: 0;
-        z-index: 1000; /* Ensures the message is above other content */
-        text-align: center;
-        font-weight: bold;
-    }
-    .success {
-        color: rgb(126, 192, 126);
-    }
-    .error {
-        color: lightcoral;
-    }
     /* Table Styles */
     table {
         width: 100%;

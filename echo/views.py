@@ -1516,7 +1516,7 @@ def home(request):
         beatmap_tags_with_counts = (
             TagApplication.objects
             .filter(beatmap=beatmap)
-            .values('tag__id', 'tag__name', 'tag__description', 'tag__description_author')
+            .values('tag__id', 'tag__name', 'tag__description', 'tag__description_author__username')
             .annotate(apply_count=Count('id'))
         ).order_by('-apply_count')
 

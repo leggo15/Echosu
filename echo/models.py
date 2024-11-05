@@ -55,8 +55,7 @@ class UserProfile(models.Model):
     profile_pic_url = models.URLField(max_length=1000, null=True, blank=True)
     banned = models.BooleanField(default=False)
     ban_reason = models.CharField(max_length=255, unique=False, null=False, blank=True)
-    hiddenuser = models.BooleanField(default=False)
-    
+
     def __str__(self):
         return self.user.username or "Unknown User"
 

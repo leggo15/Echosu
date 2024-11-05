@@ -29,7 +29,6 @@ from echo.views import (
     update_beatmap_info,
     tag_library,
     custom_404_view,
-    toggle_leaderboard_visibility,
 )
 
 
@@ -61,7 +60,6 @@ urlpatterns = [
     path('load_more_recommendations/', load_more_recommendations, name='load_more_recommendations'),
     path('update_beatmap_info/', update_beatmap_info, name='update_beatmap_info'),
     path('tag_library/', tag_library, name='tag_library'),
-    path('toggle_leaderboard_visibility/', toggle_leaderboard_visibility, name='toggle_leaderboard_visibility'),
     
 
 

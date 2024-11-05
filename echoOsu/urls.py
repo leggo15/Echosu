@@ -28,6 +28,7 @@ from echo.views import (
     load_more_recommendations,
     update_beatmap_info,
     tag_library,
+    custom_404_view,
 )
 
 
@@ -74,3 +75,5 @@ urlpatterns = [
     # REST API endpoints using routers
     path('api/', include(router.urls)),
 ]
+
+handler404 = 'echo.views.custom_404_view'

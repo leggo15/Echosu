@@ -57,7 +57,7 @@
         </p>
 
         <p>
-            The search results are based on how many of the specific tags you search for are applied to the map. 
+            The search results are in short based on how many of the specific tags you search for are applied to the map. 
             For example:
             <ul>
                 <li><strong>Map A:</strong> aim(7), farm(6), "high spacing"(2)</li>
@@ -70,7 +70,9 @@
                 <li>Map C (12)</li>
                 <li>Map B (9)</li>
             </ul>
-            These weights determine the ranking based on tag relevance.
+            These weights determine the ranking based on tag relevance. 
+        </br>
+            The exact algorithm is as follows: 'exact_match_distinct_count' * 3.0 + 'exact_match_total_count' * 0.3 + 'tag_match_count' * 0.5 + 'tag_apply_count' * 0.01
         </p>
 
         <h3>Genres</h3>

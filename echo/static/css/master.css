@@ -213,6 +213,12 @@ body {
     cursor: pointer;
 }
 
+.weight {
+    font-size: 10px;
+    color: #747474;
+    float: right;
+}
+
 .beatmap-stats span {
     display: inline-block;
     margin-right: 15px;

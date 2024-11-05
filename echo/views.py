@@ -829,23 +829,29 @@ def search_results(request):
 
     def parse_query_with_quotes(raw_query):
         """
-        Parses the raw query string into search terms, handling quotes.
-
-        Returns:
-            list of tuples: Each tuple contains (term, is_quoted)
+        Parses the raw search query and returns a list of tuples: Each tuple contains (term, is_quoted)
+        Handles unmatched quotes by ignoring them.
         """
-        # Use shlex to split the query, respecting quotes
         lexer = shlex.shlex(raw_query, posix=True)
         lexer.whitespace_split = True
         lexer.quotes = '"\''
         tokens = []
-        for token in lexer:
-            # Determine if the token was quoted
-            if token.startswith('"') and token.endswith('"') or token.startswith("'") and token.endswith("'"):
-                is_quoted = True
-            else:
-                is_quoted = False
-            tokens.append((token, is_quoted))
+        
+        try:
+            for token in lexer:
+                is_quoted = ' ' in token
+                tokens.append((token, is_quoted))
+        except ValueError as e:
+            # Handle the unmatched quotes by stripping them and re-parsing
+            print(f"Warning: {e}. Attempting to parse without unmatched quotes.")
+            # Remove all quotes and split the string
+            fixed_query = raw_query.replace('"', '').replace("'", "")
+            lexer = shlex.shlex(fixed_query, posix=True)
+            lexer.whitespace_split = True
+            lexer.quotes = ''  # Disable quoting
+            for token in lexer:
+                tokens.append((token, False))
+        
         return tokens
 
     def process_search_terms(parsed_terms):

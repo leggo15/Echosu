@@ -55,12 +55,13 @@ class UserProfile(models.Model):
     profile_pic_url = models.URLField(max_length=1000, null=True, blank=True)
     banned = models.BooleanField(default=False)
     ban_reason = models.CharField(max_length=255, unique=False, null=False, blank=True)
-
+    hiddenuser = models.BooleanField(default=False)
+    
     def __str__(self):
         return self.user.username or "Unknown User"
 
-from django.contrib.auth.models import User
 
+from django.contrib.auth.models import User
 
 def get_default_author():
     return User.objects.get_or_create(username='default_author')[0]
@@ -158,6 +159,7 @@ class TagApplication(models.Model):
 
     def __str__(self):
         return f"{self.user.username} applied tag '{self.tag.name}' on {self.beatmap.beatmap_id}"
+
 
 ################ API ##################
 

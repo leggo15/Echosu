@@ -1398,6 +1398,37 @@ def recommended_maps_view(request):
     return render(request, 'your_template.html', context)
 
 
+def get_leaderboard():
+    """
+    Retrieves the top 10 most active users based on the number of tags they've applied,
+    excluding users who have hidden themselves.
+    """
+    # Aggregate tag applications per user, excluding hidden users
+    top_users = UserProfile.objects.filter(
+        hiddenuser=False
+    ).annotate(
+        tag_count=Count('user__tagapplication', distinct=True)
+    ).filter(
+        tag_count__gt=0
+    ).order_by('-tag_count')[:10]
+    
+    return top_users
+
+
+@login_required
+def toggle_leaderboard_visibility(request):
+    user = request.user
+    user_profile = user.userprofile
+
+    # Toggle the hiddenuser field
+    user_profile.hiddenuser = not user_profile.hiddenuser
+    user_profile.save()
+
+    is_hidden = user_profile.hiddenuser
+
+    return JsonResponse({'is_hidden': is_hidden})
+
+
 import re
 from .models import Genre
 from .fetch_genre import fetch_genres, get_or_create_genres 
@@ -1406,14 +1437,22 @@ from .fetch_genre import fetch_genres, get_or_create_genres
 def home(request):
     user = request.user if request.user.is_authenticated else None
 
-    # Fetch top tags and recommendations
     tags = get_top_tags(user)
     recommended_maps = get_recommendations(user)
+    top_users = get_leaderboard()
+
+    # Check if the user is hidden
+    is_user_hidden = False
+    if user:
+        is_user_hidden = user.userprofile.hiddenuser
 
     context = {
         'tags': tags,
         'recommended_maps': recommended_maps,
+        'top_users': top_users,
+        'is_user_hidden': is_user_hidden,
     }
+
 
     # Handle beatmap info form submission (POST request)
     if request.method == 'POST':
@@ -1544,6 +1583,7 @@ def home(request):
         context['beatmap_tags_with_counts'] = beatmap_tags_with_counts
 
     return render(request, 'home.html', context)
+
 
 
 # ------------------------------------------------------------------------ #

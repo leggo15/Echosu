@@ -13,7 +13,6 @@
     <script src="https://echosu-s3.s3.eu-central-1.amazonaws.com/static/js/collapsible_descriptions.js"></script>
     <link rel="icon" type="image/x-icon" sizes="32x32" href="https://echosu-s3.s3.eu-central-1.amazonaws.com/static/orange_32x32.ico">
     <link rel="icon" type="image/x-icon" sizes="16x16" href="https://echosu-s3.s3.eu-central-1.amazonaws.com/static/orange_16x16.ico">
-
 </head>
 <body class="page-beatmap-detail">
     {% include '_navbar.html' %}
@@ -157,6 +156,53 @@
             </div>
         </section>  
 
+        <section class="tags-usage">
+            <h2>Top 10 Active Taggers</h2>
+            <div class="container">
+                {% if user.is_authenticated %}
+                <!-- Toggle Leaderboard Visibility Button -->
+                <span class="hidden_button">
+                    <button id="toggle-visibility-btn" class="generic_btn">
+                        {% if is_user_hidden %}
+                        <a href="javascript: location.reload();">Show me</a>
+                        {% else %}
+                        <a href="javascript: location.reload();">Hide me</a>
+                        {% endif %}
+                    </button>
+                </span>
+            {% endif %}
+                <!-- Leaderboards Section -->
+                    <table class="leaderboard-table" cellspacing="0" cellpadding="0">
+                        <thead>
+                            <tr>
+                                <th>User</th>
+                                <th>Tags Applied</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for user_profile in top_users %}
+                                <tr>
+                                    <td>
+                                        {% if user_profile.profile_pic_url %}
+                                            <img src="{{ user_profile.profile_pic_url }}" alt="{{ user_profile.user.username }}'s profile picture" class="profile-pic">
+                                        {% else %}
+                                            <img src="{% static 'images/default_profile_pic.png' %}" alt="Default profile picture" class="profile-pic">
+                                        {% endif %}
+
+                                        <a href="https://osu.ppy.sh/users/{{ user_profile.osu_id }}" class="leaderboard-users">{{ user_profile.user.username }}</a>
+                                    </td>
+                                    <td>{{ user_profile.tag_count }}</td>
+                                </tr>
+                            {% empty %}
+                                <tr>
+                                    <td colspan="3">No active taggers to display.</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </section> 
+        
         <!-- Recommended Maps Section -->
         <section class="recommended-maps">
             <h2>Recommended Maps</h2>
@@ -189,6 +235,32 @@
                     }
                 });
             });
+            
+            // Handle toggle visibility button click
+            const toggleBtn = document.getElementById('toggle-visibility-btn');
+            if (toggleBtn) {
+                toggleBtn.addEventListener('click', function () {
+                    fetch('{% url "toggle_leaderboard_visibility" %}', {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRFToken': '{{ csrf_token }}',
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({}),
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.is_hidden) {
+                            toggleBtn.textContent = 'Show me';
+                        } else {
+                            toggleBtn.textContent = 'Hide me';
+                        }
+                        // Optionally, refresh the leaderboard section here
+                        // location.reload(); // Uncomment to refresh the page
+                    })
+                    .catch(error => console.error('Error:', error));
+                });
+            }
         });
     </script>
 </body>

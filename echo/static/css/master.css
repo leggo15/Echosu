@@ -775,6 +775,48 @@ nav {
 
 
 
+/* Leaderboards Section */
+.leaderboards {
+    margin-bottom: 40px;
+    padding: 20px;
+    background-color: #f9f9f9; /* Light background for contrast */
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+
+.leaderboard-table th, .leaderboard-table td {
+    border: 0px solid #ddd;
+    padding: 12px 15px;
+    text-align: left;
+}
+
+.leaderboard-table th {
+    background-color: #e2e2e2;
+    color: #333;
+    font-weight: bold;
+}
+
+.profile-pic {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    margin-right: 10px;
+    vertical-align: middle;
+    object-fit: cover;
+}
+.hidden_button {
+    float: right;
+    padding: 25px;
+}
+.hidden_button a {
+    text-decoration: none; /* Remove underline */
+    color: inherit; /* Inherit the color from the parent element */
+    cursor: pointer; /* Ensure it still looks clickable */
+}
+.leaderboard-users{
+    text-decoration: none; /* Remove underline from <a> elements */
+}
 
 
 

@@ -402,6 +402,18 @@ $(document).ready(function() {
         });
     });
 
+    // -----------------------------------------------
+    // Add Apply Tag on Enter Key Functionality
+    // -----------------------------------------------
+
+    // Function to handle applying tag on Enter keypress
+    $('#tag-input').on('keydown', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault(); // Prevent form submission or other default actions
+            $('.apply-tag-btn').click(); // Trigger the Apply Tag button click
+        }
+    });
+
 }); 
 
 

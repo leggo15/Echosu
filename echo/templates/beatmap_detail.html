@@ -120,7 +120,7 @@
                               data-beatmap-id="{{ beatmap.beatmap_id }}"
                               {% if tag_info.tag__description %}
                                   data-description=' "{{ tag_info.tag__description|escapejs }}" '
-                                  data-description-author=" - {{ tag_info.tag__description_author|escapejs }}"
+                                  data-description-author=" - {{ tag_info.tag__description_author__username|escapejs }}"
                               {% endif %}
                         >
                             {{ tag_info.tag__name }} ({{ tag_info.apply_count }})

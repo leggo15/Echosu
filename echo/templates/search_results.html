@@ -168,7 +168,7 @@
 
             </div>
             <input type="text" name="query" id="tag-input" placeholder="Search by Tags, song genre, name, mapper, or artist" value="{{ request.GET.query }}">
-            <button type="submit" class="generic_btn">Search</button>
+            <button type="submit" class="search_btn">Search</button>
         </form>
 
         <form method="get" action="{% url 'search_results' %}" class="sorting-form">

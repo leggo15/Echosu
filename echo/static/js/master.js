@@ -411,6 +411,7 @@ $(document).ready(function() {
         if (e.key === 'Enter') {
             e.preventDefault(); // Prevent form submission or other default actions
             $('.apply-tag-btn').click(); // Trigger the Apply Tag button click
+            $('.search_btn').click(); 
         }
     });
 

@@ -909,90 +909,50 @@ def search_results(request):
                         break
         return exact_match_tag_names
 
+    from django.db.models import Count, OuterRef, Subquery, F, Value, IntegerField, Q
+
     def annotate_and_order_beatmaps(beatmaps, include_tag_names, exact_match_tag_names, sort_method):
-        """
-        Annotates the beatmaps queryset with tag counts and weights, then orders them.
+        beatmaps_filtered = beatmaps.filter(tags__name__in=include_tag_names).distinct()
 
-        Args:
-            beatmaps (QuerySet): The beatmaps queryset.
-            include_tag_names (set): Set of tag names to include.
-            exact_match_tag_names (set): Set of exact match tag names.
-            sort_method (str): The sorting method ('tag_weight' or 'popularity').
+        # Prepare subquery that grabs total tag count (no filter):
+        total_tags_subquery = (
+            Beatmap.objects
+            .filter(pk=OuterRef('pk'))
+            .annotate(real_count=Count('tags', distinct=True))
+            .values('real_count')[:1]
+        )
 
-        Returns:
-            QuerySet: Annotated and ordered queryset.
-        """
         if sort_method == 'tag_weight':
-            annotated_beatmaps = beatmaps.annotate(
-                tag_match_count=Count(
-                    'tags',
-                    filter=Q(tags__name__in=include_tag_names),
-                ),
-                tag_apply_count=Count(
-                    'tagapplication',
-                    filter=Q(tags__name__in=include_tag_names)
-                ),
-                exact_match_total_count=Count(
-                    'tags',
-                    filter=Q(tags__name__in=exact_match_tag_names),
-                ),
-                exact_match_distinct_count=Count(
-                    'tags',
-                    filter=Q(tags__name__in=exact_match_tag_names),
-                    distinct=True
-                ),
-                # Calculate the number of tags in the query not applied to the beatmap
-                tag_miss_match_count=Value(len(include_tag_names), output_field=IntegerField()) - Count(
-                    'tags',
-                    filter=Q(tags__name__in=include_tag_names),
-                    distinct=True
+            annotated_beatmaps = (
+                beatmaps_filtered
+                .annotate(
+                    tag_match_count=Count('tags', 
+                    filter=Q(tags__name__in=include_tag_names), distinct=True),
+                    exact_match_total_count=Count('tags', 
+                    filter=Q(tags__name__in=exact_match_tag_names)),
+                    exact_match_distinct_count=Count('tags', 
+                    filter=Q(tags__name__in=exact_match_tag_names), distinct=True),
+                    total_tag_count=Subquery(total_tags_subquery),
                 )
-            ).annotate(
-                # Define weight with higher priority for exact matches
-                tag_weight=(
-                    (F('exact_match_distinct_count') * 3.0 +
-                    F('exact_match_total_count') * 1.0 +
-                    F('tag_match_count') * 0.3 +
-                    F('tag_apply_count') * 0.01) / (F('tag_miss_match_count') + 1)
-                ),
-                popularity=F('favourite_count') * 0.5 + F('playcount') * 0.001,
-            ).order_by('-tag_weight')  # Order by weight descending
-
-        elif sort_method == 'popularity':
-            annotated_beatmaps = beatmaps.annotate(
-                tag_match_count=Count(
-                    'tags',
-                    filter=Q(tags__name__in=include_tag_names),
-                ),
-                tag_apply_count=Count(
-                    'tagapplication',
-                    filter=Q(tags__name__in=include_tag_names)
-                ),
-                exact_match_count=Count(
-                    'tags',
-                    filter=Q(tags__name__in=exact_match_tag_names),
-                ),
-                exact_match_distinct_count=Count(
-                    'tags',
-                    filter=Q(tags__name__in=exact_match_tag_names),
-                    distinct=True
+                .annotate(
+                    tag_miss_match_count=Value(len(include_tag_names), output_field=IntegerField()) - F('tag_match_count'),
+                    tag_surplus_count=F('total_tag_count') - F('tag_match_count'),
+                    tag_weight=(
+                        (F('exact_match_distinct_count')*3.0 +
+                        F('exact_match_total_count')*1.0 +
+                        F('tag_match_count')*0.3)
+                        / (F('tag_miss_match_count') + 1 + (F('tag_surplus_count') * 0.2))
+                    )
                 )
-            ).annotate(
-                # Define weight with higher priority for exact matches
-                tag_weight=(
-                    (F('exact_match_distinct_count') * 3.0 +
-                    F('exact_match_total_count') * 1.0 +
-                    F('tag_match_count') * 0.3 +
-                    F('tag_apply_count') * 0.01) / (F('tag_miss_match_count') + 1)
-                ),
-                popularity=F('favourite_count') * 0.5 + F('playcount') * 0.001,
-            ).order_by('-popularity')  # Order by popularity descending
+                .order_by('-tag_weight')
+            )
 
         else:
-            # Default sorting
-            annotated_beatmaps = beatmaps.order_by('-favourite_count', '-playcount')
+            annotated_beatmaps = beatmaps_filtered.order_by('-favourite_count', '-playcount')
 
         return annotated_beatmaps
+
+
 
     ############################################
 

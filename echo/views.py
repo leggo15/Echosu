@@ -918,7 +918,7 @@ def search_results(request):
         total_tags_subquery = (
             Beatmap.objects
             .filter(pk=OuterRef('pk'))
-            .annotate(real_count=Count('tags', distinct=True))
+            .annotate(real_count=Count('tags', distinct=False))
             .values('real_count')[:1]
         )
 
@@ -941,7 +941,7 @@ def search_results(request):
                         (F('exact_match_distinct_count')*3.0 +
                         F('exact_match_total_count')*1.0 +
                         F('tag_match_count')*0.3)
-                        / (F('tag_miss_match_count') * 0.5 + 1 + (F('tag_surplus_count') * 0.3))
+                        / (F('tag_miss_match_count') * 0.5 + 1 + (F('tag_surplus_count') * 0.2))
                     )
                 )
                 .order_by('-tag_weight')

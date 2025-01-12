@@ -940,11 +940,20 @@ def search_results(request):
                     'tags',
                     filter=Q(tags__name__in=exact_match_tag_names),
                     distinct=True
+                ),
+                # Calculate the number of tags in the query not applied to the beatmap
+                tag_miss_match_count=Value(len(include_tag_names), output_field=IntegerField()) - Count(
+                    'tags',
+                    filter=Q(tags__name__in=include_tag_names),
+                    distinct=True
                 )
             ).annotate(
                 # Define weight with higher priority for exact matches
                 tag_weight=(
-                    F('exact_match_distinct_count') * 3.0 + F('exact_match_total_count') * 1.0 + F('tag_match_count') * 0.3 + F('tag_apply_count') * 0.01
+                    (F('exact_match_distinct_count') * 3.0 +
+                    F('exact_match_total_count') * 1.0 +
+                    F('tag_match_count') * 0.3 +
+                    F('tag_apply_count') * 0.01) / (F('tag_miss_match_count') + 1)
                 ),
                 popularity=F('favourite_count') * 0.5 + F('playcount') * 0.001,
             ).order_by('-tag_weight')  # Order by weight descending
@@ -971,7 +980,10 @@ def search_results(request):
             ).annotate(
                 # Define weight with higher priority for exact matches
                 tag_weight=(
-                    F('exact_match_distinct_count') * 3.0 + F('exact_match_total_count') * 1.0 + F('tag_match_count') * 0.3 + F('tag_apply_count') * 0.01
+                    (F('exact_match_distinct_count') * 3.0 +
+                    F('exact_match_total_count') * 1.0 +
+                    F('tag_match_count') * 0.3 +
+                    F('tag_apply_count') * 0.01) / (F('tag_miss_match_count') + 1)
                 ),
                 popularity=F('favourite_count') * 0.5 + F('playcount') * 0.001,
             ).order_by('-popularity')  # Order by popularity descending
@@ -981,6 +993,7 @@ def search_results(request):
             annotated_beatmaps = beatmaps.order_by('-favourite_count', '-playcount')
 
         return annotated_beatmaps
+
     ############################################
 
 

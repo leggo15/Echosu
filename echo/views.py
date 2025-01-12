@@ -918,7 +918,7 @@ def search_results(request):
         total_tags_subquery = (
             Beatmap.objects
             .filter(pk=OuterRef('pk'))
-            .annotate(real_count=Count('tags', distinct=False))
+            .annotate(real_count=Count('tags', distinct=True))
             .values('real_count')[:1]
         )
 

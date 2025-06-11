@@ -1,40 +1,53 @@
-from .views import *
+# echosu/views/profile.py
 
-# ----------------------------- Home, tag_library, and Admin Views ----------------------------- #
+# Standard library imports
+import json
+from collections import Counter
 
-def home(request):
-    """Render the home page."""
-    return render(request, 'home.html')
+# Third-party imports
+import numpy as np
+from scipy.spatial.distance import cosine
 
-def about(request):
-    """Render the about page."""
-    return render(request, 'about.html')
+# Django imports
+from django.contrib.auth.decorators import login_required
+from django.shortcuts import render, redirect
+from django.db.models import Count
+from django.db.models.functions import TruncDate
 
-def admin(request):
-    """Redirect to the admin panel."""
-    return redirect('/admin/')
+# Local application imports
+from ..models import Beatmap, TagApplication, APIRequestLog
 
-def error_page_view(request):
+
+# ----------------------------- Profile Views ----------------------------- #
+
+def profile(request):
     """
-    Render the error_page template.
+    User profile view displaying tagging statistics.
     """
-    return render(request, 'error_page.html')
+    if request.user.is_authenticated:
+        user_tags = TagApplication.objects.filter(user=request.user).select_related('beatmap')
 
-def tag_library(request):
-    # Retrieve all tags ordered alphabetically and annotate with beatmap count
-    tags = Tag.objects.annotate(beatmap_count=Count('beatmaps')).order_by('name')
-    
-    context = {
-        'tags': tags
-    }
-    return render(request, 'tag_library.html', context)
+        # Calculate accuracy of user's tagging
+        total_tags = user_tags.count()
+        agreed_tags = sum(1 for tag_app in user_tags if tag_app.agreed_by_others())
+        accuracy = (agreed_tags / total_tags * 100) if total_tags > 0 else 0
 
-def custom_404_view(request, exception):
-    return render(request, '404.html', status=404)
+        # Prepare data for the pie chart
+        tag_counts = Counter(tag_app.tag.name for tag_app in user_tags)
+        most_common_tags = tag_counts.most_common(10)
+        tag_labels = [tag for tag, count in most_common_tags]
+        tag_data = [count for tag, count in most_common_tags]
 
+        context = {
+            'user_tags': user_tags,
+            'accuracy': accuracy,
+            'tag_labels': json.dumps(tag_labels),
+            'tag_data': json.dumps(tag_data),
+        }
 
-
-# ------------------------------------------------------------------------ #
+        return render(request, 'profile.html', context)
+    else:
+        return redirect('login')  # Redirect to login if user is not authenticated
 
 
 

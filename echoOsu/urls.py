@@ -1,34 +1,28 @@
 from django.contrib import admin
 from django.contrib.auth.views import LogoutView
-from django.urls import include, path
+from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from echo.views import (
-    vote_description,
-    confirm_data_deletion,
-    delete_user_data,
-    update_tag_description,
-    edit_tags,
-    api_token,
-    home,
-    about,
-    osu_callback,
-    search_tags,
-    modify_tag,
-    get_tags,
-    profile,
-    search_results,
-    beatmap_detail,
-    BeatmapViewSet,
-    TagViewSet,
-    TagApplicationViewSet,
-    UserProfileViewSet,
-    tags_for_beatmaps,
-    settings,
-    error_page_view,
-    load_more_recommendations,
-    update_beatmap_info,
-    tag_library,
-    custom_404_view,
+
+#  --------  new view imports  --------
+from echo.views.home      import home, about, load_more_recommendations, tag_library
+from echo.views.auth      import osu_callback, api_token
+from echo.views.profile   import profile, user_stats
+from echo.views.beatmap   import (
+    beatmap_detail, update_beatmap_info,
+)
+from echo.views.search    import search_results
+from echo.views.tags      import (
+    modify_tag, get_tags, edit_tags,
+    update_tag_description, vote_description, search_tags
+)
+from echo.views.settings  import (
+    settings, confirm_data_deletion, delete_user_data,
+)
+from echo.views.misc      import error_page_view, custom_404_view
+
+# DRF viewsets
+from echo.views.api import (
+    BeatmapViewSet, TagViewSet, TagApplicationViewSet, UserProfileViewSet, tags_for_beatmaps
 )
 
 
@@ -60,6 +54,7 @@ urlpatterns = [
     path('load_more_recommendations/', load_more_recommendations, name='load_more_recommendations'),
     path('update_beatmap_info/', update_beatmap_info, name='update_beatmap_info'),
     path('tag_library/', tag_library, name='tag_library'),
+    path('statistics/', user_stats, name='user_stats'),
     
 
 

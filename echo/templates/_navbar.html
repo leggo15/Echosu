@@ -108,7 +108,7 @@
             {% if user.is_authenticated %}
                 <img src="{{ user_profile.profile_pic_url }}" alt="Profile Picture" id="profileMenuButton">
                 <div id="profileDropdown" class="dropdown-content">
-                    <!-- <a href="{% url 'profile' %}">Profile</a> -->
+                    <a href="{% url 'user_stats' %}?query={{ user.username }}">Profile</a>
                     <a href="{% url 'settings' %}">Settings</a>
                     {% if user|has_tag_edit_permission %}
                     <a href="{% url 'edit_tags' %}">Edit Tags</a>

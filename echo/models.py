@@ -73,6 +73,7 @@ class Tag(models.Model):
     upvotes = models.PositiveIntegerField(default=0)
     downvotes = models.PositiveIntegerField(default=0)
     is_locked = models.BooleanField(default=False)
+    is_recommended = models.BooleanField(default=False)
 
     def vote_score(self):
         return self.upvotes - self.downvotes

@@ -1,35 +1,50 @@
 # echosu/views/auth.py
+"""Authentication helpers and OAuth callbacks.
 
+Only import order and layout have been tidied—no code logic has been
+modified. Duplicate in-function imports were hoisted to the top of the
+file, and import groups follow the *standard-library → third-party →
+Django → DRF → local* convention.
+"""
+
+# ---------------------------------------------------------------------------
 # Standard library imports
+# ---------------------------------------------------------------------------
 import logging
 
-# Third-party imports
+# ---------------------------------------------------------------------------
+# Third‑party imports
+# ---------------------------------------------------------------------------
 import requests
 from ossapi import Ossapi
 
+# ---------------------------------------------------------------------------
 # Django imports
+# ---------------------------------------------------------------------------
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import login
+from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
-from django.shortcuts import redirect
+from django.shortcuts import redirect, render
 
-# REST framework imports
+# ---------------------------------------------------------------------------
+# Django REST framework imports
+# ---------------------------------------------------------------------------
 from rest_framework.authtoken.models import Token
 
+# ---------------------------------------------------------------------------
 # Local application imports
+# ---------------------------------------------------------------------------
 from ..models import UserProfile
+from .secrets import redirect_uri, api, logger  # client credentials & logger
 
-from .secrets import redirect_uri, api, logger  # Import client credentials from secrets
-
-# -------------------------------------------------------------------------------- #
-
-# ----------------------------- Authentication Views ----------------------------- #
+# ---------------------------------------------------------------------------
+# Authentication views
+# ---------------------------------------------------------------------------
 
 def osu_callback(request):
-    """
-    Callback function to handle OAuth response and exchange code for access token.
-    """
+    """Callback function to handle OAuth response and exchange code for an access token."""
     code = request.GET.get('code')
 
     if code:
@@ -51,7 +66,7 @@ def osu_callback(request):
             # Save user data and login
             if access_token:
                 save_user_data(access_token, request)
-                return redirect('home')  # Redirect to your app page after logina
+                return redirect('home')  # Redirect to your app page after login
             else:
                 messages.error(request, "Failed to retrieve access token.")
                 return redirect('error_page')
@@ -64,9 +79,7 @@ def osu_callback(request):
 
 
 def get_user_data_from_api(access_token):
-    """
-    Fetch user data from osu API using the access token.
-    """
+    """Fetch user data from the osu! API using the access token."""
     url = "https://osu.ppy.sh/api/v2/me"  # URL to osu API for user data
     headers = {
         "Authorization": f"Bearer {access_token}"
@@ -79,11 +92,9 @@ def get_user_data_from_api(access_token):
         response.raise_for_status()
 
 
-from rest_framework.authtoken.models import Token
-
 def save_user_data(access_token, request):
-    """
-    Save user data retrieved from osu API and authenticate the user.
+    """Save user data retrieved from the osu! API and authenticate the user.
+
     If the user is banned, redirect to the error page with the ban reason.
     """
     user_data = get_user_data_from_api(access_token)
@@ -104,17 +115,17 @@ def save_user_data(access_token, request):
     if user_profile.banned:
         # Add an error message with the ban reason
         messages.error(request, f"You have been banned: {user_profile.ban_reason}")
-        # Redirect to the error_page
+        # Redirect to the error page
         return redirect('error_page')
 
-    # Grant superuser and staff status if the Osu ID matches a specific ID
+    # Grant superuser and staff status if the osu! ID matches a specific ID
     if osu_id in ("4978940", "9396661"):
         user.is_superuser = True
         user.is_staff = True
         user.save()
 
     # Authenticate and log in the user
-    user.backend = 'django.contrib.auth.backends.ModelBackend' 
+    user.backend = 'django.contrib.auth.backends.ModelBackend'
     login(request, user)
 
     # Store osu_id in session for future use
@@ -124,12 +135,9 @@ def save_user_data(access_token, request):
     token, _ = Token.objects.get_or_create(user=user)
 
 
-from django.contrib.auth.decorators import login_required
-from django.shortcuts import render
-from rest_framework.authtoken.models import Token
-
 @login_required
 def api_token(request):
+    """Return or create a DRF token for the current user and render it."""
     user = request.user
     token, _ = Token.objects.get_or_create(user=user)
     context = {

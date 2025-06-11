@@ -15,10 +15,10 @@ from echo.views.tags      import (
     modify_tag, get_tags, edit_tags,
     update_tag_description, vote_description, search_tags
 )
-from echo.views.settings  import (
+from echo.views.userSettings  import (
     settings, confirm_data_deletion, delete_user_data,
 )
-from echo.views.misc      import error_page_view, custom_404_view
+from echo.views.pages      import error_page_view, custom_404_view
 
 # DRF viewsets
 from echo.views.api import (

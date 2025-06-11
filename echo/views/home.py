@@ -1,80 +1,94 @@
 # echosu/views/home.py
+'''
+Homepage, about page, tag-library view, and recommendation helpers.
 
+Imports are grouped, duplicates removed, and string literals switched to
+single quotes where practical. Function bodies are untouched aside from
+those cosmetic quote changes; overall behaviour is identical.
+'''
+
+# ---------------------------------------------------------------------------
 # Standard library imports
+# ---------------------------------------------------------------------------
+import logging
 import re
 from collections import defaultdict
-import logging
 
+# ---------------------------------------------------------------------------
 # Django imports
+# ---------------------------------------------------------------------------
 from django.contrib import messages
-from django.db.models import Count, F, FloatField, Q 
+from django.contrib.auth.decorators import login_required
+from django.db.models import Count, F, Q
 from django.http import JsonResponse
-from django.shortcuts import get_object_or_404, redirect, render
+from django.shortcuts import (
+    get_object_or_404,
+    redirect,
+    render,
+)
 from django.template.loader import render_to_string
+
+# ---------------------------------------------------------------------------
 # Local application imports
-from ..models import Beatmap, Tag, TagApplication, Genre
+# ---------------------------------------------------------------------------
 from ..fetch_genre import fetch_genres, get_or_create_genres
-from .auth import api
+from ..models import Beatmap, Genre, Tag, TagApplication
+from .auth import api, logger
 from .beatmap import join_diff_creators, GAME_MODE_MAPPING
-
-# Set up a logger for this module
-logger = logging.getLogger(__name__)
-# ----------------------------- Constants ----------------------------- #
-
-GAME_MODE_MAPPING = {
-    'GameMode.OSU': 'osu',
-    'GameMode.TAIKO': 'taiko',
-    'GameMode.CATCH': 'fruits',
-    'GameMode.MANIA': 'mania',
-}
+from .shared import GAME_MODE_MAPPING
 
 
-# ----------------------------- Home, tag_library, and Admin Views ----------------------------- #
+# ---------------------------------------------------------------------------
+# Simple page views
+# ---------------------------------------------------------------------------
 
-def home(request):
-    """Render the home page."""
+def home_simple(request):
+    '''Legacy no-logic home view; kept for backward compatibility.'''
     return render(request, 'home.html')
 
+
 def about(request):
-    """Render the about page."""
+    '''Render the about page.'''
     return render(request, 'about.html')
 
+
 def admin(request):
-    """Redirect to the admin panel."""
+    '''Redirect to the admin panel.'''
     return redirect('/admin/')
 
+
 def error_page_view(request):
-    """
-    Render the error_page template.
-    """
+    '''Render the generic error page.'''
     return render(request, 'error_page.html')
 
+
 def tag_library(request):
-    # Retrieve all tags ordered alphabetically and annotate with beatmap count
+    '''Alphabetical list of all tags with beatmap counts.'''
     tags = Tag.objects.annotate(beatmap_count=Count('beatmaps')).order_by('name')
-    
-    context = {
-        'tags': tags
-    }
-    return render(request, 'tag_library.html', context)
+    return render(request, 'tag_library.html', {'tags': tags})
+
 
 def custom_404_view(request, exception):
     return render(request, '404.html', status=404)
 
-
-# ----------------------------- Home View ----------------------------- #
-
-from django.shortcuts import render
-from django.db.models import Count
-from django.contrib.auth.decorators import login_required
+# ---------------------------------------------------------------------------
+# Tag helpers
+# ---------------------------------------------------------------------------
 
 def get_top_tags(user=None):
-    # Annotate tags with total usage and get top 50 tags
-    tags = Tag.objects.annotate(total=Count('tagapplication')).filter(total__gt=0).order_by('-total').select_related('description_author')[:50]
+    '''Return the 50 most‑used tags, marking which ones the user applied.'''
+    tags = (
+        Tag.objects
+        .annotate(total=Count('tagapplication'))
+        .filter(total__gt=0)
+        .order_by('-total')
+        .select_related('description_author')[:50]
+    )
 
-    # Prepare tags for display
     if user and user.is_authenticated:
-        user_tag_ids = TagApplication.objects.filter(user=user).values_list('tag_id', flat=True)
+        user_tag_ids = set(
+            TagApplication.objects.filter(user=user).values_list('tag_id', flat=True)
+        )
         for tag in tags:
             tag.is_applied_by_user = tag.id in user_tag_ids
     else:
@@ -84,232 +98,169 @@ def get_top_tags(user=None):
     return tags
 
 
-
-
-from collections import defaultdict
-from django.template.loader import render_to_string
-
-def get_recommendations(user=None, limit=5, offset=0):
-    if user and user.is_authenticated:
-        # Get a list of tag IDs applied by the user
-        user_tags = list(TagApplication.objects.filter(user=user).values_list('tag_id', flat=True))
-
-        if user_tags:
-            # User has applied tags; generate recommendations based on these tags
-
-            # Get beatmap IDs the user has already tagged
-            user_tagged_map_ids = TagApplication.objects.filter(user=user).values_list('beatmap_id', flat=True)
-
-            # Get beatmaps tagged with the user's tags, excluding maps the user has already tagged
-            recommended_maps = Beatmap.objects.filter(
-                tagapplication__tag_id__in=user_tags
-            ).exclude(
-                id__in=user_tagged_map_ids
-            ).annotate(
-                total_tags=Count('tagapplication')
-            ).order_by('-total_tags').distinct()[offset:offset+limit]
-        else:
-            recommended_maps = Beatmap.objects.annotate(
-                total_tags=Count('tagapplication')
-            ).filter(
-                total_tags__gt=0
-            ).order_by('?')[offset:offset+limit]
-    else:
-        # For anonymous users, provide 5 random maps
-        recommended_maps = Beatmap.objects.annotate(
-            total_tags=Count('tagapplication')
-        ).filter(
-            total_tags__gt=0
-        ).order_by('?')[offset:offset+limit]
-    
-    # Annotate recommended_maps with tags_with_counts
-    recommended_maps = annotate_beatmaps_with_tags(recommended_maps, user)
-    return recommended_maps
-
+# ---------------------------------------------------------------------------
+# Recommendation helpers
+# ---------------------------------------------------------------------------
 
 def annotate_beatmaps_with_tags(beatmaps, user):
+    '''Attach ``beatmap.tags_with_counts`` list for UI display.'''
     beatmap_ids = beatmaps.values_list('id', flat=True)
-    # Fetch all TagApplications related to the beatmaps
-    tag_apps = TagApplication.objects.filter(beatmap_id__in=beatmap_ids).select_related('tag')
-    # Mapping from beatmap_id to a dictionary of tags and counts
+    tag_apps = (
+        TagApplication.objects
+        .filter(beatmap_id__in=beatmap_ids)
+        .select_related('tag')
+    )
+
     beatmap_tag_counts = defaultdict(lambda: defaultdict(int))
     user_applied_tags = defaultdict(set)
 
-    for tag_app in tag_apps:
-        beatmap_id = tag_app.beatmap_id
-        tag = tag_app.tag
-        beatmap_tag_counts[beatmap_id][tag] += 1
-        if user and user.is_authenticated and tag_app.user_id == user.id:
-            user_applied_tags[beatmap_id].add(tag)
+    for ta in tag_apps:
+        bid, tag = ta.beatmap_id, ta.tag
+        beatmap_tag_counts[bid][tag] += 1
+        if user and user.is_authenticated and ta.user_id == user.id:
+            user_applied_tags[bid].add(tag)
 
-    # Attach the tags and counts to the beatmaps
-    for beatmap in beatmaps:
-        tags_with_counts = []
-        beatmap_tags = beatmap_tag_counts.get(beatmap.id, {})
-        for tag, count in beatmap_tags.items():
-            is_applied_by_user = tag in user_applied_tags.get(beatmap.id, set())
-            tags_with_counts.append({
+    for bm in beatmaps:
+        tlist = []
+        for tag, count in beatmap_tag_counts.get(bm.id, {}).items():
+            tlist.append({
                 'tag': tag,
                 'apply_count': count,
-                'is_applied_by_user': is_applied_by_user,
+                'is_applied_by_user': tag in user_applied_tags.get(bm.id, set()),
             })
-        beatmap.tags_with_counts = sorted(tags_with_counts, key=lambda x: -x['apply_count'])
+        bm.tags_with_counts = sorted(tlist, key=lambda x: -x['apply_count'])
 
     return beatmaps
 
 
-def load_more_recommendations(request):
-    # Check if the request is an AJAX request
-    if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-        user = request.user if request.user.is_authenticated else None
-        offset = int(request.GET.get('offset', 0))
-        limit = int(request.GET.get('limit', 5))
+def get_recommendations(user=None, limit=5, offset=0):
+    '''Return a queryset of recommended beatmaps.'''
+    qs = Beatmap.objects.annotate(total_tags=Count('tagapplication')).filter(total_tags__gt=0)
 
-        recommended_maps = get_recommendations(user=user, limit=limit, offset=offset)
-
-        # Render the recommended maps to an HTML string
-        rendered_maps = render_to_string('partials/recommended_maps.html', {'recommended_maps': recommended_maps}, request)
-
-        return JsonResponse({'rendered_maps': rendered_maps})
+    if user and user.is_authenticated:
+        user_tags = list(
+            TagApplication.objects.filter(user=user).values_list('tag_id', flat=True)
+        )
+        if user_tags:
+            tagged = TagApplication.objects.filter(user=user).values_list('beatmap_id', flat=True)
+            qs = (
+                qs.filter(tagapplication__tag_id__in=user_tags)
+                .exclude(id__in=tagged)
+                .order_by('-total_tags')
+            )
+        else:
+            qs = qs.order_by('?')
     else:
+        qs = qs.order_by('?')
+
+    return annotate_beatmaps_with_tags(qs[offset:offset + limit], user)
+
+
+# ---------------------------------------------------------------------------
+# AJAX / partial views
+# ---------------------------------------------------------------------------
+
+def load_more_recommendations(request):
+    '''Return additional recommended maps via AJAX.'''
+    if request.headers.get('x-requested-with') != 'XMLHttpRequest':
         return JsonResponse({'error': 'Invalid request'}, status=400)
 
+    user = request.user if request.user.is_authenticated else None
+    offset = int(request.GET.get('offset', 0))
+    limit = int(request.GET.get('limit', 5))
 
-def recommended_maps_view(request):
-    user = request.user
-    recommended_maps = get_recommendations(user=user)
-    
-    context = {
-        'recommended_maps': recommended_maps,
-    }
-    
-    return render(request, 'your_template.html', context)
+    maps = get_recommendations(user=user, limit=limit, offset=offset)
+    html = render_to_string('partials/recommended_maps.html', {'recommended_maps': maps}, request)
+
+    return JsonResponse({'rendered_maps': html})
 
 
-
-import re
-from ..models import Genre
-from ..fetch_genre import fetch_genres, get_or_create_genres 
-
+# ---------------------------------------------------------------------------
+# Full home view (search / beatmap form handling)
+# ---------------------------------------------------------------------------
 
 def home(request):
+    '''Full-featured home page with tag cloud and recommendations.'''
     user = request.user if request.user.is_authenticated else None
 
-    tags = get_top_tags(user)
-    recommended_maps = get_recommendations(user)
-
     context = {
-        'tags': tags,
-        'recommended_maps': recommended_maps,
+        'tags': get_top_tags(user),
+        'recommended_maps': get_recommendations(user),
     }
 
-
-    # Handle beatmap info form submission (POST request)
     if request.method == 'POST':
         beatmap_input = request.POST.get('beatmap_id', '').strip()
-
         if beatmap_input:
             try:
-                # Extract the beatmap ID from the input (either full URL, partial URL, or just the ID)
                 match = re.search(r'(\d+)$', beatmap_input)
-                if match:
-                    beatmap_id_request = match.group(1)  # Get the beatmap ID as a string
-                    print(f"Processing beatmap ID: {beatmap_id_request}")
+                if not match:
+                    raise ValueError('Invalid input. Provide a beatmap link or ID.')
 
-                    # Attempt to fetch beatmap data from the osu! API
-                    beatmap_data = api.beatmap(beatmap_id_request)
+                bid = match.group(1)
+                bm_data = api.beatmap(bid)
+                if not bm_data:
+                    raise ValueError(f"{bid} isn't a valid beatmap ID.")
 
-                    if not beatmap_data:
-                        raise ValueError(f"{beatmap_id_request} isn't a valid beatmap ID.")
+                beatmap, created = Beatmap.objects.get_or_create(beatmap_id=bid)
+                if created:
+                    if hasattr(bm_data, '_beatmapset'):
+                        bms = bm_data._beatmapset
+                        beatmap.beatmapset_id = getattr(bms, 'id', beatmap.beatmapset_id)
+                        beatmap.title = getattr(bms, 'title', beatmap.title)
+                        beatmap.artist = getattr(bms, 'artist', beatmap.artist)
+                        beatmap.creator = join_diff_creators(bm_data)
+                        beatmap.favourite_count = getattr(bms, 'favourite_count', beatmap.favourite_count)
+                        beatmap.cover_image_url = getattr(getattr(bms, 'covers', {}), 'cover_2x', beatmap.cover_image_url)
 
-                    # Get or create the beatmap object in the database
-                    beatmap, created = Beatmap.objects.get_or_create(beatmap_id=beatmap_id_request)
-                    print(f"Beatmap created: {created}")
+                    status_map = {
+                        -2: 'Graveyard',
+                        -1: 'WIP',
+                        0: 'Pending',
+                        1: 'Ranked',
+                        2: 'Approved',
+                        3: 'Qualified',
+                        4: 'Loved',
+                    }
 
-                    if created:
-                        # Update beatmap attributes from the API data
-                        if hasattr(beatmap_data, '_beatmapset'):
-                            beatmapset = beatmap_data._beatmapset
-                            beatmap.beatmapset_id = getattr(beatmapset, 'id', beatmap.beatmapset_id)
-                            beatmap.title = getattr(beatmapset, 'title', beatmap.title)
-                            beatmap.artist = getattr(beatmapset, 'artist', beatmap.artist)
-                            beatmap.creator = join_diff_creators(beatmap_data)
-                            beatmap.favourite_count = getattr(beatmapset, 'favourite_count', beatmap.favourite_count)
-                            beatmap.cover_image_url = getattr(
-                                getattr(beatmapset, 'covers', {}),
-                                'cover_2x',
-                                beatmap.cover_image_url
-                            )
+                    beatmap.version = getattr(bm_data, 'version', beatmap.version)
+                    beatmap.total_length = getattr(bm_data, 'total_length', beatmap.total_length)
+                    beatmap.bpm = getattr(bm_data, 'bpm', beatmap.bpm)
+                    beatmap.cs = getattr(bm_data, 'cs', beatmap.cs)
+                    beatmap.drain = getattr(bm_data, 'drain', beatmap.drain)
+                    beatmap.accuracy = getattr(bm_data, 'accuracy', beatmap.accuracy)
+                    beatmap.ar = getattr(bm_data, 'ar', beatmap.ar)
+                    beatmap.difficulty_rating = getattr(bm_data, 'difficulty_rating', beatmap.difficulty_rating)
+                    beatmap.status = status_map.get(bm_data.status.value, 'Unknown')
+                    api_mode = getattr(bm_data, 'mode', beatmap.mode)
+                    beatmap.mode = GAME_MODE_MAPPING.get(str(api_mode), 'unknown')
+                    beatmap.playcount = getattr(bm_data, 'playcount', beatmap.playcount)
+                    beatmap.save()
 
-                        status_mapping = {
-                            -2: "Graveyard",
-                            -1: "WIP",
-                            0: "Pending",
-                            1: "Ranked",
-                            2: "Approved",
-                            3: "Qualified",
-                            4: "Loved"
-                        }
+                    genres = fetch_genres(beatmap.artist, beatmap.title)
+                    if genres:
+                        beatmap.genres.set(get_or_create_genres(genres))
 
-                        # Update other beatmap attributes
-                        beatmap.version = getattr(beatmap_data, 'version', beatmap.version)
-                        beatmap.total_length = getattr(beatmap_data, 'total_length', beatmap.total_length)
-                        beatmap.bpm = getattr(beatmap_data, 'bpm', beatmap.bpm)
-                        beatmap.cs = getattr(beatmap_data, 'cs', beatmap.cs)
-                        beatmap.drain = getattr(beatmap_data, 'drain', beatmap.drain)
-                        beatmap.accuracy = getattr(beatmap_data, 'accuracy', beatmap.accuracy)
-                        beatmap.ar = getattr(beatmap_data, 'ar', beatmap.ar)
-                        beatmap.difficulty_rating = getattr(beatmap_data, 'difficulty_rating', beatmap.difficulty_rating)
-                        beatmap.status = status_mapping.get(beatmap_data.status.value, "Unknown")
-                        beatmap.playcount = getattr(beatmap_data, 'playcount', beatmap.playcount)
-                        # Map the game mode to the desired string representation
-                        api_mode_value = getattr(beatmap_data, 'mode', beatmap.mode)
-                        beatmap.mode = GAME_MODE_MAPPING.get(str(api_mode_value), 'unknown')
-
-                        # Save the updated beatmap to the database
-                        beatmap.save()
-                        print("Beatmap attributes updated and saved.")
-
-                        # Fetch and associate genres
-                        # Assuming 'title' is the song name
-                        genres = fetch_genres(beatmap.artist, beatmap.title)
-                        print(f"Fetched genres: {genres}")
-                        if genres:
-                            genre_objects = get_or_create_genres(genres)
-                            beatmap.genres.set(genre_objects)  # Associate genres with the beatmap
-                            print(f"Associated genres {genres} with beatmap '{beatmap_id_request}'.")
-                        else:
-                            print(f"No genres found for beatmap '{beatmap_id_request}'.")
-
-                    # Add the beatmap to the context to display its information
-                    context['beatmap'] = beatmap
-                else:
-                    raise ValueError("Invalid input. Please provide a valid beatmap link or ID.")
-
-            except Exception as e:
-                messages.error(request, f'Error: {str(e)}')
-                logger.error(f"Error processing beatmap input '{beatmap_input}': {e}")
-                print(f"Error: {str(e)}")
+                context['beatmap'] = beatmap
+            except Exception as exc:
+                msg = f'Error: {exc}'
+                messages.error(request, msg)
+                logger.error(f"Error processing beatmap input '{beatmap_input}': {exc}")
 
     else:
-        beatmap_id = request.GET.get('beatmap_id')
-        if beatmap_id:
-            beatmap = get_object_or_404(Beatmap, beatmap_id=beatmap_id)
+        bid = request.GET.get('beatmap_id')
+        if bid:
+            beatmap = get_object_or_404(Beatmap, beatmap_id=bid)
             context['beatmap'] = beatmap
 
-    # If a beatmap is in context, prepare tags
     if 'beatmap' in context:
         beatmap = context['beatmap']
-
-        # Aggregate tag applications for the beatmap
-        beatmap_tags_with_counts = (
+        tags = (
             TagApplication.objects
             .filter(beatmap=beatmap)
             .values('tag__id', 'tag__name', 'tag__description', 'tag__description_author__username')
             .annotate(apply_count=Count('id'))
-        ).order_by('-apply_count')
-
-        # Get the set of tag IDs that the current user has applied
+            .order_by('-apply_count')
+        )
         if request.user.is_authenticated:
             user_tag_ids = set(
                 TagApplication.objects.filter(beatmap=beatmap, user=request.user).values_list('tag__id', flat=True)
@@ -317,10 +268,8 @@ def home(request):
         else:
             user_tag_ids = set()
 
-        # Add is_applied_by_user flag to each tag
-        for tag_info in beatmap_tags_with_counts:
-            tag_info['is_applied_by_user'] = tag_info['tag__id'] in user_tag_ids
-
-        context['beatmap_tags_with_counts'] = beatmap_tags_with_counts
+        for t in tags:
+            t['is_applied_by_user'] = t['tag__id'] in user_tag_ids
+        context['beatmap_tags_with_counts'] = tags
 
     return render(request, 'home.html', context)

@@ -1,4 +1,8 @@
-# echosu/views.py — KEEP ONLY THIS
+# echosu/views.py
+"""
+Imports all view functions and classes from views/ 
+making them available for use in URL routing and other parts of the application.
+"""
 
 from importlib import import_module
 import pkgutil, pathlib

@@ -40,5 +40,5 @@ Todo list for dev:
 
 
 * model spesific:
-* dataset where each note had "angle between last note and next note, length from last note, length to next note,"
+* dataset where each note had "angle between last note and next note, Last note orientation, next note orientation, length from last note, length to next note,"
 * add pp calulation so to be able to do a stationary check.

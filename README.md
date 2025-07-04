@@ -36,3 +36,9 @@ Todo list for dev:
 * Fix so user icon is there even a user has a transparent profile pic
 * Fix Audio volume on recommended maps after page 1.
 * Add keywords for amount of tags added to map
+* tag spesific extra metrics when searching (aka if "stream" in query apply +- 10bpm, if "percicion" in query apply +- 1 CS, if "reading" in query apply +- 1 ar)
+
+
+* model spesific:
+* dataset where each note had "angle between last note and next note, length from last note, length to next note,"
+* add pp calulation so to be able to do a stationary check.

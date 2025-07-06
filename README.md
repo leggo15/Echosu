@@ -1,6 +1,43 @@
-[chrome_RMjJQPyY2L](https://github.com/user-attachments/assets/620d0594-f158-4e4c-ac8f-184ec38e4acf)
+# echosu
 
-Todo list for dev:
+echosu is a **Django** web app that lets the osu! community add crowd-sourced tags to beatmaps and then search for them with powerful operators.
+
+A booru board for osu! maps in a sense with OAuth login, genre fetching, and an open JSON API.
+
+---
+
+### Features
+
+* **osu! OAuth** – Login using your osu account
+* **Tagging UI** – create / apply / vote tags; tag-description edit workflow with vote-locking
+* **Advanced search** –
+
+  `tech ."awkward aim" -bursts AR<=9.5 BPM>=190`
+
+  operators support inclusion/exclusion, quoted multi-word tags, numeric attribute filters, etc.
+* **Beatmap ingest** – paste an ID or osu! URL; metadata & cover pulled from the official API; genres auto-fetched from Last.fm/MusicBrainz
+* **Personalised recommendations** – shows maps similar to ones you’ve already tagged (getting axed and replaced by a propper recomendation algorithm)
+* **REST API** – read-write endpoints for beatmaps, tags, tag-applications & user profiles, plus a convenience `/api/beatmaps/tags/` aggregator; HMAC-style custom token auth
+* **Admin & analytics** – Django admin, request logging middleware, user-stats dashboard
+
+---
+
+### Thanks / Acknowledgements
+
+* osu! team for the public API
+* Last.fm & MusicBrainz for music genre data
+* Django, DRF, OSSAPI, NumPy, SciPy, NLTK, Better Profanity & friends
+* The osu! community for tagging hundreds of beatmaps already!
+
+
+
+
+
+---
+
+
+
+Todo list:
 
 * Merge "Home" and "Find map". -DONE
 * Fix the API authentication denied issue. -DONE
@@ -16,20 +53,16 @@ Todo list for dev:
 * Quick Search on the home page-DONE
 * Make documentation for the API -DONE
 * Add a write method in the API, users should be able to send in a beatmap ID and tags they wish to apply to said ID. -DONE
-
-
-* Create a userpage (a new User Stats page where an osu username or userID can be inserted in a field and stats regarding that profile becomes visible, if that user is the currently logged in one then public and private stats show, if its a differnet user, only the public stats show)
+* Create a userpage (a new User Stats page where an osu username or userID can be inserted in a field and stats regarding that profile becomes visible, if that user is the currently logged in one then public and private stats show, if its a differnet user, only the public stats show) - In progress
 
   * Public stats:
 
-    * What tags are typical for the user's maps, which maps are the most exemplar for the user and which is the most unlike the user to map. (pie chart with most common tags associated with the user's maps)
+    * What tags are typical for the user's maps, which maps are the most exemplar for the user and which is the most unlike the user to map. (pie chart with most common tags associated with the user's maps) - In progress
     * list of maps the user has tagged, and their most used tags
   * Private Stats:
 
     * log of searches done
     * when the user's maps were tagged (line chart time series with tag amount can be sorted by tag)
-
-
 * "leaderboard" that displays the users who've tagged the most maps.
 * Find the cause for the tag description rearangement bug.
 * Make the recommended maps feature more interesting, add noise to it to keep it from always recomending the same set of maps.
@@ -37,8 +70,10 @@ Todo list for dev:
 * Fix Audio volume on recommended maps after page 1.
 * Add keywords for amount of tags added to map
 * tag spesific extra metrics when searching (aka if "stream" in query apply +- 10bpm, if "percicion" in query apply +- 1 CS, if "reading" in query apply +- 1 ar)
-
-
 * model spesific:
 * dataset where each note had "angle between last note and next note, Last note orientation, next note orientation, length from last note, length to next note,"
 * add pp calulation so to be able to do a stationary check.
+
+
+
+[chrome_RMjJQPyY2L](https://github.com/user-attachments/assets/620d0594-f158-4e4c-ac8f-184ec38e4acf)

@@ -39,6 +39,16 @@ from rest_framework.authtoken.models import Token
 from ..models import UserProfile
 from .secrets import redirect_uri, api, logger  # client credentials & logger
 
+# ----------------------------- Initialize API and Logger ----------------------------- #
+
+# Initialize client credentials from Django settings
+client_id = settings.SOCIAL_AUTH_OSU_KEY
+client_secret = settings.SOCIAL_AUTH_OSU_SECRET
+redirect_uri = settings.SOCIAL_AUTH_OSU_REDIRECT_URI
+
+# Initialize the Ossapi instance with client credentials
+api = Ossapi(client_id, client_secret)
+
 # ---------------------------------------------------------------------------
 # Authentication views
 # ---------------------------------------------------------------------------

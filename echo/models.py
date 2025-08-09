@@ -143,7 +143,15 @@ class Vote(models.Model):
 class TagApplication(models.Model):
     tag = models.ForeignKey(Tag, on_delete=models.CASCADE)
     beatmap = models.ForeignKey(Beatmap, on_delete=models.CASCADE)
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    is_prediction = models.FloatField(default=False, help_text="Indicates if tag is predicted for this beatmap")
+    prediction_confidence = models.FloatField(default=0.0, blank=True, null=True, help_text="Confidence level of the prediction")
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     def agreed_by_others(self):

@@ -1,7 +1,10 @@
 <!-- _navbar.html -->
 {% load static %}
 {% load custom_tags %}
-<link rel="stylesheet" href="https://echosu-s3.s3.eu-central-1.amazonaws.com/static/css/master.css">
+<head>
+    <link rel="stylesheet" href="https://code.jquery.com/ui/1.13.3/themes/base/jquery-ui.css">
+    <link rel="stylesheet" href="https://echosu-s3.s3.eu-central-1.amazonaws.com/static/css/master.css">
+</head>
 <style>
     /* Base styles for the navbar */
     .nav-content {
@@ -132,6 +135,10 @@
         </div>
     </div>
 </nav>
+<body>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://code.jquery.com/ui/1.13.3/jquery-ui.min.js"></script> <script src="https://echosu-s3.s3.eu-central-1.amazonaws.com/static/js/master.js"></script>
+</body>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         const messages = document.querySelectorAll('.messages li');

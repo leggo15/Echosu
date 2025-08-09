@@ -123,10 +123,10 @@ def search_results(request):
                     tag_miss_match_count=Value(len(include_tags), output_field=IntegerField()) - F('tag_match_count'),
                     tag_surplus_count=F('total_tag_count') - F('tag_match_count'),
                     tag_weight=(
-                        (F('exact_match_distinct_count') * 3.0 +
+                        (F('exact_match_distinct_count') * 5.0 +
                          F('exact_match_total_count') * 1.0 +
-                         F('tag_match_count') * 0.3) /
-                        (F('tag_miss_match_count') * 0.5 + 1 + (F('tag_surplus_count') * 1.3))
+                         F('tag_match_count') * 0.1) /
+                        (F('tag_miss_match_count') * 1 + (F('tag_surplus_count') * 3))
                     ),
                 )
                 .order_by('-tag_weight')

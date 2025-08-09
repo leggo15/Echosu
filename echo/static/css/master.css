@@ -39,6 +39,7 @@ body {
     background-color: lightcoral; /* Color indicating the tag can be removed */
 }
 
+
 /* Style for the tag list (suggestions) */
 #tag-list {
     list-style: none;
@@ -481,8 +482,15 @@ nav {
     background-color: #aaaaaa; /* Grey */
 }
 
-/* Hover over a tag that can be applied (unapplied) */
-.applied-tags span.tag.tag-unapplied:hover {
+/* Tag is predicted by the model and has no user applications (Orange) */
+.applied-tags .tag.tag-predicted {
+  background-color: #ffaf6e !important;
+  color: #fff !important;
+}
+
+/* Hover over a tag that can be applied (unapplied or predicted) */
+.applied-tags span.tag.tag-unapplied:hover,
+.applied-tags span.tag.tag-predicted:hover {
     background-color: rgb(105, 158, 105); /* Green */
 }
 
@@ -490,7 +498,6 @@ nav {
 .applied-tags span.tag.tag-applied:hover {
     background-color: lightcoral; /* Red */
 }
-
 
 
 /* ########### PROFILE PAGE ##########*/

@@ -102,7 +102,7 @@ $(document).ready(function() {
         var $this = $(this);
         var tagName = $this.data('tag-name');
         var beatmapId = $this.data('beatmap-id');
-        var isAppliedByUser = $this.attr('data-applied-by-user') === 'true';
+        var isAppliedByUser = $this.attr('data-applied-by-user').toLowerCase() === 'true';
         var action = isAppliedByUser ? 'remove' : 'apply';
         modifyTag($this, tagName, beatmapId, action);
     });

@@ -1,4 +1,3 @@
-# API_TOKEN = 'UlNweYKx44Qg2WHhH4Ndxey8ef1kU2aNYKU6KvLuMmKaM3Da8P7qaAC18OM5Pbs8'
 
 import os
 import django
@@ -19,7 +18,7 @@ client_id = settings.SOCIAL_AUTH_OSU_KEY
 client_secret = settings.SOCIAL_AUTH_OSU_SECRET
 api = Ossapi(client_id, client_secret)
 
-API_TOKEN = 'UlNweYKx44Qg2WHhH4Ndxey8ef1kU2aNYKU6KvLuMmKaM3Da8P7qaAC18OM5Pbs8'
+API_TOKEN = 'IToYZUbsa6gRvmtoB1kEMTh4kfQ4RRK1L3aMsvtQcwqkVJ1YpvaDpXel9H7T0ucX'
 BASE_URL = 'https://www.echosu.com'
 
 headers = {

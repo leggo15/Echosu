@@ -49,6 +49,7 @@ from ..serializers import (
 )
 from .auth import api                         # shared Ossapi instance
 from .beatmap import join_diff_creators       # helper
+from .shared import GAME_MODE_MAPPING         # mode mapping helper
 # --------------------------------------------------------------------- #
 
 
@@ -533,9 +534,25 @@ def admin_refresh_beatmaps(request):
                 beatmap.accuracy = getattr(beatmap_data, 'accuracy', beatmap.accuracy)
                 beatmap.ar = getattr(beatmap_data, 'ar', beatmap.ar)
                 beatmap.difficulty_rating = getattr(beatmap_data, 'difficulty_rating', beatmap.difficulty_rating)
-                beatmap.mode = getattr(beatmap_data, 'mode', beatmap.mode)
+                # Map osu! API mode to canonical string used by search
+                api_mode_value = getattr(beatmap_data, 'mode', beatmap.mode)
+                beatmap.mode = GAME_MODE_MAPPING.get(str(api_mode_value), 'unknown')
                 try:
                     beatmap.status = status_mapping.get(beatmap_data.status.value, getattr(beatmap, 'status', 'Unknown'))
+                except Exception:
+                    pass
+                # Popularity fields
+                try:
+                    beatmap.playcount = getattr(beatmap_data, 'playcount', beatmap.playcount)
+                except Exception:
+                    pass
+                try:
+                    beatmap.favourite_count = getattr(getattr(beatmap_data, '_beatmapset', None), 'favourite_count', getattr(beatmap, 'favourite_count', 0))
+                except Exception:
+                    pass
+                # Last updated if available
+                try:
+                    beatmap.last_updated = getattr(beatmap_data, 'last_updated', beatmap.last_updated)
                 except Exception:
                     pass
                 updated += 0 if was_created else 1

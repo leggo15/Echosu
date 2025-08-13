@@ -10,6 +10,7 @@ set -euo pipefail
 : "${WWW_DOMAIN:=www.echosu.com}"
 : "${ADMIN_EMAIL:=admin@example.com}"
 : "${GENERATE_DEPLOY_KEY:=0}"  # set to 1 to auto-generate an ed25519 key for $APP_USER
+: "${GIT_AS_ROOT:=1}"          # set to 1 to run git operations as root (use root's SSH key)
 
 REPO_DIR=/opt/$APP_NAME
 VENV_DIR=$REPO_DIR/venv
@@ -48,9 +49,15 @@ setup_user() {
 clone_repo() {
   if [[ -d $REPO_DIR/.git ]]; then
     log "Repo exists; fetching latest"
-    sudo -u "$APP_USER" -H git -C "$REPO_DIR" fetch --quiet --all
-    CURRENT_BRANCH=$(sudo -u "$APP_USER" -H git -C "$REPO_DIR" symbolic-ref --short HEAD || echo main)
-    sudo -u "$APP_USER" -H git -C "$REPO_DIR" reset --hard "origin/$CURRENT_BRANCH" --quiet
+    if [[ "$GIT_AS_ROOT" == "1" ]]; then
+      git -C "$REPO_DIR" fetch --quiet --all
+      CURRENT_BRANCH=$(git -C "$REPO_DIR" symbolic-ref --short HEAD || echo main)
+      git -C "$REPO_DIR" reset --hard "origin/$CURRENT_BRANCH" --quiet
+    else
+      sudo -u "$APP_USER" -H git -C "$REPO_DIR" fetch --quiet --all
+      CURRENT_BRANCH=$(sudo -u "$APP_USER" -H git -C "$REPO_DIR" symbolic-ref --short HEAD || echo main)
+      sudo -u "$APP_USER" -H git -C "$REPO_DIR" reset --hard "origin/$CURRENT_BRANCH" --quiet
+    fi
   else
     log "Cloning repo into $REPO_DIR"
     sudo mkdir -p "$REPO_DIR"
@@ -59,7 +66,11 @@ clone_repo() {
       echo "REPO_URL is empty. Please set REPO_URL to your repository URL." >&2
       exit 1
     fi
-    sudo -u "$APP_USER" -H git clone "$REPO_URL" "$REPO_DIR"
+    if [[ "$GIT_AS_ROOT" == "1" ]]; then
+      git clone "$REPO_URL" "$REPO_DIR"
+    else
+      sudo -u "$APP_USER" -H git clone "$REPO_URL" "$REPO_DIR"
+    fi
   fi
   sudo chown -R "$APP_USER":"www-data" "$REPO_DIR"
 }

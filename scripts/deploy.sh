@@ -7,6 +7,8 @@ set -euo pipefail
 : "${REPO_DIR:=/opt/$APP_NAME}"
 : "${VENV_DIR:=$REPO_DIR/venv}"
 : "${ENV_FILE:=$REPO_DIR/.env}"
+:
+: "${GIT_AS_ROOT:=1}"          # set to 1 to run git operations as root (use root's SSH key)
 APP_DIR=""
 detect_app_dir() {
   if [[ -f "$REPO_DIR/manage.py" ]]; then
@@ -35,9 +37,15 @@ pull_latest() {
     echo "Repo not found at $REPO_DIR" >&2
     exit 1
   fi
-  sudo -u "$APP_USER" git -C "$REPO_DIR" fetch --quiet --all
-  BR=$(sudo -u "$APP_USER" git -C "$REPO_DIR" symbolic-ref --short HEAD || echo main)
-  sudo -u "$APP_USER" git -C "$REPO_DIR" reset --hard "origin/$BR" --quiet
+  if [[ "$GIT_AS_ROOT" == "1" ]]; then
+    git -C "$REPO_DIR" fetch --quiet --all
+    BR=$(git -C "$REPO_DIR" symbolic-ref --short HEAD || echo main)
+    git -C "$REPO_DIR" reset --hard "origin/$BR" --quiet
+  else
+    sudo -u "$APP_USER" git -C "$REPO_DIR" fetch --quiet --all
+    BR=$(sudo -u "$APP_USER" git -C "$REPO_DIR" symbolic-ref --short HEAD || echo main)
+    sudo -u "$APP_USER" git -C "$REPO_DIR" reset --hard "origin/$BR" --quiet
+  fi
 }
 
 install_requirements() {

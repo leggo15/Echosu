@@ -433,3 +433,113 @@ def admin_upload_tag_applications(request):
             errors.append(str(exc))
 
     return Response({'status': 'ok', 'created': created, 'skipped': skipped, 'errors': errors})
+
+
+@api_view(['POST'])
+@authentication_classes([CustomTokenAuthentication])
+@permission_classes([IsAuthenticated])
+def admin_refresh_beatmaps(request):
+    """Fetch and update beatmap metadata from osu! API for given IDs (admin only).
+
+    Accepted payloads:
+      - {"beatmap_ids": ["123", "456"]}
+      - {"items": ["123", "456"]}
+      - ["123", "456"]
+      - {"items": [{"beatmap_id": "123"}, ...]}
+    """
+    user = request.user
+    if not getattr(user, 'is_staff', False):
+        return Response({'detail': 'Admin privileges required.'}, status=403)
+
+    payload = request.data
+    items = []
+    if isinstance(payload, dict):
+        if 'beatmap_ids' in payload and isinstance(payload['beatmap_ids'], list):
+            items = payload['beatmap_ids']
+        elif 'items' in payload and isinstance(payload['items'], list):
+            items = payload['items']
+        else:
+            return Response({'detail': 'Invalid payload.'}, status=400)
+    elif isinstance(payload, list):
+        items = payload
+    else:
+        return Response({'detail': 'Invalid payload.'}, status=400)
+
+    def _extract_id(it):
+        if isinstance(it, dict):
+            return str(it.get('beatmap_id') or it.get('id') or '').strip()
+        return str(it).strip()
+
+    processed = 0
+    created = 0
+    updated = 0
+    skipped = 0
+    errors = []
+
+    status_mapping = {
+        -2: 'Graveyard',
+        -1: 'WIP',
+        0: 'Pending',
+        1: 'Ranked',
+        2: 'Approved',
+        3: 'Qualified',
+        4: 'Loved',
+    }
+
+    for raw in items:
+        bm_id = _extract_id(raw)
+        if not bm_id or not bm_id.isdigit():
+            skipped += 1
+            continue
+        processed += 1
+        try:
+            beatmap_data = api.beatmap(bm_id)
+            if not beatmap_data:
+                skipped += 1
+                continue
+            with transaction.atomic():
+                beatmap, was_created = Beatmap.objects.get_or_create(beatmap_id=str(bm_id))
+                created += 1 if was_created else 0
+
+                if hasattr(beatmap_data, '_beatmapset'):
+                    bm_set = beatmap_data._beatmapset
+                    try:
+                        beatmap.beatmapset_id = getattr(bm_set, 'id', beatmap.beatmapset_id)
+                    except Exception:
+                        pass
+                    beatmap.title = getattr(bm_set, 'title', beatmap.title)
+                    beatmap.artist = getattr(bm_set, 'artist', beatmap.artist)
+                    # Preserve original set owner id/name if unset
+                    set_owner_name = getattr(bm_set, 'creator', None)
+                    set_owner_id = getattr(bm_set, 'user_id', None)
+                    if not getattr(beatmap, 'original_creator', None):
+                        beatmap.original_creator = set_owner_name
+                    if not getattr(beatmap, 'original_creator_id', None):
+                        try:
+                            beatmap.original_creator_id = str(set_owner_id or '')
+                        except Exception:
+                            pass
+                    beatmap.creator = join_diff_creators(beatmap_data)
+                    try:
+                        beatmap.cover_image_url = getattr(getattr(bm_set, 'covers', {}), 'cover_2x', beatmap.cover_image_url)
+                    except Exception:
+                        pass
+
+                beatmap.version = getattr(beatmap_data, 'version', beatmap.version)
+                beatmap.total_length = getattr(beatmap_data, 'total_length', beatmap.total_length)
+                beatmap.bpm = getattr(beatmap_data, 'bpm', beatmap.bpm)
+                beatmap.cs = getattr(beatmap_data, 'cs', beatmap.cs)
+                beatmap.drain = getattr(beatmap_data, 'drain', beatmap.drain)
+                beatmap.accuracy = getattr(beatmap_data, 'accuracy', beatmap.accuracy)
+                beatmap.ar = getattr(beatmap_data, 'ar', beatmap.ar)
+                beatmap.difficulty_rating = getattr(beatmap_data, 'difficulty_rating', beatmap.difficulty_rating)
+                beatmap.mode = getattr(beatmap_data, 'mode', beatmap.mode)
+                try:
+                    beatmap.status = status_mapping.get(beatmap_data.status.value, getattr(beatmap, 'status', 'Unknown'))
+                except Exception:
+                    pass
+                updated += 0 if was_created else 1
+                beatmap.save()
+        except Exception as exc:
+            errors.append(f"{bm_id}: {exc}")
+    return Response({'status': 'ok', 'processed': processed, 'created': created, 'updated': updated, 'skipped': skipped, 'errors': errors})

@@ -9,6 +9,7 @@ set -euo pipefail
 : "${DOMAIN:=echosu.com}"
 : "${WWW_DOMAIN:=www.echosu.com}"
 : "${ADMIN_EMAIL:=admin@example.com}"
+: "${GENERATE_DEPLOY_KEY:=0}"  # set to 1 to auto-generate an ed25519 key for $APP_USER
 
 REPO_DIR=/opt/$APP_NAME
 VENV_DIR=$REPO_DIR/venv
@@ -40,16 +41,16 @@ install_pkgs() {
 setup_user() {
   log "Ensuring system user $APP_USER exists"
   if ! id -u "$APP_USER" &>/dev/null; then
-    sudo adduser --system --group "$APP_USER"
+    sudo adduser --system --group --home "/home/$APP_USER" --shell /bin/bash "$APP_USER"
   fi
 }
 
 clone_repo() {
   if [[ -d $REPO_DIR/.git ]]; then
     log "Repo exists; fetching latest"
-    git -C "$REPO_DIR" fetch --quiet --all
-    CURRENT_BRANCH=$(git -C "$REPO_DIR" symbolic-ref --short HEAD || echo main)
-    git -C "$REPO_DIR" reset --hard "origin/$CURRENT_BRANCH" --quiet
+    sudo -u "$APP_USER" -H git -C "$REPO_DIR" fetch --quiet --all
+    CURRENT_BRANCH=$(sudo -u "$APP_USER" -H git -C "$REPO_DIR" symbolic-ref --short HEAD || echo main)
+    sudo -u "$APP_USER" -H git -C "$REPO_DIR" reset --hard "origin/$CURRENT_BRANCH" --quiet
   else
     log "Cloning repo into $REPO_DIR"
     sudo mkdir -p "$REPO_DIR"
@@ -58,7 +59,7 @@ clone_repo() {
       echo "REPO_URL is empty. Please set REPO_URL to your repository URL." >&2
       exit 1
     fi
-    sudo -u "$APP_USER" git clone "$REPO_URL" "$REPO_DIR"
+    sudo -u "$APP_USER" -H git clone "$REPO_URL" "$REPO_DIR"
   fi
   sudo chown -R "$APP_USER":"www-data" "$REPO_DIR"
 }
@@ -67,6 +68,46 @@ add_git_safedir() {
   if ! sudo git config --global --get-all safe.directory | grep -q "^$REPO_DIR$"; then
     log "Marking $REPO_DIR as a safe Git directory"
     sudo git config --global --add safe.directory "$REPO_DIR"
+  fi
+}
+
+get_user_home() {
+  USER_HOME=$(getent passwd "$APP_USER" | cut -d: -f6)
+  if [[ -z "$USER_HOME" || "$USER_HOME" == "/nonexistent" ]]; then
+    USER_HOME="/home/$APP_USER"
+    log "Fixing $APP_USER home to $USER_HOME"
+    sudo usermod -d "$USER_HOME" -m "$APP_USER"
+  fi
+}
+
+prepare_user_home_ssh() {
+  get_user_home
+  log "Preparing $APP_USER SSH directory at $USER_HOME/.ssh"
+  sudo mkdir -p "$USER_HOME/.ssh"
+  sudo chown -R "$APP_USER":"$APP_USER" "$USER_HOME/.ssh"
+  sudo chmod 700 "$USER_HOME/.ssh"
+
+  local host=""
+  # Best-effort extraction of SSH host from REPO_URL
+  if echo "$REPO_URL" | grep -qE '^[^@]+@[^:]+:'; then
+    host=$(echo "$REPO_URL" | sed -n 's/.*@\([^:]*\):.*/\1/p')
+  elif echo "$REPO_URL" | grep -qE '^ssh://'; then
+    host=$(echo "$REPO_URL" | sed -n 's#ssh://[^@]*@\([^/]*\)/.*#\1#p')
+  elif echo "$REPO_URL" | grep -q 'github.com'; then
+    host="github.com"
+  fi
+
+  if [[ -n "$host" ]]; then
+    log "Seeding known_hosts for $host"
+    sudo -u "$APP_USER" ssh-keyscan -H "$host" 2>/dev/null | sudo tee -a "$USER_HOME/.ssh/known_hosts" >/dev/null || true
+    sudo chmod 644 "$USER_HOME/.ssh/known_hosts" || true
+  fi
+
+  if [[ "$GENERATE_DEPLOY_KEY" == "1" && ! -f "$USER_HOME/.ssh/id_ed25519" ]]; then
+    log "Generating deploy key for $APP_USER (ed25519)"
+    sudo -u "$APP_USER" ssh-keygen -t ed25519 -N "" -C "$APP_NAME-deploy" -f "$USER_HOME/.ssh/id_ed25519"
+    log "Public key (add as a deploy key in your repo settings):"
+    sudo cat "$USER_HOME/.ssh/id_ed25519.pub" || true
   fi
 }
 
@@ -230,6 +271,7 @@ restart_stack() {
 main() {
   install_pkgs
   setup_user
+  prepare_user_home_ssh
   clone_repo
   add_git_safedir
   detect_app_dir

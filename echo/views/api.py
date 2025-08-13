@@ -392,26 +392,75 @@ def admin_upload_tag_applications(request):
                 skipped += 1
                 continue
 
-            # Resolve user
+            # Resolve or create user
             resolved_user = None
             osu_id = (entry.get('osu_id') or '').strip()
             username = (entry.get('username') or '').strip()
             user_id = entry.get('user_id')
+
+            # 1) Prefer osu_id for deterministic identity; create if missing
             if osu_id:
                 try:
                     profile = UserProfile.objects.get(osu_id=str(osu_id))
                     resolved_user = profile.user
                 except UserProfile.DoesNotExist:
-                    resolved_user = None
-            if not resolved_user and user_id:
-                try:
-                    resolved_user = UserProfile._meta.model._meta.get_field('user').remote_field.model.objects.get(id=user_id)
-                except Exception:
-                    resolved_user = None
+                    try:
+                        from django.contrib.auth.models import User as DjangoUser
+                        # Choose a username: provided username or fallback to osu-<id>
+                        candidate = username or f'osu-{osu_id}'
+                        base = candidate
+                        suffix = 1
+                        while True:
+                            try:
+                                u, created_user = DjangoUser.objects.get_or_create(username=candidate)
+                                if not created_user and not username:
+                                    # If fallback name exists but not tied to this osu_id, try next suffix
+                                    candidate = f"{base}-{suffix}"
+                                    suffix += 1
+                                    continue
+                                break
+                            except Exception:
+                                candidate = f"{base}-{suffix}"
+                                suffix += 1
+                        resolved_user = u
+                        UserProfile.objects.create(user=resolved_user, osu_id=str(osu_id))
+                    except Exception as create_exc:
+                        errors.append(f"user_create_failed osu_id={osu_id}: {create_exc}")
+                        resolved_user = None
+
+            # 2) If still not resolved and username present, attempt lookup or create via osu API
             if not resolved_user and username:
                 try:
                     from django.contrib.auth.models import User as DjangoUser
-                    resolved_user = DjangoUser.objects.get(username=username)
+                    u = DjangoUser.objects.filter(username=username).first()
+                    if u:
+                        resolved_user = u
+                    else:
+                        # Try to resolve osu_id via Ossapi for profile creation
+                        try:
+                            from ossapi.enums import UserLookupKey
+                            uid = None
+                            try:
+                                api_user = api.user(username, key=UserLookupKey.USERNAME)
+                                uid = getattr(api_user, 'id', None)
+                            except Exception:
+                                uid = None
+                            if uid:
+                                u = DjangoUser.objects.create(username=username)
+                                UserProfile.objects.create(user=u, osu_id=str(uid))
+                                resolved_user = u
+                            else:
+                                # Create user without osu_id is not possible due to model constraint; skip
+                                resolved_user = None
+                        except Exception:
+                            resolved_user = None
+                except Exception:
+                    resolved_user = None
+
+            # 3) As a last resort, allow user_id mapping if an existing Django user exists
+            if not resolved_user and user_id:
+                try:
+                    resolved_user = UserProfile._meta.model._meta.get_field('user').remote_field.model.objects.get(id=user_id)
                 except Exception:
                     resolved_user = None
 
@@ -434,6 +483,91 @@ def admin_upload_tag_applications(request):
             errors.append(str(exc))
 
     return Response({'status': 'ok', 'created': created, 'skipped': skipped, 'errors': errors})
+
+
+@api_view(['POST'])
+@authentication_classes([CustomTokenAuthentication])
+@permission_classes([IsAuthenticated])
+def admin_upload_users(request):
+    """Create or update users with profiles on the server (admin only).
+
+    Accepted payloads:
+      - {"users": [{"osu_id": "4978940", "username": "Name", "profile_pic_url": "..."}, ...]}
+      - list of the same objects
+    """
+    user = request.user
+    if not getattr(user, 'is_staff', False):
+        return Response({'detail': 'Admin privileges required.'}, status=403)
+
+    payload = request.data
+    if isinstance(payload, dict) and 'users' in payload:
+        items = payload.get('users') or []
+    elif isinstance(payload, list):
+        items = payload
+    else:
+        return Response({'detail': 'Invalid payload.'}, status=400)
+
+    from django.contrib.auth.models import User as DjangoUser
+    created, updated, skipped, errors = 0, 0, 0, []
+
+    for entry in items:
+        try:
+            if not isinstance(entry, dict):
+                skipped += 1
+                continue
+            osu_id = str(entry.get('osu_id') or '').strip()
+            username = (entry.get('username') or '').strip()
+            profile_pic_url = (entry.get('profile_pic_url') or '').strip()
+            if not osu_id or not username:
+                skipped += 1
+                continue
+
+            # Prefer identity by osu_id
+            profile = UserProfile.objects.filter(osu_id=osu_id).select_related('user').first()
+            if profile:
+                # Update username and profile pic if needed
+                u = profile.user
+                if u.username != username:
+                    conflict = DjangoUser.objects.filter(username=username).exclude(pk=u.pk).first()
+                    if conflict:
+                        conflict.username = f"{conflict.username}__old__{conflict.id}"
+                        conflict.save(update_fields=['username'])
+                    u.username = username
+                    u.save(update_fields=['username'])
+                    updated += 1
+                if profile.profile_pic_url != profile_pic_url:
+                    profile.profile_pic_url = profile_pic_url
+                    profile.save(update_fields=['profile_pic_url'])
+                    updated += 1
+                continue
+
+            # No existing profile by osu_id → create or reuse username user
+            user_obj = DjangoUser.objects.filter(username=username).first()
+            if not user_obj:
+                user_obj = DjangoUser.objects.create(username=username)
+                created += 1
+            else:
+                updated += 1
+
+            # Ensure profile exists with provided osu_id
+            existing_profile = getattr(user_obj, 'userprofile', None)
+            if existing_profile:
+                chg = False
+                if existing_profile.osu_id != osu_id:
+                    existing_profile.osu_id = osu_id
+                    chg = True
+                if existing_profile.profile_pic_url != profile_pic_url:
+                    existing_profile.profile_pic_url = profile_pic_url
+                    chg = True
+                if chg:
+                    existing_profile.save(update_fields=['osu_id', 'profile_pic_url'])
+            else:
+                UserProfile.objects.create(user=user_obj, osu_id=osu_id, profile_pic_url=profile_pic_url)
+                created += 1
+        except Exception as exc:
+            errors.append(str(exc))
+
+    return Response({'status': 'ok', 'created': created, 'updated': updated, 'skipped': skipped, 'errors': errors})
 
 
 @api_view(['POST'])

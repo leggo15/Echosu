@@ -24,7 +24,7 @@ from echo.views.statistics import statistics, statistics_player_data
 # DRF viewsets
 from echo.views.api import (
     BeatmapViewSet, TagViewSet, TagApplicationViewSet, UserProfileViewSet, tags_for_beatmaps,
-    admin_upload_predictions, admin_upload_tag_applications, admin_refresh_beatmaps,
+    admin_upload_predictions, admin_upload_tag_applications, admin_refresh_beatmaps, admin_upload_users,
 )
 
 
@@ -79,6 +79,7 @@ urlpatterns = [
     # Admin-only upload endpoints
     path('api/admin/upload/predictions/', admin_upload_predictions),
     path('api/admin/upload/tag-applications/', admin_upload_tag_applications),
+    path('api/admin/upload/users/', admin_upload_users),
     path('api/admin/refresh/beatmaps/', admin_refresh_beatmaps),
 ]
 

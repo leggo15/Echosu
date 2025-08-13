@@ -72,13 +72,21 @@ def tag_library(request):
     '''Alphabetical list of all tags with beatmap counts, plus top 50 by usage.'''
     tags = (
         Tag.objects
-        .annotate(beatmap_count=Count('beatmaps', distinct=True))
+        .select_related('description_author')
+        .annotate(
+            beatmap_count=Count('beatmaps', distinct=True),
+            description_author_username=F('description_author__username'),
+        )
         .order_by('name')
     )
 
     top_tags = (
         Tag.objects
-        .annotate(map_count=Count('beatmaps', distinct=True))
+        .select_related('description_author')
+        .annotate(
+            map_count=Count('beatmaps', distinct=True),
+            description_author_username=F('description_author__username'),
+        )
         .filter(map_count__gt=0)
         .order_by('-map_count', 'name')[:50]
     )

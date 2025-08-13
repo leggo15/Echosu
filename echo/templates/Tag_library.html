@@ -38,7 +38,7 @@
                        aria-label="Search results for tag {{ tag.name }}">
                         <span class="tag-name" 
                               data-description="{{ tag.description|escapejs }}" 
-                              data-description-author="{{ tag.description_author|escapejs }}">
+                              data-description-author="{{ tag.description_author_username|default_if_none:'N/A'|escapejs }}">
                             {{ tag.name }}
                         </span>
                         <span class="tag-count">

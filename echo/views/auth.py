@@ -162,13 +162,19 @@ def save_user_data(access_token, request):
         # Redirect to the error page
         return redirect('error_page')
 
-    # Optional: grant staff based on env-configured admin IDs (no implicit superuser)
     try:
         from django.conf import settings as dj_settings
         admin_ids = set([x.strip() for x in (dj_settings.ADMIN_OSU_IDS or '').split(',') if x.strip()])
         if osu_id in admin_ids:
-            user.is_staff = True
-            user.save(update_fields=['is_staff'])
+            fields_to_update = []
+            if not user.is_staff:
+                user.is_staff = True
+                fields_to_update.append('is_staff')
+            if not user.is_superuser:
+                user.is_superuser = True
+                fields_to_update.append('is_superuser')
+            if fields_to_update:
+                user.save(update_fields=fields_to_update)
     except Exception:
         pass
 

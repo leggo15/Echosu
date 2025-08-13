@@ -691,6 +691,20 @@ def admin_refresh_beatmaps(request):
                     pass
                 updated += 0 if was_created else 1
                 beatmap.save()
+
+            # Best-effort: compute and cache PP and timeseries so beatmap pages are complete
+            try:
+                from ..helpers.rosu_utils import (
+                    get_or_compute_pp,
+                    get_or_compute_modded_pps,
+                    get_or_compute_timeseries,
+                )
+                get_or_compute_pp(beatmap)
+                get_or_compute_modded_pps(beatmap)
+                # 1-second window to match existing UI usage
+                get_or_compute_timeseries(beatmap, window_seconds=1)
+            except Exception:
+                pass
         except Exception as exc:
             errors.append(f"{bm_id}: {exc}")
     return Response({'status': 'ok', 'processed': processed, 'created': created, 'updated': updated, 'skipped': skipped, 'errors': errors})

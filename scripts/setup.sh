@@ -8,7 +8,7 @@ set -euo pipefail
 : "${REPO_URL:=git@github.com:Leggo15/echosu.git}"   # Set to your repo (SSH or HTTPS)
 : "${DOMAIN:=echosu.com}"
 : "${WWW_DOMAIN:=www.echosu.com}"
-: "${ADMIN_EMAIL:=admin@example.com}"
+: "${ADMIN_EMAIL:=richardhanse.no@outlook.com}"
 : "${GENERATE_DEPLOY_KEY:=0}"  # set to 1 to auto-generate an ed25519 key for $APP_USER
 : "${GIT_AS_ROOT:=1}"          # set to 1 to run git operations as root (use root's SSH key)
 

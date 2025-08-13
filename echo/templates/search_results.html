@@ -1,52 +1,18 @@
+{% extends 'base.html' %}
 {% load static %}
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Search Results</title>
-    <link rel="stylesheet" href="https://echosu-s3.s3.eu-central-1.amazonaws.com/static/css/master.css">
-    <!-- jQuery UI CSS for the slider -->
-    <link rel="stylesheet" href="https://code.jquery.com/ui/1.13.2/themes/base/jquery-ui.css">
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <!-- jQuery UI JS for the slider -->
-    <script src="https://code.jquery.com/ui/1.13.2/jquery-ui.min.js"></script>
-    <script src="https://echosu-s3.s3.eu-central-1.amazonaws.com/static/js/master.js"></script>
-    <script src="https://echosu-s3.s3.eu-central-1.amazonaws.com/static/js/collapsible_descriptions.js"></script>
+
+{% block title %}Search Results{% endblock %}
+{% block body_class %}page-search-results{% endblock %}
+
+{% block head_css %}
+  <link rel="stylesheet" href="https://code.jquery.com/ui/1.13.2/themes/base/jquery-ui.css">
+  <link rel="stylesheet" href="{% static 'css/beatmap_card.css' %}">
+  <link rel="stylesheet" href="{% static 'css/tagging.css' %}">
+  <link rel="stylesheet" href="{% static 'css/search_filters.css' %}">
+{% endblock %}
+
+{% block content %}
     <meta name="csrf-token" content="{{ csrf_token }}">
-</head>
-<style>
-    /* Base styles for the beatmap display */
-    .search-results .beatmap-display {
-        padding: 15px;
-        border-radius: 10px;
-    }
-    
-    /* Apply background color to odd-numbered results */
-    .search-results .beatmap-display:nth-child(even) {
-        background-color: #f1ecee;
-    }
-    
-    /* Apply background color to even-numbered results */
-    .search-results .beatmap-display:nth-child(odd) {
-        background-color: #E9DDE2;
-    }
-    /* Apply background color to audio in odd-numbered beatmap displays */
-    .search-results .beatmap-display:nth-child(even) .audio::-webkit-media-controls-panel {
-        background-color: #f1ecee; /* Light pink */
-    }
-    
-    /* Apply background color to audio in even-numbered beatmap displays */
-    .search-results .beatmap-display:nth-child(odd) .audio::-webkit-media-controls-panel {
-        background-color: #E9DDE2; /* Lighter pink */
-    }
-    .sorting-form {
-        padding-bottom: 5px;
-    }
-</style>
-<body class="page-search-results">
-    {% include '_navbar.html' %}
-    <div class="container">
 
         <h2 class="collapsible-description-header" aria-expanded="false" aria-controls="add-beatmap-content" role="button" tabindex="0">
             Advanced Search
@@ -101,6 +67,7 @@
                                 <li><code>LENGTH&gt;=200(in seconds)</code></li>
                                 <li><code>FAV&lt;=30</code></li>
                                 <li><code>COUNT&gt;10000</code></li>
+                                 <li><code>PP&gt;=300 PP&lt;=350</code></li>
                             </ul>
                         </li>
                     </ul>
@@ -117,10 +84,10 @@
         
         
         <!-- Search form with additional filters -->
-        <form action="{% url 'search_results' %}" method="get" class="beatmap-form">
-            <div class="filter-container">
+        <form action="{% url 'search_results' %}" method="get" class="beatmap-form filters-card">
+            <div class="filters-grid filters-grid--tight">
 
-                <!-- Star Rating Slider -->
+                <!-- Star Rating Slider (slightly narrower) -->
                 <div class="filter-item slider-container">
                     <label for="star-rating">Star Rating:</label>
                     <div id="star-rating-slider"></div>
@@ -130,6 +97,7 @@
                     </div>
                     <input type="hidden" name="star_min" id="star_min" value="{{ request.GET.star_min|default:0 }}">
                     <input type="hidden" name="star_max" id="star_max" value="{{ request.GET.star_max|default:10 }}">
+                    <input type="hidden" name="sort" value="{{ sort }}">
                 </div>
 
                 <!-- Add status filter toggle buttons -->
@@ -137,21 +105,38 @@
                     <label>Status:</label>
                     <div class="status-toggles">
                         <label>
-                            <input type="checkbox" name="status_ranked" value="ranked"
-                                {% if status_ranked %}checked{% endif %}>
-                            Ranked
+                            <input type="checkbox" name="status_ranked" value="ranked" {% if status_ranked %}checked{% endif %}>
+                            <span>Ranked</span>
                         </label>
                         <label>
-                            <input type="checkbox" name="status_loved" value="loved"
-                                {% if status_loved %}checked{% endif %}>
-                            Loved
+                            <input type="checkbox" name="status_loved" value="loved" {% if status_loved %}checked{% endif %}>
+                            <span>Loved</span>
                         </label>
                         <label>
-                            <input type="checkbox" name="status_unranked" value="unranked"
-                                {% if status_unranked %}checked{% endif %}>
-                            Unranked
+                            <input type="checkbox" name="status_unranked" value="unranked" {% if status_unranked %}checked{% endif %}>
+                            <span>Unranked</span>
                         </label>
                     </div>
+                </div>
+
+                <!-- Include predicted tags dropdown -->
+                <div class="filter-mode">
+                    <label for="include_predicted">Predicted Tags:</label>
+                    <select name="include_predicted" id="include_predicted">
+                        <option value="include" {% if include_predicted == 'include' or not include_predicted %}selected{% endif %}>Include</option>
+                        <option value="exclude" {% if include_predicted == 'exclude' %}selected{% endif %}>Exclude</option>
+                        <option value="only" {% if include_predicted == 'only' %}selected{% endif %}>Only</option>
+                    </select>
+                </div>
+
+                <!-- Exclude player's maps dropdown -->
+                <div class="filter-mode">
+                    <label for="exclude_player">Exclude My:</label>
+                    <select name="exclude_player" id="exclude_player">
+                        <option value="none" {% if request.GET.exclude_player == 'none' or not request.GET.exclude_player %}selected{% endif %}>None</option>
+                        <option value="top" {% if request.GET.exclude_player == 'top' %}selected{% endif %}>Top plays</option>
+                        <option value="fav" {% if request.GET.exclude_player == 'fav' %}selected{% endif %}>osu! Favorites</option>
+                    </select>
                 </div>
 
 
@@ -167,8 +152,10 @@
                 </div>
 
             </div>
-            <input type="text" name="query" id="tag-input" placeholder="Search by Tags, song genre, name, mapper, or artist" value="{{ request.GET.query }}">
-            <button type="submit" class="search_btn">Search</button>
+            <div class="search-row">
+                <input type="text" class="search-input" name="query" id="tag-input" placeholder="Search by Tags, song genre, name, mapper, artist and more..." value="{{ request.GET.query }}">
+                <button type="submit" class="search-btn">Search</button>
+            </div>
         </form>
 
         <form method="get" action="{% url 'search_results' %}" class="sorting-form">
@@ -177,6 +164,8 @@
             <input type="hidden" name="mode" value="{{ request.GET.mode }}">
             <input type="hidden" name="star_min" value="{{ star_min }}">
             <input type="hidden" name="star_max" value="{{ star_max }}">
+            <input type="hidden" name="include_predicted" value="{{ include_predicted }}">
+            <input type="hidden" name="exclude_player" value="{{ request.GET.exclude_player }}">
             {% if status_ranked %}
                 <input type="hidden" name="status_ranked" value="ranked">
             {% endif %}
@@ -196,124 +185,19 @@
 
 
         <div class="search-results">
-            {% for beatmap in beatmaps %}
-            <div class="beatmap-display" id="beatmap-{{ beatmap.beatmap_id }}">
-                {% if beatmap.cover_image_url %}
-                <div class="beatmap-cover-container">
-                    <a href="{% url 'beatmap_detail' beatmap_id=beatmap.beatmap_id %}"><img class="beatmap-cover" src="{{ beatmap.cover_image_url }}" alt="Cover Image">
-                    <!-- Audio Preview Section -->
-                    {% if beatmap.beatmapset_id %}
-                        <audio controls class="audio" >
-                            <source src="//b.ppy.sh/preview/{{ beatmap.beatmapset_id }}.mp3" type="audio/mpeg"></a>
-                        </audio>
-                    {% else %}
-                        <span>No preview available.</span>
-                    {% endif %}
-                </div>
-                {% endif %}
-                <div class="beatmap-details-container">
-                    {% if beatmap %}
-                        <div class="beatmap-title-artist">
-                            <h2 class="title">{{ beatmap.title }} - [{{ beatmap.version }}]</h2>
-                            <h3 class="artist">Artist: {{ beatmap.artist }}</h3>
-                            <h3 class="mapper">Mapper: {{ beatmap.creator }}</h3>
-
-                            <!-- Genres Display -->
-                            {% with genres_list=beatmap.genres.all %}
-                                {% if genres_list %}
-                                    {% if genres_list|length > 10 %}
-                                        <!-- Collapsible Genres Section -->
-                                        <h4 class="genres" aria-expanded="false" aria-controls="genres-content-{{ beatmap.beatmap_id }}" role="button" tabindex="0">
-                                            Genres
-                                            <span class="arrow">&#9660;</span> <!-- Down arrow -->
-                                        </h4>
-                                        <div class="genres" id="genres-content-{{ beatmap.beatmap_id }}" aria-hidden="true" style="display: none;">
-                                            <i class="genres">
-                                                {% for genre in genres_list %}
-                                                    {{ genre.name }}{% if not forloop.last %}, {% endif %}
-                                                {% endfor %}
-                                            </i>
-                                        </div>
-                                    {% else %}
-                                        <!-- Display genres normally if count <= 5 -->
-                                        <i class="genres">
-                                            Genres:
-                                            {% for genre in genres_list %}
-                                                {{ genre.name }}{% if not forloop.last %}, {% endif %}
-                                            {% endfor %}
-                                        </i>
-                                    {% endif %}
-                                {% else %}
-                                <i class="genres">No genres associated.</i>
-                                {% endif %}
-                            {% endwith %}
-
-                        </div>
-                        <div class="beatmap-stats">
-                            <span class="beatmap-length">Length: {{ beatmap.total_length }}</span>
-                            <span>BPM: {{ beatmap.bpm }} </span>
-                            <span>CS: {{ beatmap.cs }} </span>
-                            <span>HP: {{ beatmap.drain }}</span>
-                            <span>OD: {{ beatmap.accuracy }}</span>
-                            <span>AR: {{ beatmap.ar }}</span>
-                            <span>SR: {{ beatmap.difficulty_rating }}</span>
-                            <span>Status: {{ beatmap.status }}</span>
-                            <span>Playcount: {{ beatmap.playcount }}</span>
-                            <span>Favourites: {{ beatmap.favourite_count }}</span>
-                            {% if user.is_staff %}
-                            <span>[{{ beatmap.popularity }}]</span>
-                        {% endif %}
-                        </div>
-
-                        <a href="{% url 'beatmap_detail' beatmap_id=beatmap.beatmap_id %}" class="beatmap-link">View Beatmap</a>
-
-                        {% if beatmap.beatmapset_id %}
-                            <a href="https://osu.ppy.sh/beatmapsets/{{ beatmap.beatmapset_id }}/#{{ beatmap.mode }}/{{ beatmap.beatmap_id }}" class="beatmap-link" target="_blank">View on osu!</a>
-                        {% else %}
-                            <span class="no-link">Beatmap set not available on osu!</span>
-                        {% endif %}
-
-                        <!-- Hidden input to store the current beatmap's ID for JavaScript -->
-                        <input type="hidden" class="current_beatmap_id" data-beatmap-id="{{ beatmap.beatmap_id }}" value="{{ beatmap.beatmap_id }}">
-
-                        <div class="applied-tags"> 
-                            Tags:
-                            <!-- Display Weight for Admins -->
-                            {% if beatmap.tags_with_counts %}
-                                {% for tag_info in beatmap.tags_with_counts %}
-                                    <span class="tag {% if tag_info.is_applied_by_user %}tag-applied{% else %}tag-unapplied{% endif %}" 
-                                        data-tag-name="{{ tag_info.tag.name }}" 
-                                        data-applied-by-user="{{ tag_info.is_applied_by_user }}"
-                                        data-beatmap-id="{{ beatmap.beatmap_id }}"
-                                        {% if tag_info.tag.description %}
-                                            data-description=' "{{ tag_info.tag.description }}" '
-                                            data-description-author=" - {{ tag_info.tag.description_author }}"
-                                        {% endif %}
-                                    >
-                                        {{ tag_info.tag.name }} ({{ tag_info.apply_count }})
-                                    </span>
-                                {% endfor %}
-                            {% else %}
-                                <span>No tags associated.</span>
-                            {% endif %}
-                            
-                        </div>
-                        <i class="weight">[{{ beatmap.tag_weight|floatformat:"2" }}]</i>
-
-                    {% endif %}
-                </div>
-            </div>
-            {% empty %}
-                <p>No results found.</p>
-            {% endfor %}
+          {% for beatmap in beatmaps %}
+            {% include 'partials/tag_card.html' with beatmap=beatmap %}
+          {% empty %}
+            <p>No results found.</p>
+          {% endfor %}
         </div>
 
     <!-- Pagination Controls -->
     <div class="pagination">
         <span class="step-links">
             {% if beatmaps.has_previous %}
-                <a href="?query={{ query|urlencode }}&mode={{ request.GET.mode }}&star_min={{ star_min }}&star_max={{ star_max }}&sort={{ sort }}{% if status_ranked %}&status_ranked=ranked{% endif %}{% if status_loved %}&status_loved=loved{% endif %}{% if status_unranked %}&status_unranked=unranked{% endif %}&page=1">&laquo; first</a>
-                <a href="?query={{ query|urlencode }}&mode={{ request.GET.mode }}&star_min={{ star_min }}&star_max={{ star_max }}&sort={{ sort }}{% if status_ranked %}&status_ranked=ranked{% endif %}{% if status_loved %}&status_loved=loved{% endif %}{% if status_unranked %}&status_unranked=unranked{% endif %}&page={{ beatmaps.previous_page_number }}">previous</a>
+                <a href="?query={{ query|urlencode }}&mode={{ request.GET.mode }}&star_min={{ star_min }}&star_max={{ star_max }}&sort={{ sort }}{% if status_ranked %}&status_ranked=ranked{% endif %}{% if status_loved %}&status_loved=loved{% endif %}{% if status_unranked %}&status_unranked=unranked{% endif %}&include_predicted={{ request.GET.include_predicted }}&exclude_player={{ request.GET.exclude_player }}&page=1">&laquo; first</a>
+                <a href="?query={{ query|urlencode }}&mode={{ request.GET.mode }}&star_min={{ star_min }}&star_max={{ star_max }}&sort={{ sort }}{% if status_ranked %}&status_ranked=ranked{% endif %}{% if status_loved %}&status_loved=loved{% endif %}{% if status_unranked %}&status_unranked=unranked{% endif %}&include_predicted={{ request.GET.include_predicted }}&exclude_player={{ request.GET.exclude_player }}&page={{ beatmaps.previous_page_number }}">previous</a>
             {% endif %}
 
             <span class="current">
@@ -321,33 +205,16 @@
             </span>
 
             {% if beatmaps.has_next %}
-                <a href="?query={{ query|urlencode }}&mode={{ request.GET.mode }}&star_min={{ star_min }}&star_max={{ star_max }}&sort={{ sort }}{% if status_ranked %}&status_ranked=ranked{% endif %}{% if status_loved %}&status_loved=loved{% endif %}{% if status_unranked %}&status_unranked=unranked{% endif %}&page={{ beatmaps.next_page_number }}">next</a>
-                <a href="?query={{ query|urlencode }}&mode={{ request.GET.mode }}&star_min={{ star_min }}&star_max={{ star_max }}&sort={{ sort }}{% if status_ranked %}&status_ranked=ranked{% endif %}{% if status_loved %}&status_loved=loved{% endif %}{% if status_unranked %}&status_unranked=unranked{% endif %}&page={{ beatmaps.paginator.num_pages }}">last &raquo;</a>
+                <a href="?query={{ query|urlencode }}&mode={{ request.GET.mode }}&star_min={{ star_min }}&star_max={{ star_max }}&sort={{ sort }}{% if status_ranked %}&status_ranked=ranked{% endif %}{% if status_loved %}&status_loved=loved{% endif %}{% if status_unranked %}&status_unranked=unranked{% endif %}&include_predicted={{ request.GET.include_predicted }}&exclude_player={{ request.GET.exclude_player }}&page={{ beatmaps.next_page_number }}">next</a>
+                <a href="?query={{ query|urlencode }}&mode={{ request.GET.mode }}&star_min={{ star_min }}&star_max={{ star_max }}&sort={{ sort }}{% if status_ranked %}&status_ranked=ranked{% endif %}{% if status_loved %}&status_loved=loved{% endif %}{% if status_unranked %}&status_unranked=unranked{% endif %}&include_predicted={{ request.GET.include_predicted }}&exclude_player={{ request.GET.exclude_player }}&page={{ beatmaps.paginator.num_pages }}">last &raquo;</a>
             {% endif %}
         </span>
     </div>
 
-    <script>
-        document.addEventListener('DOMContentLoaded', function () {
-            // Handle collapsible descriptions
-            var collapsibleHeaders = document.querySelectorAll('.genres');
-            collapsibleHeaders.forEach(function (header) {
-                header.addEventListener('click', function () {
-                    var expanded = this.getAttribute('aria-expanded') === 'true';
-                    this.setAttribute('aria-expanded', !expanded);
-                    var contentId = this.getAttribute('aria-controls');
-                    var content = document.getElementById(contentId);
-                    if (content) {
-                        content.setAttribute('aria-hidden', expanded);
-                        content.style.display = expanded ? 'none' : 'block';
-                        var arrow = this.querySelector('.arrow');
-                        if (arrow) {
-                            arrow.innerHTML = expanded ? '&#9660;' : '&#9650;'; // Toggle arrow direction
-                        }
-                    }
-                });
-            });
-        });
-    </script>
-</body>
-</html>
+{% endblock %}
+
+{% block foot_js %}
+  <script src="{% static 'js/search_filters.js' %}"></script>
+  <script src="{% static 'js/tagging.js' %}"></script>
+  <script src="{% static 'js/collapsible_descriptions.js' %}"></script>
+{% endblock %}

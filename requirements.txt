@@ -24,6 +24,7 @@ certifi==2024.2.2
 # osu! Related Packages
 osrparse==6.0.2
 ossapi==3.4.4
+rosu-pp-py==3.1.0
 
 # HTTP and Networking
 requests==2.31.0
@@ -95,6 +96,9 @@ tornado==6.4
 # Build and Packaging Tools (Optional)
 setuptools==69.1.1
 wheel==0.42.0
+
+# WSGI Server
+gunicorn==21.2.0
 
 # Windows-Specific Packages
 pywin32==306; sys_platform == 'win32'

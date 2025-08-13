@@ -9,8 +9,7 @@ from .beatmap   import *
 from .tags      import *
 from .search    import *
 from .home      import *
-from .profile   import *
-from .profile import *
 from .api       import *
-from .pages       import *
+from .pages     import *
 from .shared    import *
+from .userSettings import *

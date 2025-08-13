@@ -1,5 +1,6 @@
 from pathlib import Path
 import os
+import json
 from dotenv import load_dotenv
 
 # "/home/ubuntu/Echosu/.env"
@@ -13,13 +14,49 @@ load_dotenv(dotenv_path)
 
 SECRET_KEY = os.getenv('SECRET_KEY')
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+# Read DEBUG from env: set DEBUG=1 / true to enable
+def _get_bool(name: str, default: bool = False) -> bool:
+    val = os.getenv(name)
+    if val is None:
+        return default
+    return str(val).strip().lower() in {"1", "true", "yes", "on"}
 
-DEBUG_PORT = 8000
+DEBUG = _get_bool('DEBUG', default=True)
+
+DEBUG_PORT = int(os.getenv('DEBUG_PORT', '8000'))
 BASE_URL = f"127.0.0.1" if DEBUG else "echosu.com"
 
-ALLOWED_HOSTS = [BASE_URL, f"www.{BASE_URL}"]
+# Allow override via .env (JSON list or comma-separated)
+_allowed_hosts_env = os.getenv('ALLOWED_HOSTS')
+def _parse_allowed_hosts(raw: str):
+    s = (raw or '').strip()
+    if not s:
+        return []
+    # Strip wrapping quotes
+    if (s.startswith("'") and s.endswith("'")) or (s.startswith('"') and s.endswith('"')):
+        s = s[1:-1].strip()
+    # Try JSON first
+    try:
+        val = json.loads(s)
+        if isinstance(val, list):
+            return [str(h).strip().strip('"\'') for h in val if str(h).strip()]
+        if isinstance(val, str):
+            return [val.strip()]
+    except Exception:
+        pass
+    # Fallback: comma-separated; strip brackets/quotes
+    s = s.strip('[]')
+    return [p.strip().strip('"\'') for p in s.split(',') if p.strip()]
+
+if _allowed_hosts_env:
+    ALLOWED_HOSTS = _parse_allowed_hosts(_allowed_hosts_env)
+else:
+    ALLOWED_HOSTS = [BASE_URL, f"www.{BASE_URL}"]
+
+# Ensure dev hosts are allowed when in DEBUG to avoid DisallowedHost during local work
+if DEBUG:
+    dev_hosts = {'127.0.0.1', 'localhost', '[::1]', 'testserver'}
+    ALLOWED_HOSTS = list(set(ALLOWED_HOSTS or []) | dev_hosts)
 
 
 # Application definition
@@ -199,3 +236,22 @@ REST_FRAMEWORK = {
         'rest_framework.renderers.JSONRenderer',
     ],
 }
+
+# admin provisioning via env (comma-separated osu IDs)
+ADMIN_OSU_IDS = os.getenv('ADMIN_OSU_IDS', '')
+
+# Security flags (env-driven; default cookies secure in prod)
+SESSION_COOKIE_SECURE = _get_bool('SESSION_COOKIE_SECURE', not DEBUG)
+CSRF_COOKIE_SECURE = _get_bool('CSRF_COOKIE_SECURE', not DEBUG)
+
+X_FRAME_OPTIONS = os.getenv('X_FRAME_OPTIONS', 'DENY')
+SECURE_REFERRER_POLICY = os.getenv('SECURE_REFERRER_POLICY', 'strict-origin-when-cross-origin')
+
+# CSRF trusted origins (JSON list or comma-separated)
+_csrf_origins = os.getenv('CSRF_TRUSTED_ORIGINS')
+if _csrf_origins:
+    try:
+        CSRF_TRUSTED_ORIGINS = json.loads(_csrf_origins) if _csrf_origins.strip().startswith('[') \
+            else [o.strip() for o in _csrf_origins.split(',') if o.strip()]
+    except Exception:
+        CSRF_TRUSTED_ORIGINS = [o.strip() for o in _csrf_origins.split(',') if o.strip()]

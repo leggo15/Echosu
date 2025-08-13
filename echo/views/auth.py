@@ -128,11 +128,15 @@ def save_user_data(access_token, request):
         # Redirect to the error page
         return redirect('error_page')
 
-    # Grant superuser and staff status if the osu! ID matches a specific ID
-    if osu_id in ("4978940", "9396661"):
-        user.is_superuser = True
-        user.is_staff = True
-        user.save()
+    # Optional: grant staff based on env-configured admin IDs (no implicit superuser)
+    try:
+        from django.conf import settings as dj_settings
+        admin_ids = set([x.strip() for x in (dj_settings.ADMIN_OSU_IDS or '').split(',') if x.strip()])
+        if osu_id in admin_ids:
+            user.is_staff = True
+            user.save(update_fields=['is_staff'])
+    except Exception:
+        pass
 
     # Authenticate and log in the user
     user.backend = 'django.contrib.auth.backends.ModelBackend'

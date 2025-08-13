@@ -1,0 +1,26 @@
+/* Tagging component styles (used by tag_card and any page that shows tags) */
+
+.tag-input { padding: 10px; margin-right: 5px; border-radius: 8px; border: 1px solid #ccc; }
+.apply-tag-btn { background-color: #28a745; color: white; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer; }
+.apply-tag-btn:hover { background-color: #218838; }
+.tag-list { list-style: none; padding: 0; margin-top: 10px; }
+.tag-list li { padding: 5px 10px; border: 1px solid #ccc; border-radius: 15px; margin-bottom: 5px; cursor: pointer; transition: background-color 0.3s; }
+.tag-list li:hover { background-color: #f0f0f0; }
+
+.applied-tags { margin-top: 20px; }
+.applied-tags span.tag { display: inline-block; padding: 5px 10px; border-radius: 15px; margin: 5px; font-size: 14px; cursor: pointer; transition: background-color 0.15s, color 0.15s; color: white; background-color: lightgrey; }
+.applied-tags span.tag.tag-applied { background-color: #17a2b8; }
+.applied-tags span.tag.tag-unapplied { background-color: #aaaaaa; }
+.applied-tags .tag.tag-predicted { background-color: #e09c44 !important; color: #fff !important; }
+.applied-tags .tag.tag-predicted:hover { background-color: #56bb91 !important; color: #fff !important; }
+.applied-tags span.tag.tag-unapplied:hover, .applied-tags span.tag.tag-predicted:hover { background-color: #56bb91; }
+.applied-tags span.tag.tag-applied:hover { background-color: lightcoral; }
+
+/* Tooltip */
+.tooltip { position: absolute; background-color: rgba(60, 60, 60, 0.9); color: #fff; padding: 6px 8px 10px 8px; border-radius: 4px; white-space: nowrap; z-index: 1000; font-size: 14px; pointer-events: none; opacity: 0; transition: opacity 0.2s ease-in-out; }
+.description-author { position: absolute; background-color: rgba(60, 60, 60, 0.0); color: #fff; padding: 0 0; border-radius: 4px; opacity: 0; transition: opacity 0.2s ease-in-out; z-index: 1001; pointer-events: none; font-size: 14px; font-style: italic; }
+
+/* Alternating card backgrounds for lists */
+.tag-card { background: #e7dadf; border-radius: 10px; }
+.tag-card--alt { background: #f1eeec; }
+

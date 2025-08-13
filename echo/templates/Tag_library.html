@@ -1,121 +1,33 @@
-<!-- your_app/templates/tag_library.html -->
-
+{% extends 'base.html' %}
 {% load static %}
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tag Library</title>
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <link rel="stylesheet" href="https://echosu-s3.s3.eu-central-1.amazonaws.com/static/css/master.css">
-    <script src="https://echosu-s3.s3.eu-central-1.amazonaws.com/static/js/master.js"></script>
-    <style>
-        /* Container Styling */
-        .container {
-            max-width: 800px;
-            margin: 40px auto;
-            padding: 20px;
-            background-color: #fdfdfd;
-            border-radius: 8px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-        }
-        
-        /* Search Field Styling */
-        .search-field {
-            width: 100%;
-            padding: 12px 20px;
-            margin-bottom: 20px;
-            box-sizing: border-box;
-            border: 2px solid #ccc;
-            border-radius: 4px;
-            font-size: 16px;
-        }
-        
-        /* Tag List Styling */
-        .tag-list {
-            list-style-type: none;
-            padding: 0;
-            max-height: 600px;
-            overflow-y: auto;
-        }
-        
-        .tag-item {
-            padding: 0; /* Remove padding to let <a> handle it */
-            border-bottom: 1px solid #eaeaea;
-        }
-        
-        /* Tag Link Styling */
-        .tag-link {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 10px 15px;
-            text-decoration: none;
-            color: inherit; /* Inherit color from parent */
-            transition: background-color 0.3s;
-        }
-        
-        .tag-link:hover {
-            background-color: #f1f1f1;
-        }
-        
-        /* Tag Name Styling */
-        .tag-name {
-            font-weight: bold;
-            color: #3e3e3e;
-            cursor: pointer; /* Indicate interactivity */
-            flex-grow: 1;
-            position: relative; /* For tooltip positioning */
-        }
-        
 
-        /* Beatmap Count Styling */
-        .tag-count {
-            font-size: 14px;
-            color: #666;
-            flex-shrink: 0;
-            margin-left: auto;
-        }
-        
-        /* No Tags Message */
-        .no-tags-message {
-            text-align: center;
-            color: #999;
-            padding: 20px;
-            font-style: italic;
-        }
-        
-        /* Highlighting */
-        .highlight {
-            background-color: yellow;
-        }
-
-        /* Tooltip Styling */
-        .tooltip {
-            position: absolute;
-            background-color: rgba(0, 0, 0, 0.8);
-            color: #fff;
-            padding: 8px 12px;
-            border-radius: 4px;
-            font-size: 14px;
-            max-width: 300px;
-            z-index: 1000;
-            white-space: pre-wrap;
-            opacity: 0;
-            transition: opacity 0.3s;
-        }
-
-        .tooltip-author {
-            margin-top: 4px;
-            font-size: 12px;
-            color: #ccc;
-        }
-    </style>
-</head>
-<body>
-    {% include '_navbar.html' %}
+{% block title %}Tag Library{% endblock %}
+{% block head_css %}
+  <link rel="stylesheet" href="{% static 'css/tag_library.css' %}">
+{% endblock %}
+{% block content %}
     <div class="container">
+
+        <!-- Top Tags Section -->
+        <section class="tags-usage">
+            <h2>Top 50 Tags</h2>
+            <div class="top-tags">
+                {% for tag in top_tags %}
+                    <a 
+                        href="{% url 'search_results' %}?query={{ '"'|add:tag.name|add:'"'|urlencode }}"
+                        class="tag-pill"
+                        aria-label="Search results for tag {{ tag.name }}"
+                    >
+                        <span class="pill-name">{{ tag.name }} </span>
+                        <span class="pill-count">({{ tag.map_count }})</span>
+                    </a>
+                {% empty %}
+                    <p>No tags available.</p>
+                {% endfor %}
+            </div>
+        </section>  
+
+
         <h1>Tag Library</h1>
         <input type="text" id="tag-search" class="search-field" placeholder="Search tags..." aria-label="Search Tags" />
         <ul class="tag-list" id="tag-list">
@@ -200,47 +112,7 @@
             }, 300)); // 300ms delay
 
             // Tooltip functionality
-            function initializeTooltips() {
-                // Event delegation for mouseenter and mouseleave on .tag-name elements
-                $(document).on('mouseenter', '.tag-name', function(e) {
-                    var tag = $(this);
-                    var description = tag.data('description') || 'No description available.';
-                    var descriptionAuthor = tag.data('description-author') || '';
-
-                    // Create tooltip element
-                    var $tooltip = $('<div class="tooltip"></div>').text(description).appendTo('body');
-
-                    if(descriptionAuthor) {
-                        var $author = $('<div class="tooltip-author"></div>').text(descriptionAuthor).appendTo($tooltip);
-                    }
-
-                    // Position the tooltip above the tag
-                    var tagOffset = tag.offset();
-                    var tagWidth = tag.outerWidth();
-                    var tooltipWidth = $tooltip.outerWidth();
-                    var tooltipHeight = $tooltip.outerHeight();
-
-                    var tooltipLeft = tagOffset.left + (tagWidth / 2) - (tooltipWidth / 2);
-                    var tooltipTop = tagOffset.top - tooltipHeight - 8; // 8px gap
-
-                    // Ensure tooltip doesn't go off the left or right edge
-                    tooltipLeft = Math.max(tooltipLeft, 10); // 10px from left
-                    tooltipLeft = Math.min(tooltipLeft, $(window).width() - tooltipWidth - 10); // 10px from right
-
-                    $tooltip.css({
-                        left: tooltipLeft + 'px',
-                        top: tooltipTop + 'px',
-                        opacity: '1'
-                    });
-                }).on('mouseleave', '.tag-name', function() {
-                    // Remove the tooltip when mouse leaves
-                    $('.tooltip').remove();
-                });
-            }
-
-            // Initialize tooltips
-            initializeTooltips();
+            // Note: tooltips for .tag-name can be handled by a dedicated JS if needed later
         });
     </script>
-</body>
-</html>
+{% endblock %}

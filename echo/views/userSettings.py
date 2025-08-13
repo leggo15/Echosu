@@ -28,7 +28,6 @@ def settings(request):
     if request.method == 'POST' and 'generate_token' in request.POST:
         CustomToken.objects.filter(user=request.user).delete()
         token, raw_key = CustomToken.create_token(request.user)
-        print(f'raw_key passed to template from view: {raw_key}')
         return render(request, 'settings.html', {'full_key': raw_key, 'user': request.user})
     return render(request, 'settings.html', {'user': request.user})
 
@@ -54,7 +53,6 @@ def delete_user_data(request):
             messages.success(request, 'Your contributions have been successfully deleted.')
         except Exception as exc:
             messages.error(request, 'An error occurred while deleting your data.')
-            print(exc)
         return redirect('settings')
 
     return redirect('settings')

@@ -1,0 +1,13 @@
+/* Edit Tags page styles extracted from legacy master.css */
+table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+th, td { padding: 12px; border: 1px solid #ddd; text-align: left; }
+textarea { width: 100%; resize: vertical; }
+.tag-search-form { margin-top: 20px; margin-bottom: 20px; }
+#loading-spinner { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 1000; }
+.vote-section { margin-top: 10px; display: flex; flex-direction: column; align-items: center; gap: 5px; }
+.vote-section button { margin-right: 5px; }
+.vote-count { margin-right: 15px; }
+.disabled-btn { background-color: #6c757d !important; cursor: not-allowed !important; }
+.narrow-column { width: 30px; text-align: center; }
+
+

@@ -1,0 +1,25 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Echo osu{% endblock %}</title>
+    <link rel="stylesheet" href="https://code.jquery.com/ui/1.13.3/themes/base/jquery-ui.css">
+    <link rel="stylesheet" href="{% static 'css/core.css' %}">
+    {% block head_css %}{% endblock %}
+  </head>
+  <body class="{% block body_class %}{% endblock %}">
+    {% include '_navbar.html' %}
+    <main class="container">
+      {% block content %}{% endblock %}
+    </main>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://code.jquery.com/ui/1.13.3/jquery-ui.min.js"></script>
+    <script src="{% static 'js/core.js' %}"></script>
+    {% block foot_js %}{% endblock %}
+  </body>
+  </html>
+
+

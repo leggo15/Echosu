@@ -2,6 +2,7 @@ import requests
 import time
 import urllib.parse
 import logging
+import os
 
 from .models import Genre, Beatmap
 
@@ -36,8 +37,8 @@ MB_HEADERS = {
 }
 
 # === Last.fm Configuration ===
-LASTFM_API_KEY = 'f802dffb47a4ee8ffb0ae803a000dcdf'  # Replace with your Last.fm API key
-LASTFM_BASE_URL = "http://ws.audioscrobbler.com/2.0/"
+LASTFM_API_KEY = os.getenv('LASTFM_API_KEY', '')  # Provide via environment
+LASTFM_BASE_URL = "https://ws.audioscrobbler.com/2.0/"
 
 # Rate limiting: one request per second
 RATE_LIMIT = 1  # seconds

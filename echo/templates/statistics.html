@@ -1,0 +1,111 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Statistics{% endblock %}
+{% block head_css %}
+  <link rel="stylesheet" href="{% static 'css/beatmap_card.css' %}">
+  <link rel="stylesheet" href="{% static 'css/statistics.css' %}">
+  <link rel="stylesheet" href="{% static 'css/beatmap_card.css' %}">
+  <link rel="stylesheet" href="{% static 'css/tagging.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="stats-page">
+  <h1>Statistics</h1>
+
+  <form method="get" action="" class="stats-form">
+    <div class="search-row">
+      <input type="text" name="user" placeholder="osu! username or id" value="{{ input_user|default:resolved_username }}">
+      <button type="submit">Load User</button>
+    </div>
+    {% if resolve_error %}
+      <div class="error">{{ resolve_error }}</div>
+    {% endif %}
+    {% if resolved_username %}
+      <div class="resolved">User: <strong>{{ resolved_username }}</strong> ({{ resolved_user_id }})</div>
+    {% endif %}
+  </form>
+
+  <hr/>
+
+  <section class="mapper-stats stats-section">
+    <h2>Mapper Statistics</h2>
+    <div class="chart-container"><canvas id="mapperChart"></canvas></div>
+    <div class="mapper-cards">
+      <div class="mapper-card full-width">
+        <h3>Most Representative</h3>
+        {% if mapper_most_map %}
+          {% include 'partials/tag_card.html' with beatmap=mapper_most_map %}
+        {% else %}
+          <p>No data.</p>
+        {% endif %}
+      </div>
+      <div class="mapper-card full-width">
+        <h3>Least Representative</h3>
+        {% if mapper_least_map %}
+          {% include 'partials/tag_card.html' with beatmap=mapper_least_map %}
+        {% else %}
+          <p>No data.</p>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+
+  <hr/>
+
+  <section class="player-stats stats-section">
+    <div class="section-header">
+      <h2>Player Statistics</h2>
+      <div class="player-toggle">
+        <label for="playerSource">From:</label>
+        <select id="playerSource">
+          <option value="top" {% if source == 'top' %}selected{% endif %}>Top 100 Plays</option>
+          <option value="fav" {% if source == 'fav' %}selected{% endif %}>Favourites</option>
+        </select>
+      </div>
+    </div>
+    <div class="chart-container"><canvas id="playerChart"></canvas></div>
+    <div class="player-related">
+      <div class="mapper-card">
+        <h3>Most Related</h3>
+        <div id="mostRelatedContainer">
+          {% if most_related_map %}
+            {% include 'partials/tag_card.html' with beatmap=most_related_map %}
+          {% else %}
+            <p>No data.</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </section>
+
+</div>
+{% endblock %}
+
+{% block foot_js %}
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="{% static 'js/tagging.js' %}"></script>
+  <script src="{% static 'js/statistics.js' %}"></script>
+  <script>
+    (function(){
+      try {
+        var mapperLabels = JSON.parse(document.getElementById('mapperLabels').textContent);
+        var mapperCounts = JSON.parse(document.getElementById('mapperCounts').textContent);
+        var mapperClickQueries = JSON.parse(document.getElementById('mapperClickQueries').textContent);
+        var playerLabels = JSON.parse(document.getElementById('playerLabels').textContent);
+        var playerCounts = JSON.parse(document.getElementById('playerCounts').textContent);
+        window.initStatistics && window.initStatistics({
+          mapper: { labels: mapperLabels, data: mapperCounts, clickQueries: mapperClickQueries },
+          player: { labels: playerLabels, data: playerCounts }
+        });
+      } catch (e) {}
+    })();
+  </script>
+  {{ mapper_labels|default:'[]'|json_script:'mapperLabels' }}
+  {{ mapper_counts|default:'[]'|json_script:'mapperCounts' }}
+  {{ mapper_click_queries|default:'[]'|json_script:'mapperClickQueries' }}
+  {{ player_labels|default:'[]'|json_script:'playerLabels' }}
+  {{ player_counts|default:'[]'|json_script:'playerCounts' }}
+{% endblock %}
+
+

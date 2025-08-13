@@ -34,8 +34,14 @@ from django.template.loader import render_to_string
 from ..fetch_genre import fetch_genres, get_or_create_genres
 from ..models import Beatmap, Genre, Tag, TagApplication
 from .auth import api, logger
-from .beatmap import join_diff_creators, GAME_MODE_MAPPING
-from .shared import GAME_MODE_MAPPING
+from .beatmap import join_diff_creators
+from .shared import (
+    GAME_MODE_MAPPING,
+    compute_attribute_windows,
+    derive_filters_from_tags,
+    build_similar_maps_query,
+)
+from ..helpers.rosu_utils import get_or_compute_pp
 
 
 # ---------------------------------------------------------------------------
@@ -63,9 +69,21 @@ def error_page_view(request):
 
 
 def tag_library(request):
-    '''Alphabetical list of all tags with beatmap counts.'''
-    tags = Tag.objects.annotate(beatmap_count=Count('beatmaps')).order_by('name')
-    return render(request, 'tag_library.html', {'tags': tags})
+    '''Alphabetical list of all tags with beatmap counts, plus top 50 by usage.'''
+    tags = (
+        Tag.objects
+        .annotate(beatmap_count=Count('beatmaps', distinct=True))
+        .order_by('name')
+    )
+
+    top_tags = (
+        Tag.objects
+        .annotate(map_count=Count('beatmaps', distinct=True))
+        .filter(map_count__gt=0)
+        .order_by('-map_count', 'name')[:50]
+    )
+
+    return render(request, 'tag_library.html', {'tags': tags, 'top_tags': top_tags})
 
 
 def custom_404_view(request, exception):
@@ -240,7 +258,27 @@ def home(request):
                     if genres:
                         beatmap.genres.set(get_or_create_genres(genres))
 
-                context['beatmap'] = beatmap
+                    # Prepare similar maps helpers for the single beatmap on home
+                    windows = compute_attribute_windows(beatmap)
+                    # Build tags_with_counts similar to beatmap_detail for the mapping
+                    tags = (
+                        TagApplication.objects
+                        .filter(beatmap=beatmap)
+                        .values('tag__name')
+                        .annotate(apply_count=Count('id'))
+                        .order_by('-apply_count')
+                    )
+                    top_tags = [t['tag__name'] for t in list(tags)[:10] if t['tag__name']]
+                    encapsulated_tags = [f'"{t}"' if ' ' in t else t for t in top_tags]
+                    tags_query_string = ' '.join(encapsulated_tags)
+                    filters_to_apply = derive_filters_from_tags(top_tags)
+                    similar_query, extra_params = build_similar_maps_query(filters_to_apply, windows, tags_query_string)
+
+                    context['beatmap'] = beatmap
+                    context['tags_query_string'] = tags_query_string
+                    context.update(windows)
+                    context['similar_query'] = similar_query
+                    context['similar_extra_params'] = extra_params
             except Exception as exc:
                 msg = f'Error: {exc}'
                 messages.error(request, msg)
@@ -254,6 +292,8 @@ def home(request):
 
     if 'beatmap' in context:
         beatmap = context['beatmap']
+        # Attach PP for tag card display
+        beatmap.pp = get_or_compute_pp(beatmap)
         tags = (
             TagApplication.objects
             .filter(beatmap=beatmap)

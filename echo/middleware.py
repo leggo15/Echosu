@@ -26,9 +26,12 @@ class APILoggingMiddleware(MiddlewareMixin):
 
 
             # Log detailed request
-            APIRequestLog.objects.create(
-                user=user,
-                method=request.method,
-                path=request.path,
-            )
+            try:
+                APIRequestLog.objects.create(
+                    user=user if getattr(user, 'is_authenticated', False) else None,
+                    method=request.method,
+                    path=request.path,
+                )
+            except Exception:
+                pass
         return None

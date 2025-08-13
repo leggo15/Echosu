@@ -1,0 +1,102 @@
+/* Search page – modern filter styles */
+
+.filters-card {
+  background: #ffffff;
+  border-radius: 14px;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.06);
+  padding: 16px;
+  margin: 12px 0 20px 0;
+}
+
+.filters-grid {
+  display: grid;
+  grid-template-columns: repeat(36, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+.filters-grid.filters-grid--tight { gap: 12px; }
+
+/* Star slider section spans wide on desktop */
+.filters-grid .slider-container { grid-column: span 15; }
+.filters-grid .filter-status { grid-column: span 9; }
+.filters-grid .filter-mode { grid-column: span 4; }
+
+@media (max-width: 900px) {
+  .filters-grid .slider-container,
+  .filters-grid .filter-status,
+  .filters-grid .filter-mode { grid-column: 1 / -1; }
+}
+
+.filters-card label { font-weight: 600; color: #374151; display: inline-block; margin-bottom: 6px; }
+
+/* Slider area */
+.slider-container #star-rating-slider { margin-top: 8px; }
+
+/* jQuery UI Slider Custom Styling */
+.ui-slider {
+  position: relative;
+  text-align: left;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  height: 8px;
+}
+
+.ui-slider .ui-slider-range {
+  position: absolute;
+  z-index: 1;
+  font-size: .7em;
+  display: block;
+  border: 0;
+  background: #649bd6; /* Selected range color - matches your theme */
+  border-radius: 4px;
+}
+
+.ui-widget.ui-widget-content {
+  background: #c6c7c7;
+}
+
+
+.slider-labels { display: flex; justify-content: space-between; margin-top: 6px; font-weight: 600; color: #64748b; }
+
+/* Status toggle pills */
+.status-toggles { display: flex; flex-wrap: wrap; gap: 8px; }
+.status-toggles label { display: inline-flex; align-items: center; }
+.status-toggles input[type="checkbox"] { position: absolute; opacity: 0; width: 0; height: 0; }
+.status-toggles label span {
+  display: inline-block;
+  padding: 8px 12px;
+  border-radius: 9999px;
+  background: #eef2f7;
+  color: #1f2937;
+  border: 1px solid #dbe3ef;
+  transition: all .15s ease-in-out;
+  font-weight: 600;
+}
+/* Removed pill-style slider pseudo-elements to revert to simple pill toggle */
+.status-toggles input[type="checkbox"]:checked + span {
+  background: #649bd6;
+  color: #ffffff;
+  border-color: #649bd6;
+}
+
+/* Mode select */
+.filter-mode select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #dbe3ef;
+  border-radius: 10px;
+  background: #f8fafc;
+  color: #111827;
+  font-weight: 600;
+}
+
+/* Search row */
+.search-row { display: flex; gap: 10px; margin-top: 14px; }
+.search-row .search-input { flex: 1; padding: 12px 14px; border: 1px solid #dbe3ef; border-radius: 12px; background: #f8fafc; font-size: 16px; }
+.search-row .search-btn { padding: 12px 16px; border: none; border-radius: 12px; background: #2b87d1; color: #fff; font-weight: 700; cursor: pointer; }
+.search-row .search-btn:hover { background: #1f6fb2; }
+
+

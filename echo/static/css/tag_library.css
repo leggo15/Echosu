@@ -1,0 +1,20 @@
+/* Tag Library page styles extracted from inline */
+.container { max-width: 800px; margin: 40px auto; padding: 20px; background-color: #fdfdfd; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+.search-field { width: 100%; padding: 12px 20px; margin-bottom: 20px; box-sizing: border-box; border: 2px solid #ccc; border-radius: 4px; font-size: 16px; }
+.tag-list { list-style-type: none; padding: 0; max-height: 600px; overflow-y: auto; }
+.tag-item { padding: 0; border-bottom: 1px solid #eaeaea; }
+.tag-link { display: flex; justify-content: space-between; align-items: center; padding: 10px 15px; text-decoration: none; color: inherit; transition: background-color 0.3s; }
+.tag-link:hover { background-color: #f1f1f1; }
+.tag-name { font-weight: bold; color: #3e3e3e; cursor: pointer; flex-grow: 1; position: relative; }
+.tag-count { font-size: 14px; color: #666; flex-shrink: 0; margin-left: auto; }
+.no-tags-message { text-align: center; color: #999; padding: 20px; font-style: italic; }
+
+/* Top tags pills */
+.top-tags { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.tag-pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 999px; background: #e7dadf; color: #1f1f1f; text-decoration: none; border: 1px solid rgba(0,0,0,0.08); }
+.tag-pill:hover { background: #f1eeec; }
+.pill-name { font-weight: 600; }
+.pill-count { display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 22px; padding: 0 6px; border-radius: 11px; font-size: 12px; }
+.highlight { background-color: yellow; }
+.tooltip { position: absolute; background-color: rgba(0,0,0,0.8); color: #fff; padding: 8px 12px; border-radius: 4px; font-size: 14px; max-width: 300px; z-index: 1000; white-space: pre-wrap; opacity: 0; transition: opacity 0.3s; }
+.tooltip-author { margin-top: 4px; font-size: 12px; color: #ccc; }

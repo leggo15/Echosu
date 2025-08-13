@@ -1,16 +1,9 @@
+{% extends 'base.html' %}
 {% load static %}
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>About</title>
-    <link rel="stylesheet" href="https://echosu-s3.s3.eu-central-1.amazonaws.com/static/css/master.css">
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script src="https://echosu-s3.s3.eu-central-1.amazonaws.com/static/js/master.js"></script>
-</head>
-<body>
-    {% include '_navbar.html' %}
+
+{% block title %}About{% endblock %}
+
+{% block content %}
     <div class="container">
         <h1>About echosu</h1>
         
@@ -82,9 +75,9 @@
 
         <h2>For Developers</h2>
         <p>
+            
             echosu generates labeling data for osu maps, which is valuable for analytics and model training. An API has been set up to fetch this data. Documentation is available <a href="https://github.com/leggo15/echosu_API_Documentation">here</a>.
             The API source code can be found at <a href="https://github.com/leggo15/Echosu/blob/main/echo/views/api.py">github.com/leggo15/Echosu</a>. For any questions feel free to reach out at "The Emperor" on osu or "Leggo15" on Discord!
         </p>
     </div>
-</body>
-</html>
+{% endblock %}

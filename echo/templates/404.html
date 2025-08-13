@@ -1,25 +1,7 @@
+{% extends 'base.html' %}
 {% load static %}
-<!DOCTYPE html>
-<html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Beatmap Info</title>
-        <link rel="stylesheet" href="https://echosu-s3.s3.eu-central-1.amazonaws.com/static/css/master.css">
-        <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-        <script src="https://echosu-s3.s3.eu-central-1.amazonaws.com/static/js/master.js"></script>
-    </head>
-    <body>
-        {% include '_navbar.html' %}
-        <div class="container">
-            404
 
-            {% if messages %}
-            <ul class="messages">
-                {% for message in messages %}
-                    <li class="{{ message.tags }}">{{ message }}</li>
-                {% endfor %}
-            </ul>
-        </div>
-    </body>
-</html>
+{% block title %}404{% endblock %}
+{% block content %}
+  <div class="container">404</div>
+{% endblock %}

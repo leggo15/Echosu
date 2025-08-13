@@ -1,0 +1,13 @@
+/* Profile page styles extracted from legacy master.css */
+.profile-container { display: flex; flex-wrap: wrap; gap: 20px; }
+.profile-maps { flex-basis: 60%; max-width: 60%; min-width: 300px; }
+.profile-stats { flex-basis: 40%; max-width: 40%; min-width: 300px; display: flex; flex-direction: column; align-items: center; box-sizing: border-box; }
+.accuracy-details { max-width: 100%; box-sizing: border-box; padding: 10px; }
+.accuracy-info { font-size: 1em; line-height: 1.6; color: #333; margin-top: 10px; }
+#tagsChart { max-width: 100%; height: auto; }
+.map-entry { background-color: #f1ecee; border: 1px solid #ddd; padding: 15px; margin-bottom: 15px; border-radius: 8px; display: flex; align-items: center; transition: background-color 0.3s; overflow: hidden; }
+.map-entry:hover { background-color: #e0e0e0; }
+.map-details { display: flex; justify-content: space-between; align-items: center; }
+.map-title { font-weight: bold; }
+.map-tags { margin-left: 10px; }
+@media (max-width: 768px) { .profile-maps, .profile-stats { flex-basis: 100%; max-width: 100%; } .map-details { flex-direction: column; align-items: flex-start; } .map-tags { margin-top: 10px; } }

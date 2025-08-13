@@ -1,84 +1,7 @@
 <!-- _navbar.html -->
 {% load static %}
 {% load custom_tags %}
-<head>
-    <link rel="stylesheet" href="https://code.jquery.com/ui/1.13.3/themes/base/jquery-ui.css">
-    <link rel="stylesheet" href="https://echosu-s3.s3.eu-central-1.amazonaws.com/static/css/master.css">
-</head>
-<style>
-    /* Base styles for the navbar */
-    .nav-content {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-    }
-    
-    /* Styles for the navigation links */
-    .nav-links {
-        display: flex;
-        align-items: center;
-    }
-    
-    /* Styles for the hamburger menu icon */
-    .hamburger-menu {
-        display: none; /* Hidden on larger screens */
-        flex-direction: column;
-        cursor: pointer;
-        padding: 10px;
-    }
-    
-    .hamburger-menu span {
-        width: 25px;
-        height: 3px;
-        background-color: #f1ecee;
-        margin: 4px 0;
-    }
-    
-    /* Hide the search input field on small screens */
-    @media (max-width: 900px) {
-        /* Show the hamburger menu */
-        .hamburger-menu {
-            display: flex;
-        }
-        /* Hide the nav links by default */
-        .nav-links {
-            display: none;
-            flex-direction: column;
-            width: 55%;
-            position: absolute;
-            top: 75px; /* Adjust based on your nav height */
-            left: 20%;
-            padding: 20;
-            margin: 0;
-            font-size:32px;
-            z-index: 2000;
-        }
-        /* Show the nav links when active */
-        .nav-links.active {
-            display: flex;
-        }
-        /* Style nav links */
-        .nav-links a {
-            padding: 12px;
-            text-align: center;
-        }
-        /* Adjust the user section */
-        .user-section {
-            order: -1; /* Move user section above nav links */
-        }
-        /* Hide the search input field */
-        .quick-search-form input[type="text"] {
-            display: none;
-        }
-        /* Adjust search button */
-        .quick-search-form button {
-            width: 100%;
-            padding: 12px;
-        }
-    }
-</style>
-
-
+ 
 
 <!-- Display messages -->
 {% if messages %}
@@ -98,20 +21,20 @@
         </div>
         <!-- Navigation links and search form -->
         <div class="nav-links" id="navLinks">
-            <a href="{% url 'home' %}" class="generic-nav-btn">Home</a>
+            <a href="{% url 'home' %}" class="generic-nav-btn">Search</a>
             <a href="{% url 'about' %}" class="generic-nav-btn">About</a>
             <a href="{% url 'tag_library' %}" class="generic-nav-btn">Tag Library</a>
-            <form method="get" action="{% url 'search_results' %}" class="quick-search-form">
+            <a href="{% url 'statistics' %}" class="generic-nav-btn">Statistics</a>
+            <!-- <form method="get" action="{% url 'search_results' %}" class="quick-search-form">
                 <input type="text" name="query" placeholder="Quick Search...">
                 <button type="submit" class="generic-nav-btn">Search</button>
-            </form>
+            </form> -->
         </div>
         
         <div class="user-section">
             {% if user.is_authenticated %}
                 <img src="{{ user_profile.profile_pic_url }}" alt="Profile Picture" id="profileMenuButton">
                 <div id="profileDropdown" class="dropdown-content">
-                    <a href="{% url 'user_stats' %}?query={{ user.username }}">Profile</a>
                     <a href="{% url 'settings' %}">Settings</a>
                     {% if user|has_tag_edit_permission %}
                     <a href="{% url 'edit_tags' %}">Edit Tags</a>
@@ -135,32 +58,38 @@
         </div>
     </div>
 </nav>
-<body>
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script src="https://code.jquery.com/ui/1.13.3/jquery-ui.min.js"></script> <script src="https://echosu-s3.s3.eu-central-1.amazonaws.com/static/js/master.js"></script>
-</body>
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-        const messages = document.querySelectorAll('.messages li');
-        
-        messages.forEach(function(message) {
-            setTimeout(function() {
-                message.classList.add('fade-out');
+ 
+{# Floating Add-Beatmap quick form shown on all pages #}
+<!-- Mobile/Tablet slide-out toggle for side panels -->
+<button type="button" class="side-panels-toggle" id="sidePanelsToggle" aria-expanded="false" aria-label="Open tools" title="Open tools"><span>&lt;</span></button>
 
-                message.addEventListener('transitionend', function() {
-                    message.remove();
-                });
-            }, 3000);
-        });
-
-        // Existing hamburger menu script
-        const hamburgerMenu = document.getElementById('hamburgerMenu');
-        const navLinks = document.getElementById('navLinks');
-    
-        hamburgerMenu.addEventListener('click', function() {
-            navLinks.classList.toggle('active');
-        });
-    });
-</script>
+<div class="side-panels-container" id="sidePanels">
+{% if user.is_authenticated %}
+<form method="post" action="{% url 'quick_add_beatmap' %}" class="floating-add-beatmap" aria-label="Quick add beatmap">
+  <header class="floating-add-header">Add beatmap</header>
+  <div class="floating-add-body">
+    {% csrf_token %}
+    <input type="text" name="beatmap_input" placeholder="Add beatmap ID or URL..." aria-label="Add beatmap">
+    <button type="submit" title="Add">Add</button>
+  </div>
+</form>
+{% endif %}
+<!-- Bulk Download panel (always visible) -->
+<section class="bulk-download-panel" aria-label="Bulk download">
+  <header class="bulk-download-header">Bulk download</header>
+  <div class="bulk-download-body">
+    <div class="bulk-list-container">
+      <ul id="bulkDownloadList" class="bulk-list" aria-live="polite"></ul>
+    </div>
+    <div class="bulk-download-footer">
+      <span class="bulk-count">Maps: <strong id="bulkSelectedCount">0</strong></span>
+      <div class="bulk-actions">
+        <button type="button" id="bulkDirectAllBtn" class="generic_btn">Direct</button>
+        <button type="button" id="bulkSelectAllBtn" class="generic_btn">Select All</button>
+      </div>
+    </div>
+  </div>
+</section>
+</div>
 
 

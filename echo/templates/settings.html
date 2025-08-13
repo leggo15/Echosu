@@ -1,172 +1,21 @@
-
+{% extends 'base.html' %}
 {% load static %}
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Settings</title>
-    <link rel="stylesheet" href="https://echosu-s3.s3.eu-central-1.amazonaws.com/static/css/master.css">
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script src="https://echosu-s3.s3.eu-central-1.amazonaws.com/static/js/master.js"></script>
 
-    <script>
-        $(document).ready(function(){
-            // Toggle the collapsible content when header is clicked
-            $('.collapsible-header').click(function(){
-                $(this).toggleClass('active');
-                $(this).find('.arrow').toggleClass('rotated');
-                $(this).next('.collapsible-content').toggleClass('show');
-            });
-
-            // Handle double-click on API key name to enable editing
-            $('.api-key-name').dblclick(function(){
-                var currentElement = $(this);
-                var alreadyEditing = $('.edit-input').length > 0;
-
-                if(alreadyEditing){
-                    alert('Please finish editing the current API key before editing another.');
-                    return;
-                }
-
-                var currentName = currentElement.text().trim();
-                var apiKeyId = currentElement.data('api-key-id');
-
-                // Create an input field with the current name
-                var inputField = $('<input>', {
-                    type: 'text',
-                    class: 'edit-input',
-                    value: currentName
-                });
-
-                // Create Save and Cancel buttons
-                var saveButton = $('<button>', {
-                    type: 'button',
-                    class: 'save-button',
-                    text: 'Save'
-                });
-
-                var cancelButton = $('<button>', {
-                    type: 'button',
-                    class: 'cancel-button',
-                    text: 'Cancel'
-                });
-
-                // Replace the name text with the input field and buttons
-                currentElement.hide();
-                currentElement.after(inputField, saveButton, cancelButton);
-
-                // Focus on the input field
-                inputField.focus();
-
-                // Handle Save button click
-                saveButton.click(function(){
-                    var newName = inputField.val().trim();
-                    if(newName === ''){
-                        alert('API Key name cannot be empty.');
-                        inputField.focus();
-                        return;
-                    }
-
-                    // Submit the form with the new name
-                    var form = $('<form>', {
-                        method: 'POST',
-                        action: '{% url "settings" %}'
-                    });
-
-                    // Add CSRF token
-                    var csrfToken = '{{ csrf_token }}';
-                    form.append($('<input>', {
-                        type: 'hidden',
-                        name: 'csrfmiddlewaretoken',
-                        value: csrfToken
-                    }));
-
-                    // Add api_key_id and new key_name
-                    form.append($('<input>', {
-                        type: 'hidden',
-                        name: 'api_key_id',
-                        value: apiKeyId
-                    }));
-                    form.append($('<input>', {
-                        type: 'hidden',
-                        name: 'key_name',
-                        value: newName
-                    }));
-
-                    // Append the form to the body and submit
-                    $('body').append(form);
-                    form.submit();
-                });
-
-                // Handle Cancel button click
-                cancelButton.click(function(){
-                    inputField.remove();
-                    saveButton.remove();
-                    cancelButton.remove();
-                    currentElement.show();
-                });
-
-                // Optional: Handle Enter key to save
-                inputField.keypress(function(e){
-                    if(e.which == 13){ // Enter key
-                        saveButton.click();
-                    }
-                });
-            });
-
-            // Handle Delete button click for API keys
-            $('.delete-button').click(function(){
-                var deleteButton = $(this);
-                var apiKeyId = deleteButton.data('api-key-id');
-                var apiKeyName = deleteButton.data('api-key-name');
-
-                if(confirm('Are you sure you want to delete the API Key "' + apiKeyName + '"? This action cannot be undone.')){
-                    // Create a form to submit the delete request
-                    var form = $('<form>', {
-                        method: 'POST',
-                        action: '{% url "settings" %}'
-                    });
-
-                    // Add CSRF token
-                    var csrfToken = '{{ csrf_token }}';
-                    form.append($('<input>', {
-                        type: 'hidden',
-                        name: 'csrfmiddlewaretoken',
-                        value: csrfToken
-                    }));
-
-                    // Add delete_key and api_key_id
-                    form.append($('<input>', {
-                        type: 'hidden',
-                        name: 'delete_key',
-                        value: '1' // Identifier for delete action
-                    }));
-                    form.append($('<input>', {
-                        type: 'hidden',
-                        name: 'api_key_id',
-                        value: apiKeyId
-                    }));
-
-                    // Append the form to the body and submit
-                    $('body').append(form);
-                    form.submit();
-                }
-            });
-
-            // Handle Delete All Data button click
-            $('.delete-data-btn').click(function(){
-                if(confirm('Are you sure you want to delete all your data? This action cannot be undone.')){
-                    // Redirect to the confirmation page
-                    window.location.href = '{% url "confirm_data_deletion" %}';
-                }
-            });
-
-        });
-    </script>
-</head>
-<body>
-    {% include '_navbar.html' %}
-
+{% block title %}Settings{% endblock %}
+{% block head_css %}
+  <link rel="stylesheet" href="{% static 'css/settings.css' %}">
+{% endblock %}
+{% block foot_js %}
+  <script>
+    window.settingsPage = {
+      csrf: '{{ csrf_token }}',
+      settingsUrl: '{% url 'settings' %}',
+      confirmUrl: '{% url 'confirm_data_deletion' %}'
+    };
+  </script>
+  <script src="{% static 'js/settings.js' %}"></script>
+{% endblock %}
+{% block content %}
     <div class="container">
         <div class="settings-page">
             <h1>Settings</h1>
@@ -216,5 +65,4 @@
 
         </div>
     </div>
-</body>
-</html>
+{% endblock %}

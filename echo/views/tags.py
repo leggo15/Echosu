@@ -31,11 +31,14 @@ from django.http import (
 )
 from django.shortcuts import get_object_or_404, render
 from django.core.paginator import Paginator
+from django.views.decorators.http import require_POST
+from ossapi.enums import UserLookupKey
 
 # ---------------------------------------------------------------------------
 # Local application imports
 # ---------------------------------------------------------------------------
 from ..models import Beatmap, Tag, TagApplication, Vote
+from .auth import api
 from ..templatetags.custom_tags import has_tag_edit_permission
 
 
@@ -46,37 +49,58 @@ def get_tags(request):
     beatmap_id = request.GET.get('beatmap_id')
     user = request.user
     beatmap = get_object_or_404(Beatmap, beatmap_id=beatmap_id)
+    # Default to including predicted unless explicitly disabled
+    _ip = request.GET.get('include_predicted')
+    include_predicted = False if (_ip is not None and str(_ip).lower() in ['0', 'false', 'off']) else True
 
-    # Fetch all tags for this beatmap with a count of distinct users that applied each tag
-    tags_with_user_counts = (
+    # Fetch all tag applications for this beatmap
+    applications = (
         TagApplication.objects
         .filter(beatmap=beatmap)
-        .values('tag__name', 'tag__description', 'tag__description_author__username')
-        .annotate(apply_count=Count('user', distinct=True))
-        .order_by('-apply_count')
+        .select_related('tag')
     )
 
+    # Build structures: user-applied counts (exclude predictions), prediction presence per tag
+    user_counts = {}
+    has_prediction = {}
+    for app in applications:
+        tag_name = app.tag.name
+        if app.user_id:
+            user_counts[tag_name] = user_counts.get(tag_name, 0) + 1
+        else:
+            # user is null → predicted
+            has_prediction[tag_name] = True
+
     if request.user.is_authenticated:
-        # Fetch all TagApplication instances for the current user and this beatmap
         user_tag_names = set(
             TagApplication.objects
             .filter(user=user, beatmap=beatmap)
             .values_list('tag__name', flat=True)
         )
     else:
-        user_tag_names = []
+        user_tag_names = set()
 
-    # Construct the list of dictionaries
-    tags_with_counts_list = [
-        {
-            'name': tag['tag__name'],
-            'description': tag.get('tag__description', 'No description available.'),
-            'description_author': tag.get('tag__description_author__username', ''),
-            'apply_count': tag['apply_count'],
-            'is_applied_by_user': tag['tag__name'] in user_tag_names,
-        }
-        for tag in tags_with_user_counts
-    ]
+    # Construct response: include predicted-only tags as orange unless any user has applied
+    # Collect unique Tag objects involved
+    tag_objs = {app.tag.name: app.tag for app in applications}
+    tags_with_counts_list = []
+    for name, tag_obj in tag_objs.items():
+        count = user_counts.get(name, 0)
+        is_predicted_only = has_prediction.get(name, False) and count == 0
+        # Skip predicted-only when not included by toggle
+        if is_predicted_only and not include_predicted:
+            continue
+        tags_with_counts_list.append({
+            'name': name,
+            'description': getattr(tag_obj, 'description', '') or 'No description available.',
+            'description_author': getattr(getattr(tag_obj, 'description_author', None), 'username', ''),
+            'apply_count': count,
+            'is_applied_by_user': name in user_tag_names,
+            'is_predicted': bool(is_predicted_only),
+        })
+
+    # Also consider predicted tags without any TagApplication user rows if repository stores predictions separately
+    # (Left as-is for current model where predictions are TagApplication rows with user=null)
 
     return JsonResponse(tags_with_counts_list, safe=False)
 
@@ -92,6 +116,80 @@ def search_tags(request):
         .order_by('-beatmap_count')
     )
     return JsonResponse(list(tags), safe=False)
+# ----------------------------- Ownership editing ----------------------------- #
+
+@login_required
+@require_POST
+def edit_ownership(request):
+    """Allow set owner or listed owner to change the displayed ownership.
+
+    - If current user is the set owner (`original_creator`), they can assign `listed_owner` to any username (string).
+    - If current user is the listed owner (`listed_owner`), they can set it back to the set owner only.
+    """
+    beatmap_id = request.POST.get('beatmap_id')
+    new_owner = (request.POST.get('new_owner') or '').strip()
+
+    if not beatmap_id:
+        return JsonResponse({'status': 'error', 'message': 'Missing beatmap_id'}, status=400)
+
+    bm = get_object_or_404(Beatmap, beatmap_id=beatmap_id)
+    set_owner_name = (bm.original_creator or '').strip()
+    set_owner_id = (bm.original_creator_id or '').strip()
+    listed_owner_name = (bm.listed_owner or bm.creator or '').strip()
+    listed_owner_id = (bm.listed_owner_id or '').strip()
+
+    current_username = (request.user.username or '').strip()
+    current_username_l = current_username.lower()
+    current_osu_id = str(request.session.get('osu_id') or '')
+
+    is_set_owner = (current_username_l == set_owner_name.lower()) or (current_osu_id and current_osu_id == set_owner_id)
+    is_listed_owner = (current_username_l == listed_owner_name.lower()) or (current_osu_id and current_osu_id == listed_owner_id)
+
+    def resolve_user_by_input(raw: str):
+        raw = (raw or '').strip()
+        if not raw:
+            return None, None
+        # Accept id or username
+        try:
+            if raw.isdigit():
+                u = api.user(int(raw), key=UserLookupKey.ID)
+                return str(u.username), str(u.id)
+            else:
+                u = api.user(raw, key=UserLookupKey.USERNAME)
+                return str(u.username), str(u.id)
+        except Exception:
+            # Fallback: keep input as name if not found
+            return raw, None
+
+    # Set owner has full control; check this branch first
+    if is_set_owner:
+        if not new_owner:
+            return JsonResponse({'status': 'error', 'message': 'New owner required.'}, status=400)
+        new_name, new_id = resolve_user_by_input(new_owner)
+        if not new_name:
+            return JsonResponse({'status': 'error', 'message': 'Invalid owner input.'}, status=400)
+        bm.listed_owner = new_name
+        bm.listed_owner_id = new_id
+        bm.creator = new_name
+        bm.save(update_fields=['listed_owner', 'listed_owner_id', 'creator'])
+        return JsonResponse({'status': 'success', 'listed_owner': bm.listed_owner, 'listed_owner_id': bm.listed_owner_id})
+
+    # Listed owner can only hand ownership back to set owner
+    if is_listed_owner:
+        # Accept either set owner name or id
+        desired = (new_owner or '').strip()
+        if not desired:
+            return JsonResponse({'status': 'error', 'message': 'Owner input required.'}, status=400)
+        if not ((desired.isdigit() and desired == set_owner_id) or (desired.lower() == set_owner_name.lower())):
+            return JsonResponse({'status': 'forbidden', 'message': 'Listed owner can only hand back to set owner.'}, status=403)
+        bm.listed_owner = set_owner_name
+        bm.listed_owner_id = set_owner_id
+        bm.creator = set_owner_name
+        bm.save(update_fields=['listed_owner', 'listed_owner_id', 'creator'])
+        return JsonResponse({'status': 'success', 'listed_owner': bm.listed_owner, 'listed_owner_id': bm.listed_owner_id})
+
+    return JsonResponse({'status': 'forbidden', 'message': 'Insufficient permissions'}, status=403)
+
 
 
 # ----------------------------- Tag helpers ----------------------------- #

@@ -1,0 +1,171 @@
+{% load static %}
+<!-- partials/tag_card.html -->
+<div class="beatmap-card-wrapper" id="beatmap-card-{{ beatmap.beatmap_id }}" data-beatmap-id="{{ beatmap.beatmap_id }}">
+  <div class="chrome-actions">
+    {% if request.path == '/' or request.path == '/search_results/' %}
+      <label class="bulk-select-label">
+        <input
+          type="checkbox"
+          class="bulk-select-checkbox"
+          data-beatmap-id="{{ beatmap.beatmap_id }}"
+          data-beatmapset-id="{{ beatmap.beatmapset_id|default_if_none:'' }}"
+          aria-label="Select for bulk download"
+        >
+        <span class="bulk-select-text">Bulk</span>
+      </label>
+    {% endif %}
+    <a href="osu://b/{{ beatmap.beatmap_id }}" class="mini-map-links">Direct</a>
+    {% if beatmap.beatmapset_id %}
+      <a href="https://beatconnect.io/b/{{ beatmap.beatmapset_id }}" class="mini-map-links">beatconnect</a>
+    {% endif %}
+    {% if user.is_authenticated %}
+      <a href="#" class="mini-map-links update-map-info-btn" data-beatmap-id="{{ beatmap.beatmap_id }}" data-update-url="{% url 'update_beatmap_info' %}">Update Map Info</a>
+    {% endif %}
+  </div>
+
+  <div class="tag-card beatmap-display" id="beatmap-{{ beatmap.beatmap_id }}" data-beatmap-id="{{ beatmap.beatmap_id }}">
+      <div class="beatmap-cover-container">
+        <a href="{% url 'beatmap_detail' beatmap_id=beatmap.beatmap_id %}">
+          <img
+            class="beatmap-cover"
+            src="{% if beatmap.cover_image_url %}{{ beatmap.cover_image_url }}{% elif beatmap.beatmapset_id %}https://assets.ppy.sh/beatmaps/{{ beatmap.beatmapset_id }}/covers/cover.jpg{% endif %}"
+            alt="{{ beatmap.title }}"
+          >
+        </a>
+        {% if beatmap.beatmapset_id %}
+          <audio controls class="audio">
+            <source src="//b.ppy.sh/preview/{{ beatmap.beatmapset_id }}.mp3" type="audio/mpeg">
+          </audio>
+        {% endif %}
+
+        <div class="beatmap-actions beatmap-actions--secondary">
+          {% if beatmap.beatmapset_id %}
+            <a href="https://osu.ppy.sh/beatmapsets/{{ beatmap.beatmapset_id }}/#{{ beatmap.mode }}/{{ beatmap.beatmap_id }}" class="beatmap-link" target="_blank">View on osu!</a>
+          {% endif %}
+          <!-- Only display details button if NOT loaded on the beatmap_detail page-->
+          {% if not request.path == '/beatmap_detail/'|add:beatmap.beatmap_id|add:'/' %}
+            <a href="{% url 'beatmap_detail' beatmap_id=beatmap.beatmap_id %}" class="beatmap-link">View Details</a>
+          {% endif %}
+          {# Backend-driven Find Similar Maps: show if similar_query present #}
+          {% if beatmap.similar_query %}
+            <a href="{% url 'search_results' %}?query={{ beatmap.similar_query|urlencode }}&star_min={{ beatmap.similar_extra_params.star_min }}&star_max={{ beatmap.similar_extra_params.star_max }}&sort=tag_weight" class="beatmap-link">Find Similar Maps</a>
+          {% elif similar_query %}
+            <a href="{% url 'search_results' %}?query={{ similar_query|urlencode }}&star_min={{ similar_extra_params.star_min }}&star_max={{ similar_extra_params.star_max }}&sort=tag_weight" class="beatmap-link">Find Similar Maps</a>
+          {% endif %}
+        </div>
+      </div>
+
+    <div class="beatmap-details-container">
+      <div class="card-header">
+        <h2 class="title">{{ beatmap.title }}{% if beatmap.version %} - [{{ beatmap.version }}]{% endif %} | {{ beatmap.beatmap_id }}</h2>
+      </div>
+      <h3 class="artist">Artist: {{ beatmap.artist }}</h3>
+      <h3 class="mapper">
+        Mapper:
+        <span class="mapper-display" data-beatmap-id="{{ beatmap.beatmap_id }}">
+          {{ beatmap.listed_owner }}
+        </span>
+        {% if user.is_authenticated %}
+          {% with set_owner=beatmap.original_creator|default:'' listed_owner=beatmap.listed_owner|default:beatmap.creator current_user=user.username %}
+            {% if current_user == set_owner or current_user == listed_owner %}
+              <button class="mapper-edit-btn" type="button" title="Edit mapper" aria-label="Edit mapper"
+                data-beatmap-id="{{ beatmap.beatmap_id }}"
+                data-set-owner="{{ set_owner }}"
+                data-listed-owner="{{ listed_owner }}"
+                data-role="{% if current_user == set_owner and current_user != listed_owner %}set_owner{% else %}listed_owner{% endif %}">
+                ✎
+              </button>
+              <input type="text" class="mapper-edit-input" value="{{ beatmap.listed_owner_id|default:'' }}" placeholder="User ID" style="display:none; width:110px; margin-left:6px;">
+              <button class="mapper-save-btn" type="button" style="display:none;">Save</button>
+            {% endif %}
+          {% endwith %}
+        {% endif %}
+      </h3>
+
+      {% with nm=beatmap.pp_nomod hd=beatmap.pp_hd hr=beatmap.pp_hr dt=beatmap.pp_dt ht=beatmap.pp_ht ez=beatmap.pp_ez fl=beatmap.pp_fl %}
+        <div class="pp-mods" aria-label="PP by mod">
+          <div class="pp-pill pp-nm" title="No Mod"><span class="pp-mod">NM</span><span class="pp-val">{{ nm|floatformat:"0" }}</span></div>
+          <div class="pp-grid">
+            <div class="pp-pill pp-mini pp-hd" title="Hidden"><span class="pp-mod">HD</span><span class="pp-val">{{ hd|floatformat:"0" }}</span></div>
+            <div class="pp-pill pp-mini pp-hr" title="Hard Rock"><span class="pp-mod">HR</span><span class="pp-val">{{ hr|floatformat:"0" }}</span></div>
+            <div class="pp-pill pp-mini pp-dt" title="Double Time"><span class="pp-mod">DT</span><span class="pp-val">{{ dt|floatformat:"0" }}</span></div>
+            <div class="pp-pill pp-mini pp-ht" title="Half Time"><span class="pp-mod">HT</span><span class="pp-val">{{ ht|floatformat:"0" }}</span></div>
+            <div class="pp-pill pp-mini pp-ez" title="Easy"><span class="pp-mod">EZ</span><span class="pp-val">{{ ez|floatformat:"0" }}</span></div>
+            <div class="pp-pill pp-mini pp-fl" title="Flashlight"><span class="pp-mod">FL</span><span class="pp-val">{{ fl|floatformat:"0" }}</span></div>
+          </div>
+        </div>
+    {% endwith %}
+
+      {% with genres_list=beatmap.genres.all %}
+        {% if genres_list %}
+          {% if genres_list|length > 10 %}
+            <h4 class="genres" aria-expanded="false" aria-controls="genres-content-{{ beatmap.beatmap_id }}" role="button" tabindex="0">
+              Genres
+              <span class="arrow">&#9660;</span>
+            </h4>
+            <div class="genres" id="genres-content-{{ beatmap.beatmap_id }}" aria-hidden="true" style="display: none;">
+              <i class="genres">
+                {% for genre in genres_list %}
+                  {{ genre.name }}{% if not forloop.last %}, {% endif %}
+                {% endfor %}
+              </i>
+            </div>
+          {% else %}
+          <!-- list 5 genres -->
+          <i class="genres">Genres: {% for genre in genres_list|slice:":5" %}{{ genre.name }}{% if not forloop.last %}, {% endif %}{% endfor %}</i>
+          {% endif %}
+        {% else %}
+          <i class="genres">No genres associated.</i>
+        {% endif %}
+      {% endwith %}
+
+      <div class="beatmap-stats">
+        <span class="focus-stat">★{{ beatmap.difficulty_rating }}</span>
+        {% if beatmap.status == 'Ranked' or beatmap.status == 'Approved' %}
+          <span class="focus-stat status-pill status--ranked">{{ beatmap.status }}</span>
+        {% elif beatmap.status == 'Loved' %}
+          <span class="focus-stat status-pill status--loved">{{ beatmap.status }}</span>
+        {% elif beatmap.status == 'Pending' %}
+          <span class="focus-stat status-pill status--pending">{{ beatmap.status }}</span>
+        {% else %}
+          <span class="focus-stat status-pill status--unranked">{{ beatmap.status }}</span>
+        {% endif %}
+        <span>|</span>
+        <span>CS: {{ beatmap.cs }}</span>
+        <span>HP: {{ beatmap.drain }}</span>
+        <span>OD: {{ beatmap.accuracy }}</span>
+        <span>AR: {{ beatmap.ar }}</span>
+      </br>
+        <span class="minor-stat">BPM: {{ beatmap.bpm }}</span>
+        <span class="beatmap-length minor-stat">Length: {{ beatmap.length_formatted|default:beatmap.total_length }}</span>
+        {% if beatmap.last_updated %}
+          <span class="minor-stat">Year: {{ beatmap.last_updated|date:"Y" }}</span>
+        {% endif %}
+        <span class="minor-stat">Playcount: {{ beatmap.playcount|default:"0" }}</span>
+        <span class="minor-stat">Favourites: {{ beatmap.favourite_count|default:"0" }}</span>
+      </div>
+    
+      <div class="card-footer">
+        <div class="tags-area">
+          <div class="tag-input-container">
+            {% if user.is_authenticated %}
+              {% csrf_token %}
+              <input type="text" class="tag-input" autocomplete="off" placeholder="Add a tag...">
+              <button type="button" class="apply-tag-btn">Apply Tag</button>
+              <ul class="tag-list" aria-live="polite"></ul>
+            {% else %}
+              <span>Log in to apply or create tags.</span>
+            {% endif %}
+          </div>
+          <div class="applied-tags" role="list" aria-label="Applied tags">Tags:</div>
+        </div>
+        {% if request.path == '/search_results/' %}
+          {% if beatmap.tag_weight and sort == 'tag_weight' %}
+            <i class="weight">[{{ beatmap.tag_weight|floatformat:"2" }}]</i>
+          {% else %}
+          <i class="weight">[{{ beatmap.popularity|floatformat:"2" }}]</i>
+          {% endif %}
+        {% endif %}
+      </div>
+  </div>
+</div>

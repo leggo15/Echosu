@@ -1,0 +1,164 @@
+/* Beatmap card layout and visual styling */
+
+.beatmap-display { display: grid; grid-template-columns: 300px minmax(0,1fr); gap: 20px; align-items: start; padding: 16px; }
+.beatmap-cover-container { grid-row: 1 / -1; display: flex; flex-direction: column; align-items: center; }
+.beatmap-cover { width: 100%; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+.beatmap-details-container { padding: 10px; position: relative; min-width: 0; }
+/* Tag Card Specific Overrides */
+.tag-card.beatmap-display {
+    display: grid;
+    grid-template-columns: 300px 1fr; /* slightly smaller image */
+    gap: 14px; /* tighter gap between columns */
+    padding: 12px;
+    align-items: flex-start;
+}
+
+.tag-card .beatmap-cover {
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+}
+
+.tag-card .beatmap-details-container {
+    padding: 0; /* remove extra padding from beatmap cards */
+}
+
+.tag-card .title {
+    font-size: 22px;
+    margin-bottom: 4px;
+}
+
+.tag-card .artist,
+.tag-card .mapper {
+    font-size: 16px;
+    margin-bottom: 4px;
+}
+
+.tag-card .beatmap-stats {
+    margin: 6px 0;
+}
+
+.tag-card .card-footer {
+    grid-column: 1 / -1; /* make footer span entire card */
+    padding-top: 8px;
+    border-top: 1px solid rgba(0,0,0,0.05);
+    position: relative;
+    z-index: 1;
+}
+
+.beatmap-card-wrapper { position: relative; padding-top: 36px; }
+.beatmap-card-wrapper .chrome-actions { position: absolute; top: 27px; right: 8px; display: flex; gap: 8px; justify-content: flex-end; }
+.beatmap-card-wrapper .card-footer { display: grid; grid-template-columns: 1fr auto; align-items: start; padding: 8px 10px 0 10px; gap: 12px; }
+.beatmap-card-wrapper .card-footer .weight { align-self: end; }
+.beatmap-card-wrapper .card-footer .tags-area { flex: 1 1 auto; }
+.beatmap-card-wrapper .card-footer .tags-area .tag-input-container { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; position: relative; }
+.beatmap-card-wrapper .card-footer .tags-area .tag-list {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 2000;
+  background: #fff;
+  border-radius: 8px;
+  margin-top: 4px; /* spacing below input row */
+  max-height: 220px;
+  overflow-y: auto;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+}
+/* Make list items full-width and clickable */
+.beatmap-card-wrapper .card-footer .tags-area .tag-list li {
+  list-style: none;
+  margin: 0;
+  border-radius: 0;
+}
+.beatmap-card-wrapper .card-footer .tags-area .tag-list { margin: 6px 0 0 0; }
+.title { font-size: 26px; color: #333; margin: 0 0 6px 0; }
+.artist, .mapper { font-size: 18px; color: #555; }
+.beatmap-stats { margin: 10px 0 20px 0; }
+.beatmap-stats span { display: inline-block; margin-right: 15px; font-size: 16px; color: #666; }
+.beatmap-stats .focus-stat { color: #967507; font-weight: bold; }
+/* Ensure details content renders below overlayed PP stack */
+.tag-card .beatmap-details-container { z-index: 0; }
+/* Status color variants */
+.beatmap-stats .status-pill { font-weight: 700; }
+.beatmap-stats .status--ranked { color: #41a85b; }
+.beatmap-stats .status--loved { color: #e7689b; }
+.beatmap-stats .status--pending { color: #967507; }
+.beatmap-stats .status--unranked { color: #8c8c8c; }
+.beatmap-stats .minor-stat { font-size: 14px; color: #747474; }
+.beatmap-link { background-color: #649bd6; color: #ffffff; padding: 8px 10px; border-radius: 4px; text-decoration: none; margin-top: 2px; font-size: 16px;}
+.beatmap-link:hover { background-color: #8ec0f5; }
+
+.card-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.beatmap-actions { margin-top: 8px; display: flex; flex-wrap: nowrap; gap: 8px; align-items: center; }
+.beatmap-actions--primary { position: static; margin-top: 0; }
+.beatmap-actions--secondary { gap: 12px; justify-content: center; flex-wrap: wrap; }
+.beatmap-actions .mini-map-links { margin-right: 6px; }
+.mini-map-links { padding: 3px 5px; border-radius: 3px; font-size: 10px; }
+.weight { font-size: 12px; color: #747474; }
+.genres { font-size: 11px; color: #747474; }
+/* Make audio controls inherit the card background */
+.beatmap-card-wrapper audio { display: block; margin: 8px auto 0 auto; }
+.beatmap-card-wrapper audio::-webkit-media-controls-enclosure { background-color: transparent !important; box-shadow: none !important; }
+
+/* PP by mod pills */
+.pp-mods { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0 6px 0; }
+.pp-pill { display: inline-flex; align-items: center; gap: 8px; padding: 3px 5px; border-radius: 10px; font-weight: 500; color: #000; }
+.pp-pill .pp-mod { font-size: 12px; }
+.pp-pill .pp-val { font-size: 14px; }
+.pp-nm { background: #6d92c4; }
+.pp-hd { background: #e2da9b; }
+.pp-hr { background: #ca7989; color: #dfdfdf; }
+.pp-dt { background: #7a669c; color: #dfdfdf; }
+.pp-ht { background: #7f8183; }
+.pp-ez { background: #93c09b; }
+.pp-fl { background: #292828; color: #dfdfdf; }
+
+/* Sidebar PP stack on tag cards (right-aligned, vertical) */
+.tag-card .beatmap-details-container { padding-right: 0; position: relative; }
+.tag-card .pp-mods {
+  position: absolute;
+  top: 100px;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-wrap: nowrap;
+  align-items: flex-end;
+  margin: 0;
+  max-width: 220px;
+  z-index: 3;
+}
+.tag-card .pp-main-stack { display: flex; flex-direction: column; gap: 6px; align-items: flex-end; }
+.tag-card .pp-mini-row { display: flex; gap: 6px; align-items: center; }
+.tag-card .pp-grid { display: grid; grid-template-columns: repeat(3, max-content); gap: 6px; align-items: center; justify-items: end; }
+.tag-card .pp-pill { justify-content: space-between; min-width: 90px; }
+.tag-card .pp-pill.pp-nm { min-width: 158px; max-width: 158px; }
+.tag-card .pp-pill.pp-mini { min-width: 40px; max-width: 40px; padding: 2px 6px; font-weight: 300; }
+.tag-card .pp-pill.pp-mini .pp-mod { font-size: 10px; }
+.tag-card .pp-pill.pp-mini .pp-val { font-size: 10px; }
+
+/* Mapper inline edit controls */
+.mapper-edit-btn {
+  background: transparent;
+  border: none;
+  color: #649bd6;
+  cursor: pointer;
+  margin-left: 6px;
+  font-size: 16px;
+}
+.mapper-edit-btn:hover { color: #8ec0f5; }
+.mapper-edit-input { padding: 2px 6px; }
+.mapper-save-btn { padding: 2px 6px; margin-left: 4px; }
+
+/* Responsive: collapse to one column on small screens */
+@media (max-width: 760px) {
+  .tag-card.beatmap-display { grid-template-columns: 1fr; gap: 12px; }
+  .beatmap-cover-container { grid-row: auto; }
+  .tag-card .beatmap-details-container { padding-top: 6px; }
+  .beatmap-card-wrapper .chrome-actions { top: 10px; right: 10px; }
+  /* Reset PP layout on small screens */
+  .tag-card .beatmap-details-container { padding-right: 0; }
+  .tag-card .pp-mods { position: static; flex-direction: row; flex-wrap: wrap; align-items: center; margin: 8px 0 6px 0; max-width: none; }
+  .tag-card .pp-main-stack { flex-direction: row; }
+  .tag-card .pp-mini-row { margin-left: 6px; }
+}

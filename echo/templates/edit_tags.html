@@ -1,23 +1,15 @@
+{% extends 'base.html' %}
 {% load static %}
-<!DOCTYPE html>
-<html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Edit Tags Descriptions</title>
-        <link rel="stylesheet" href="https://echosu-s3.s3.eu-central-1.amazonaws.com/static/css/master.css">
-        <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-        <script src="https://echosu-s3.s3.eu-central-1.amazonaws.com/static/js/master.js"></script>
-        <script src="https://echosu-s3.s3.eu-central-1.amazonaws.com/static/js/collapsible_descriptions.js"></script>
-        <meta name="csrf-token" content="{{ csrf_token }}">
+{% load custom_tags %}
 
-    </head>
-    <body>
-        {% include '_navbar.html' %}
+{% block title %}Edit Tags Descriptions{% endblock %}
+{% block head_css %}
+  <link rel="stylesheet" href="{% static 'css/edit_tags.css' %}">
+{% endblock %}
+
+{% block content %}
+        <meta name="csrf-token" content="{{ csrf_token }}">
         <div class="container">
-            {% load static %}
-            {% load custom_tags %}
-            {% block content %}
             <h2 class="collapsible-description-header" aria-expanded="false" aria-controls="add-beatmap-content" role="button" tabindex="0">
                 Edit Tags
                 <span class="arrow">&#9660;</span> <!-- Down arrow -->
@@ -126,9 +118,10 @@
                 <img src="{% static 'images/spinner.gif' %}" alt="Loading...">
             </div>
             
-            {% endblock %}
         </div>
-    </body>
+{% endblock %}
+
+{% block foot_js %}
 <script>
     document.addEventListener('DOMContentLoaded', function () {
         const descriptionFields = document.querySelectorAll('.tag-description');
@@ -336,7 +329,4 @@
         }
     });
 </script>
-
-    
-    
-</html>
+{% endblock %}

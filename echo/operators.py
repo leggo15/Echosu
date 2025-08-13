@@ -17,14 +17,56 @@ def handle_attribute_queries(context, search_terms):
     Handles attribute equality and comparison queries.
     """
     remaining_terms = []
+
+    # Collect generic PP constraints so we can apply them as a single OR of ANDs
+    # Example: pp>=800 pp<=850 ->
+    #   (pp_nomod>=800 & pp_nomod<=850) |
+    #   (pp_hd>=800 & pp_hd<=850) | ...
+    pp_constraints = []  # list of tuples (lookup, value)
+
     for term in search_terms:
-        term = term.strip()
-        if '=' in term and not any(op in term for op in ['>=', '<=', '>', '<']):
-            context.beatmaps = handle_attribute_equal_query(context.beatmaps, term)
-        elif any(op in term for op in ['>=', '<=', '>', '<']):
-            context.beatmaps = handle_attribute_comparison_query(context.beatmaps, term)
+        t = (term or '').strip()
+        # Detect generic PP constraints (case-insensitive)
+        m = re.match(r'^\s*pp(>=|<=|>|<|=)(\d+(?:\.\d+)?)\s*$', t, re.IGNORECASE)
+        if m:
+            op, val = m.group(1), m.group(2)
+            try:
+                num = float(val)
+            except ValueError:
+                continue
+            # Map '=' to 'exact' so we can build filter keys without suffix
+            lookup = {
+                '>': 'gt', '<': 'lt', '>=': 'gte', '<=': 'lte', '=': 'exact'
+            }.get(op)
+            if lookup:
+                pp_constraints.append((lookup, num))
+            continue  # don't pass this term down further
+
+        # Fallback to existing handlers
+        if '=' in t and not any(op in t for op in ['>=', '<=', '>', '<']):
+            context.beatmaps = handle_attribute_equal_query(context.beatmaps, t)
+        elif any(op in t for op in ['>=', '<=', '>', '<']):
+            context.beatmaps = handle_attribute_comparison_query(context.beatmaps, t)
         else:
-            remaining_terms.append(term)
+            remaining_terms.append(t)
+
+    # Apply accumulated generic PP constraints, if any
+    if pp_constraints:
+        pp_fields = ['pp_nomod', 'pp_hd', 'pp_hr', 'pp_dt', 'pp_ht', 'pp_ez', 'pp_fl']
+        q_or = None
+        for field in pp_fields:
+            filters = {}
+            for lookup, num in pp_constraints:
+                if lookup == 'exact':
+                    filters[field] = num
+                else:
+                    filters[f'{field}__{lookup}'] = num
+            if filters:
+                part = Q(**filters)
+                q_or = part if q_or is None else (q_or | part)
+        if q_or is not None:
+            context.beatmaps = context.beatmaps.filter(q_or)
+
     return remaining_terms
 
 #----------#
@@ -138,16 +180,46 @@ def handle_attribute_equal_query(beatmaps, term):
         'CS': 'cs',
         'BPM': 'bpm',
         'OD': 'accuracy',
+        'HP': 'drain',
+        'DRAIN': 'drain',
         'LENGTH': 'total_length',
         'COUNT': 'playcount',
         'FAV': 'favourite_count',
+        # Generic PP (special-cased below to search across all modded variants)
+        'PP': 'pp',
+        # Modded PP aliases
+        'NM': 'pp_nomod',
+        'HD': 'pp_hd',
+        'HR': 'pp_hr',
+        'DT': 'pp_dt',
+        'HT': 'pp_ht',
+        'EZ': 'pp_ez',
+        'FL': 'pp_fl',
+        'YEAR': 'last_updated__year',
     }
 
     field_name = field_map.get(attribute)
+    if attribute == 'PP':
+        # Equality for floats is uncommon; still support
+        try:
+            numeric_value = float(value)
+        except ValueError:
+            return beatmaps
+        pp_fields = ['pp_nomod', 'pp_hd', 'pp_hr', 'pp_dt', 'pp_ht', 'pp_ez', 'pp_fl']
+        q = None
+        for f in pp_fields:
+            part = Q(**{f: numeric_value})
+            q = part if q is None else (q | part)
+        if q is not None:
+            beatmaps = beatmaps.filter(q)
+        return beatmaps
+
     if field_name:
         try:
             if field_name in ['playcount', 'favourite_count']:
-                numeric_value = float(value)
+                numeric_value = int(value)
+            elif field_name.endswith('__year'):
+                numeric_value = int(value)
             else:
                 numeric_value = float(value)
             filter_key = f'{field_name}'
@@ -159,7 +231,7 @@ def handle_attribute_equal_query(beatmaps, term):
 #----------#
 
 def handle_attribute_comparison_query(beatmaps, term):
-    match = re.match(r'(AR|CS|BPM|OD|LENGTH|COUNT|FAV)(>=|<=|>|<)(\d+(\.\d+)?)', term, re.IGNORECASE)
+    match = re.match(r'(AR|CS|BPM|OD|HP|DRAIN|LENGTH|COUNT|FAV|PP|NM|HD|HR|DT|HT|EZ|FL|YEAR)(>=|<=|>|<)(\d+(\.\d+)?)', term, re.IGNORECASE)
     if match:
         attribute, operator, value, _ = match.groups()
         attribute = attribute.upper().strip()
@@ -175,14 +247,45 @@ def handle_attribute_comparison_query(beatmaps, term):
             'CS': 'cs',
             'BPM': 'bpm',
             'OD': 'accuracy',
+            'HP': 'drain',
+            'DRAIN': 'drain',
             'LENGTH': 'total_length',
             'COUNT': 'playcount',
             'FAV': 'favourite_count',
+            # Generic PP handled specially below
+            'PP': 'pp',
+            # Modded PP fields
+            'NM': 'pp_nomod',
+            'HD': 'pp_hd',
+            'HR': 'pp_hr',
+            'DT': 'pp_dt',
+            'HT': 'pp_ht',
+            'EZ': 'pp_ez',
+            'FL': 'pp_fl',
+            'YEAR': 'last_updated__year',
         }
         field_name = field_map.get(attribute)
+        if lookup and attribute == 'PP':
+            # Compare across all PP variants
+            try:
+                numeric_value = float(value)
+            except ValueError:
+                return beatmaps
+            pp_fields = ['pp_nomod', 'pp_hd', 'pp_hr', 'pp_dt', 'pp_ht', 'pp_ez', 'pp_fl']
+            q = None
+            for f in pp_fields:
+                filter_key = f"{f}__{lookup}"
+                part = Q(**{filter_key: numeric_value})
+                q = part if q is None else (q | part)
+            if q is not None:
+                beatmaps = beatmaps.filter(q)
+            return beatmaps
+
         if lookup and field_name:
             try:
                 if field_name in ['playcount', 'favourite_count']:
+                    numeric_value = int(value)
+                elif field_name.endswith('__year'):
                     numeric_value = int(value)
                 else:
                     numeric_value = float(value)

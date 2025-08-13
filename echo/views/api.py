@@ -75,8 +75,11 @@ def tags_for_beatmaps(request, beatmap_id=None):
 
     result = []
     for beatmap in beatmaps:
+        # Exclude predicted and non-user applications from export
         tag_counts = (
-            TagApplication.objects.filter(beatmap=beatmap)
+            TagApplication.objects
+            .filter(beatmap=beatmap, is_prediction=False)
+            .exclude(user__isnull=True)
             .values('tag__name')
             .annotate(tag_count=Count('tag'))
             .order_by('-tag_count')
@@ -142,6 +145,20 @@ class TagApplicationViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = TagApplicationSerializer
     authentication_classes = [CustomTokenAuthentication]
     permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        qs = super().get_queryset()
+        params = self.request.query_params
+        include_predicted = str(params.get('include_predicted', '0')).lower() in ['1', 'true', 'yes', 'on', 'include']
+        if not include_predicted:
+            qs = qs.filter(is_prediction=False).exclude(user__isnull=True)
+        beatmap_id = params.get('beatmap_id')
+        if beatmap_id:
+            qs = qs.filter(beatmap__beatmap_id=str(beatmap_id))
+        tag_name = params.get('tag')
+        if tag_name:
+            qs = qs.filter(tag__name__iexact=str(tag_name).strip().lower())
+        return qs
 
     @action(detail=False, methods=['post'], url_path='toggle')
     def toggle_tags(self, request):
@@ -234,3 +251,185 @@ class UserProfileViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = UserProfileSerializer
     authentication_classes = [CustomTokenAuthentication]
     permission_classes = [IsAuthenticated]
+
+
+# ----------------------------- Admin Upload Endpoints ----------------------------- #
+
+@api_view(['POST'])
+@authentication_classes([CustomTokenAuthentication])
+@permission_classes([IsAuthenticated])
+def admin_upload_predictions(request):
+    """Upload predicted tags in bulk (admin only).
+
+    Accepted payloads:
+      1) {"predictions": [{"beatmap_id": "123", "tag": "stream", "confidence": 0.91}, ...]}
+      2) {"items": [{"beatmap_id": "123", "tag": "stream", "confidence": 0.91}, ...]}
+      3) [{"beatmap_id": "123", "tag": "stream", "confidence": 0.91}, ...]
+      4) [{"beatmap_id": "123", "tags": ["stream", {"tag":"alt","confidence":0.8}]}, ...]
+    """
+    user = request.user
+    if not getattr(user, 'is_staff', False):
+        return Response({'detail': 'Admin privileges required.'}, status=403)
+
+    payload = request.data
+    if isinstance(payload, dict) and 'predictions' in payload:
+        items = payload.get('predictions') or []
+    elif isinstance(payload, dict) and 'items' in payload:
+        items = payload.get('items') or []
+    elif isinstance(payload, list):
+        items = payload
+    else:
+        return Response({'detail': 'Invalid payload.'}, status=400)
+
+    created, updated, skipped, errors = 0, 0, 0, []
+
+    def _ensure_beatmap(bm_id: str) -> Beatmap:
+        bm_id = str(bm_id)
+        beatmap, _ = Beatmap.objects.get_or_create(beatmap_id=bm_id)
+        return beatmap
+
+    for entry in items:
+        try:
+            if not isinstance(entry, dict):
+                skipped += 1
+                continue
+
+            if 'tags' in entry and isinstance(entry['tags'], list):
+                beatmap = _ensure_beatmap(entry.get('beatmap_id'))
+                for tag_item in entry['tags']:
+                    if isinstance(tag_item, str):
+                        tag_name = tag_item.strip().lower()
+                        confidence = None
+                    elif isinstance(tag_item, dict):
+                        tag_name = (tag_item.get('tag') or tag_item.get('name') or '').strip().lower()
+                        confidence = tag_item.get('confidence')
+                    else:
+                        continue
+                    if not tag_name:
+                        continue
+                    tag, _ = Tag.objects.get_or_create(name=tag_name)
+                    obj, created_row = TagApplication.objects.get_or_create(
+                        tag=tag, beatmap=beatmap, user=None,
+                        defaults={'is_prediction': True, 'prediction_confidence': confidence}
+                    )
+                    if created_row:
+                        created += 1
+                    else:
+                        # Update confidence if provided
+                        if confidence is not None:
+                            obj.is_prediction = True
+                            obj.prediction_confidence = confidence
+                            obj.save(update_fields=['is_prediction', 'prediction_confidence'])
+                            updated += 1
+                        else:
+                            skipped += 1
+                continue
+
+            beatmap_id = entry.get('beatmap_id')
+            tag_name = (entry.get('tag') or entry.get('name') or '').strip().lower()
+            confidence = entry.get('confidence')
+            if not beatmap_id or not tag_name:
+                skipped += 1
+                continue
+
+            beatmap = _ensure_beatmap(beatmap_id)
+            tag, _ = Tag.objects.get_or_create(name=tag_name)
+            obj, created_row = TagApplication.objects.get_or_create(
+                tag=tag, beatmap=beatmap, user=None,
+                defaults={'is_prediction': True, 'prediction_confidence': confidence}
+            )
+            if created_row:
+                created += 1
+            else:
+                if confidence is not None:
+                    obj.is_prediction = True
+                    obj.prediction_confidence = confidence
+                    obj.save(update_fields=['is_prediction', 'prediction_confidence'])
+                    updated += 1
+                else:
+                    skipped += 1
+        except Exception as exc:
+            errors.append(str(exc))
+
+    return Response({'status': 'ok', 'created': created, 'updated': updated, 'skipped': skipped, 'errors': errors})
+
+
+@api_view(['POST'])
+@authentication_classes([CustomTokenAuthentication])
+@permission_classes([IsAuthenticated])
+def admin_upload_tag_applications(request):
+    """Upload user tag applications in bulk (admin only).
+
+    Payload options:
+      - {"applications": [{"beatmap_id": "123", "tag": "stream", "osu_id": "4978940"}, ...]}
+      - list of the same objects
+      Fields to identify a user (one of): "osu_id", "user_id", "username".
+      Optional: "created_at" (ISO 8601).
+    """
+    user = request.user
+    if not getattr(user, 'is_staff', False):
+        return Response({'detail': 'Admin privileges required.'}, status=403)
+
+    payload = request.data
+    if isinstance(payload, dict) and 'applications' in payload:
+        items = payload.get('applications') or []
+    elif isinstance(payload, list):
+        items = payload
+    else:
+        return Response({'detail': 'Invalid payload.'}, status=400)
+
+    created, skipped, errors = 0, 0, []
+
+    for entry in items:
+        try:
+            if not isinstance(entry, dict):
+                skipped += 1
+                continue
+            beatmap_id = entry.get('beatmap_id')
+            tag_name = (entry.get('tag') or '').strip().lower()
+            if not beatmap_id or not tag_name:
+                skipped += 1
+                continue
+
+            # Resolve user
+            resolved_user = None
+            osu_id = (entry.get('osu_id') or '').strip()
+            username = (entry.get('username') or '').strip()
+            user_id = entry.get('user_id')
+            if osu_id:
+                try:
+                    profile = UserProfile.objects.get(osu_id=str(osu_id))
+                    resolved_user = profile.user
+                except UserProfile.DoesNotExist:
+                    resolved_user = None
+            if not resolved_user and user_id:
+                try:
+                    resolved_user = UserProfile._meta.model._meta.get_field('user').remote_field.model.objects.get(id=user_id)
+                except Exception:
+                    resolved_user = None
+            if not resolved_user and username:
+                try:
+                    from django.contrib.auth.models import User as DjangoUser
+                    resolved_user = DjangoUser.objects.get(username=username)
+                except Exception:
+                    resolved_user = None
+
+            if not resolved_user:
+                skipped += 1
+                continue
+
+            beatmap, _ = Beatmap.objects.get_or_create(beatmap_id=str(beatmap_id))
+            tag, _ = Tag.objects.get_or_create(name=tag_name)
+
+            obj, created_row = TagApplication.objects.get_or_create(
+                tag=tag, beatmap=beatmap, user=resolved_user,
+                defaults={'is_prediction': False}
+            )
+            if created_row:
+                created += 1
+            else:
+                skipped += 1
+        except Exception as exc:
+            errors.append(str(exc))
+
+    return Response({'status': 'ok', 'created': created, 'skipped': skipped, 'errors': errors})

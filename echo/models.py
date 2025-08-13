@@ -16,6 +16,10 @@ class Beatmap(models.Model):
     artist = models.CharField(max_length=1000, null=False, blank=True)
     genres = models.ManyToManyField(Genre, blank=True)
     creator = models.CharField(max_length=255, null=False, blank=True)
+    original_creator = models.CharField(max_length=255, null=True, blank=True)
+    original_creator_id = models.CharField(max_length=50, null=True, blank=True)
+    listed_owner = models.CharField(max_length=255, null=True, blank=True)
+    listed_owner_id = models.CharField(max_length=50, null=True, blank=True)
     cover_image_url = models.URLField(max_length=1000, null=True, blank=True)
     total_length = models.IntegerField(null=True, blank=True)
     bpm = models.FloatField(null=True, blank=True)
@@ -28,6 +32,15 @@ class Beatmap(models.Model):
     status = models.CharField(max_length=32, null=False, blank=True)
     playcount = models.IntegerField(null=True, blank=True)
     favourite_count = models.IntegerField(null=True, blank=True)
+    last_updated = models.DateTimeField(null=True, blank=True)
+    rosu_timeseries = models.JSONField(default=dict, blank=True, null=True)
+    pp_nomod = models.FloatField(null=True, blank=True)
+    pp_hd = models.FloatField(null=True, blank=True)
+    pp_hr = models.FloatField(null=True, blank=True)
+    pp_dt = models.FloatField(null=True, blank=True)
+    pp_ht = models.FloatField(null=True, blank=True)
+    pp_ez = models.FloatField(null=True, blank=True)
+    pp_fl = models.FloatField(null=True, blank=True)
 
     def get_weighted_tags(self):
         tags = self.tags.annotate(
@@ -109,6 +122,7 @@ class TagDescriptionHistory(models.Model):
     description = models.CharField(max_length=255)
     date_written = models.DateTimeField(auto_now_add=True)
     author = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    
 
     class Meta:
         ordering = ['-date_written']
@@ -143,7 +157,8 @@ class Vote(models.Model):
 class TagApplication(models.Model):
     tag = models.ForeignKey(Tag, on_delete=models.CASCADE)
     beatmap = models.ForeignKey(Beatmap, on_delete=models.CASCADE)
-    is_prediction = models.FloatField(default=False, help_text="Indicates if tag is predicted for this beatmap")
+    timestamp = models.JSONField(default=dict, blank=True, null=True)
+    is_prediction = models.BooleanField(default=False, help_text="Indicates if tag is predicted for this beatmap")
     prediction_confidence = models.FloatField(default=0.0, blank=True, null=True, help_text="Confidence level of the prediction")
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -153,7 +168,6 @@ class TagApplication(models.Model):
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
-
     def agreed_by_others(self):
         return TagApplication.objects.filter(
             beatmap=self.beatmap,
@@ -166,7 +180,13 @@ class TagApplication(models.Model):
         unique_together = ('tag', 'beatmap', 'user')
 
     def __str__(self):
-        return f"{self.user.username} applied tag '{self.tag.name}' on {self.beatmap.beatmap_id}"
+        user_name = getattr(getattr(self, 'user', None), 'username', 'anonymous')
+        try:
+            tag_name = getattr(getattr(self, 'tag', None), 'name', '?')
+        except Exception:
+            tag_name = '?'
+        bm_id = getattr(getattr(self, 'beatmap', None), 'beatmap_id', '?')
+        return f"{user_name} applied tag '{tag_name}' on {bm_id}"
 
 
 ################ API ##################
@@ -183,7 +203,6 @@ class CustomToken(models.Model):
     @classmethod
     def generate_key(cls):
         random_key = get_random_string(64)
-        print(f"generate_key output: {random_key}")
         return random_key
 
 
@@ -192,17 +211,13 @@ class CustomToken(models.Model):
         raw_key = cls.generate_key()
         hashed_key = hashlib.sha256(raw_key.encode()).hexdigest()
 
-        # Debugging statements
-        print(f"Generated raw_key: {raw_key}")
-        print(f"Generated hashed_key: {hashed_key}")
-
         token = cls(key=hashed_key, user=user)
         token.save()
         return token, raw_key
 
 
 class APIRequestLog(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
     timestamp = models.DateTimeField(auto_now_add=True)
     method = models.CharField(max_length=10)
     path = models.CharField(max_length=255)

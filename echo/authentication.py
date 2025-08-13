@@ -2,6 +2,10 @@ from rest_framework.authentication import BaseAuthentication
 from rest_framework.exceptions import AuthenticationFailed
 from .models import CustomToken
 import hashlib
+try:
+    from rest_framework.authtoken.models import Token as DRFToken
+except Exception:  # pragma: no cover
+    DRFToken = None
 
 class CustomTokenAuthentication(BaseAuthentication):
     keyword = 'Token'
@@ -17,6 +21,13 @@ class CustomTokenAuthentication(BaseAuthentication):
         try:
             token = CustomToken.objects.get(key=hashed_token)
         except CustomToken.DoesNotExist:
+            # Fallback to DRF Token if present
+            if DRFToken is not None:
+                try:
+                    drf_token = DRFToken.objects.get(key=raw_token)
+                    return (drf_token.user, drf_token)
+                except Exception:
+                    pass
             raise AuthenticationFailed('Invalid token')
 
         return (token.user, token)

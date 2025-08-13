@@ -1,210 +1,36 @@
+{% extends 'base.html' %}
 {% load static %}
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ beatmap.title }} Details</title>
-    <link rel="stylesheet" href="https://echosu-s3.s3.eu-central-1.amazonaws.com/static/css/master.css">
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script src="https://echosu-s3.s3.eu-central-1.amazonaws.com/static/js/master.js"></script>
-</head>
-<body class="page-beatmap-detail">
-    {% include '_navbar.html' %}    
 
-    <div class="container">
-        <span class="link"><a href="#" id="update-map-info-link" class="mini-map-links">Update Map Info</a></span>
-        <span class="link"><a href="osu://b/{{ beatmap.beatmap_id }}"class="mini-map-links">Direct</a></span>
-        <span class="link"><a href="https://beatconnect.io/b/{{ beatmap.beatmapset_id }}" class="mini-map-links">beatconnect</a></span>
-        {% if beatmap %}
-        <div class="beatmap-display">
-            {% if beatmap.cover_image_url %}
-            <div class="beatmap-cover-container">
-                <img class="beatmap-cover" src="{{ beatmap.cover_image_url }}" alt="Cover Image">
-                <!-- Audio Preview Section -->
-                {% if beatmap.beatmapset_id %}
-                    <audio controls class="audio">
-                        <source src="//b.ppy.sh/preview/{{ beatmap.beatmapset_id }}.mp3" type="audio/mpeg">
-                    </audio>
-                {% else %}
-                    <span>No preview available.</span>
-                {% endif %}
-            </div>
-            
-            {% endif %}
-            <div class="beatmap-details-container">
-                <div class="beatmap-title-artist">
-                    <h2 class="title">{{ beatmap.title }} - [{{ beatmap.version }}] | {{ beatmap.beatmap_id }}</h2>
-                    <h3 class="artist">Artist: {{ beatmap.artist }}</h3>
-                    <h3 class="mapper">Mapper: {{ beatmap.creator }}</h3>
+{% block title %}{{ beatmap.title }} Details{% endblock %}
+{% block body_class %}page-beatmap-detail{% endblock %}
 
-                    <!-- Genres Display -->
-                    {% with genres_list=beatmap.genres.all %}
-                        {% if genres_list %}
-                            {% if genres_list|length > 10 %}
-                                <!-- Collapsible Genres Section -->
-                                <h4 class="genres" aria-expanded="false" aria-controls="genres-content-{{ beatmap.beatmap_id }}" role="button" tabindex="0">
-                                    Genres
-                                    <span class="arrow">&#9660;</span> <!-- Down arrow -->
-                                </h4>
-                                <div class="genres" id="genres-content-{{ beatmap.beatmap_id }}" aria-hidden="true" style="display: none;">
-                                    <i class="genres">
-                                        {% for genre in genres_list %}
-                                            {{ genre.name }}{% if not forloop.last %}, {% endif %}
-                                        {% endfor %}
-                                    </i>
-                                </div>
-                            {% else %}
-                                <!-- Display genres normally if count <= 5 -->
-                                <i class="genres">
-                                    Genres:
-                                    {% for genre in genres_list %}
-                                        {{ genre.name }}{% if not forloop.last %}, {% endif %}
-                                    {% endfor %}
-                                </i>
-                            {% endif %}
-                        {% else %}
-                        <i class="genres">No genres associated.</i>
-                        {% endif %}
-                    {% endwith %}
-                    
-                </div>
-                <div class="beatmap-stats">
-                    <span class="beatmap-length">Length: {{ beatmap.total_length }}</span>
-                    <span>BPM: {{ beatmap.bpm }} </span>
-                    <span>CS: {{ beatmap.cs }} </span>
-                    <span>HP: {{ beatmap.drain }}</span>
-                    <span>OD: {{ beatmap.accuracy }}</span>
-                    <span>AR: {{ beatmap.ar }}</span>
-                    <span>SR: {{ beatmap.difficulty_rating }}</span>
-                    <span>Mode: {{ beatmap.mode }}</span>
-                    <span>Status: {{ beatmap.status }}</span>
-                    <span>Playcount: {{ beatmap.playcount }}</span>
-                    <span>Favourites: {{ beatmap.favourite_count }}</span>
-                </div>
+{% block head_css %}
+  <link rel="stylesheet" href="{% static 'css/beatmap_card.css' %}">
+  <link rel="stylesheet" href="{% static 'css/tagging.css' %}">
+  <link rel="stylesheet" href="{% static 'css/search_filters.css' %}">
+  <link rel="stylesheet" href="{% static 'css/rosu_graph.css' %}">
+{% endblock %}
 
+{% block content %}
+  {% include 'partials/tag_card.html' with beatmap=beatmap show_details_button=False %}
 
-                {% if beatmap.beatmapset_id %}
-                <a href="https://osu.ppy.sh/beatmapsets/{{ beatmap.beatmapset_id }}/#{{ beatmap.mode }}/{{ beatmap.beatmap_id }}" class="beatmap-link" target="_blank">View on osu!</a>
-                {% else %}
-                    <span class="no-link">Beatmap set not available on osu!</span>
-                {% endif %}
-                
-                <!-- Find Similar Maps Button with Star Rating Limits -->
-                <a href="{% url 'search_results' %}?query=bpm>={{ bpm_min }} bpm<={{ bpm_max }} + {{ tags_query_string|urlencode}}&star_min={{ star_min }}&star_max={{ star_max }}" class="beatmap-link">
-                    Find Similar Maps
-                </a>
+  <!-- Difficulty graph -->
+  <div class="rosu-graph-card">
+    <div class="rosu-graph-header">
+        <h3 class="rosu-graph-title">Difficulty over time</h3>
+    </div>
+    <div class="rosu-graph-container">
+      <canvas id="rosuGraphCanvas" height="140" data-ts-url="{% url 'beatmap_timeseries' beatmap_id=beatmap.beatmap_id %}" data-total-stars="{{ beatmap.difficulty_rating|default:0 }}" data-total-length="{{ beatmap.total_length|default:0 }}"></canvas>
+    </div>
+  </div>
 
-            </div>
-        </div>
+  {% if error %}
+    <p class="error">{{ error }}</p>
+  {% endif %}
+{% endblock %}
 
-        <!-- Hidden field to store the current beatmap's ID -->
-        <input type="hidden" id="current_beatmap_id" data-beatmap-id="{{ beatmap.beatmap_id }}" value="{{ beatmap.beatmap_id }}">
-        {% if user.is_authenticated %}
-        <!-- Tag input field and suggestions list -->
-        <button type="button" class="apply-tag-btn">Apply Tag</button>
-        <input type="text" id="tag-input" placeholder="Enter tag"> 
-        <ul id="tag-list"></ul>
-        {% else %}
-        <span>Log in to apply or create tags.</span>
-        {% endif %}
-
-        <div class="applied-tags" id="beatmap-applied-tags">
-            Tags:
-            {% if tags_with_counts %}
-                {% for tag_info in tags_with_counts %}
-                    {% if tag_info.tag__name %}
-                        <span class="tag {% if tag_info.is_applied_by_user %}tag-applied{% else %}tag-unapplied{% endif %}"
-                              data-tag-name="{{ tag_info.tag__name }}" 
-                              data-applied-by-user="{{ tag_info.is_applied_by_user }}"
-                              data-beatmap-id="{{ beatmap.beatmap_id }}"
-                              {% if tag_info.tag__description %}
-                                  data-description=' "{{ tag_info.tag__description|escapejs }}" '
-                                  data-description-author=" - {{ tag_info.tag__description_author__username|escapejs }}"
-                              {% endif %}
-                        >
-                            {{ tag_info.tag__name }} ({{ tag_info.apply_count }})
-                        </span>
-                    {% else %}
-                        <span class="tag">(Unnamed Tag) ({{ tag_info.apply_count }})</span>
-                    {% endif %}
-                {% endfor %}
-            {% else %}
-                <span>No Tags associated.</span>
-            {% endif %}
-        </div>
-
-
-        
-            {% if error %}
-                <p class="error">{{ error }}</p>
-            {% endif %}
-        {% endif %}
-    </div>  
-    <script>
-        $('#update-map-info-link').click(function(e) {
-            e.preventDefault();
-            const beatmapId = {{ beatmap.beatmap_id }};
-            $.post("{% url 'update_beatmap_info' %}", {
-                'beatmap_id': beatmapId,
-                'csrfmiddlewaretoken': '{{ csrf_token }}'
-            })
-            .done(function(response) {
-                location.reload();
-            })
-            .fail(function(error) {
-                alert("Failed to update: " + error.responseJSON.error);
-            });
-        });
-    </script>
-    <script>
-        document.addEventListener('DOMContentLoaded', function () {
-            // Handle collapsible descriptions
-            var collapsibleHeaders = document.querySelectorAll('.genres');
-            collapsibleHeaders.forEach(function (header) {
-                header.addEventListener('click', function () {
-                    var expanded = this.getAttribute('aria-expanded') === 'true';
-                    this.setAttribute('aria-expanded', !expanded);
-                    var contentId = this.getAttribute('aria-controls');
-                    var content = document.getElementById(contentId);
-                    if (content) {
-                        content.setAttribute('aria-hidden', expanded);
-                        content.style.display = expanded ? 'none' : 'block';
-                        var arrow = this.querySelector('.arrow');
-                        if (arrow) {
-                            arrow.innerHTML = expanded ? '&#9660;' : '&#9650;'; // Toggle arrow direction
-                        }
-                    }
-                });
-            });
-        });
-
-
-        $(document).ready(function() { 
-            var selectedTag;
-        
-            // Existing code...
-        
-            // -----------------------------------------------
-            // Load More functionality for Recommended Maps
-            // -----------------------------------------------
-        
-            // Existing code...
-        
-            // -----------------------------------------------
-            // Add Apply Tag on Enter Key Functionality
-            // -----------------------------------------------
-        
-            // Function to handle applying tag on Enter keypress
-            $('#tag-input').on('keydown', function(e) {
-                if (e.key === 'Enter') {
-                    e.preventDefault(); // Prevent form submission or other default actions
-                    $('.apply-tag-btn').click(); // Trigger the Apply Tag button click
-                }
-            });
-        
-            // Existing code...
-        }); 
-    </script>
-</body>
-</html>
+{% block foot_js %}
+  <script src="{% static 'js/tagging.js' %}"></script>
+  <script src="{% static 'js/rosu_graph.js' %}"></script>
+  <script src="{% static 'js/rosu_graph_tags.js' %}"></script>
+{% endblock %}

@@ -26,6 +26,7 @@ from django.contrib import messages
 from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
+from django.db import transaction
 from django.shortcuts import redirect, render
 
 # ---------------------------------------------------------------------------
@@ -112,14 +113,47 @@ def save_user_data(access_token, request):
     osu_id = str(user_data['id'])
     username = user_data['username']
 
-    # Find or create a Django user
-    user, created = User.objects.get_or_create(username=username)
+    # Ensure we identify returning users by osu_id, and update username if it changed
+    with transaction.atomic():
+        # Try to find an existing profile by osu_id first
+        user_profile = UserProfile.objects.select_related('user').filter(osu_id=osu_id).first()
 
-    # Update or create the user profile
-    user_profile, profile_created = UserProfile.objects.get_or_create(user=user)
-    user_profile.osu_id = osu_id
-    user_profile.profile_pic_url = user_data.get('avatar_url', '')  # Use get to avoid KeyError
-    user_profile.save()
+        if user_profile:
+            user = user_profile.user
+            # If username changed on osu!, update the local Django user
+            if user.username != username:
+                conflict_user = User.objects.filter(username=username).exclude(pk=user.pk).first()
+                if conflict_user:
+                    # Preserve any data; rename the conflicting user deterministically
+                    conflict_user.username = f"{conflict_user.username}__old__{conflict_user.id}"
+                    conflict_user.save(update_fields=['username'])
+                user.username = username
+                user.save(update_fields=['username'])
+
+            # Always refresh avatar
+            user_profile.profile_pic_url = user_data.get('avatar_url', '') or ''
+            user_profile.save(update_fields=['profile_pic_url'])
+
+        else:
+            # First login for this osu_id (or previous data was inconsistent). Prefer reusing an existing user with the same username.
+            user = User.objects.filter(username=username).first()
+            if user is None:
+                user = User.objects.create(username=username)
+
+            # Attach or create profile with the osu_id
+            existing_profile = getattr(user, 'userprofile', None)
+            if existing_profile:
+                if existing_profile.osu_id != osu_id:
+                    existing_profile.osu_id = osu_id
+                    existing_profile.profile_pic_url = user_data.get('avatar_url', '') or ''
+                    existing_profile.save(update_fields=['osu_id', 'profile_pic_url'])
+                user_profile = existing_profile
+            else:
+                user_profile = UserProfile.objects.create(
+                    user=user,
+                    osu_id=osu_id,
+                    profile_pic_url=user_data.get('avatar_url', '') or ''
+                )
 
     # Check if the user is banned
     if user_profile.banned:

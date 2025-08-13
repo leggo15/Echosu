@@ -143,16 +143,14 @@ EOF
 
 django_tasks() {
   log "Running Django migrations and collectstatic"
-  # Export env from .env to support 'python-dotenv' expectations in subprocess
+  # No shell-sourcing of .env; Django loads it via python-dotenv in settings.py
   sudo -u "$APP_USER" bash -c "cd '$APP_DIR' && \
-    set -a && . '$ENV_FILE' && set +a && \
     source '$VENV_DIR/bin/activate' && \
     python manage.py migrate --noinput"
 
   # Only attempt collectstatic if AWS credentials appear present
   if grep -qE '^[ ]*AWS_ACCESS_KEY_ID=.+$' "$ENV_FILE" && grep -qE '^[ ]*AWS_SECRET_ACCESS_KEY=.+$' "$ENV_FILE"; then
     sudo -u "$APP_USER" bash -c "cd '$APP_DIR' && \
-      set -a && . '$ENV_FILE' && set +a && \
       source '$VENV_DIR/bin/activate' && \
       python manage.py collectstatic --noinput"
   else

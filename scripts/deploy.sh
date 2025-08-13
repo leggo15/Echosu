@@ -7,6 +7,24 @@ set -euo pipefail
 : "${REPO_DIR:=/opt/$APP_NAME}"
 : "${VENV_DIR:=$REPO_DIR/venv}"
 : "${ENV_FILE:=$REPO_DIR/.env}"
+APP_DIR=""
+detect_app_dir() {
+  if [[ -f "$REPO_DIR/manage.py" ]]; then
+    APP_DIR="$REPO_DIR"
+  elif [[ -f "$REPO_DIR/echoOsu/manage.py" ]]; then
+    APP_DIR="$REPO_DIR/echoOsu"
+  else
+    local found
+    found=$(find "$REPO_DIR" -maxdepth 3 -type f -name manage.py | head -n1 || true)
+    if [[ -n "$found" ]]; then
+      APP_DIR=$(dirname "$found")
+    else
+      echo "Could not locate manage.py under $REPO_DIR" >&2
+      exit 1
+    fi
+  fi
+  ENV_FILE="$APP_DIR/.env"
+}
 
 sudo() { command sudo "$@"; }
 log() { echo "[deploy:$APP_NAME] $*"; }
@@ -30,11 +48,14 @@ install_requirements() {
 
 run_django_tasks() {
   log "Applying migrations and collecting static"
-  sudo -u "$APP_USER" bash -c "cd '$REPO_DIR' && \
-    set -a && . '$ENV_FILE' && set +a && \
+  sudo -u "$APP_USER" bash -c "cd '$APP_DIR' && \
     source '$VENV_DIR/bin/activate' && \
-    python manage.py migrate --noinput && \
-    python manage.py collectstatic --noinput"
+    python manage.py migrate --noinput"
+  if grep -qE '^[ ]*AWS_ACCESS_KEY_ID=.+$' "$ENV_FILE" && grep -qE '^[ ]*AWS_SECRET_ACCESS_KEY=.+$' "$ENV_FILE"; then
+    sudo -u "$APP_USER" bash -c "cd '$APP_DIR' && \
+      source '$VENV_DIR/bin/activate' && \
+      python manage.py collectstatic --noinput"
+  fi
 }
 
 restart_services() {
@@ -44,6 +65,7 @@ restart_services() {
 }
 
 main() {
+  detect_app_dir
   pull_latest
   install_requirements
   run_django_tasks

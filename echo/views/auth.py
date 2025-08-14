@@ -76,7 +76,15 @@ def osu_callback(request):
 
             # Save user data and login
             if access_token:
-                save_user_data(access_token, request)
+                try:
+                    save_user_data(access_token, request)
+                except PermissionError:
+                    # Banned or not allowed; message already set inside helper
+                    return redirect('error_page')
+                except Exception:
+                    logger.exception("Failed to save user data during osu OAuth callback")
+                    messages.error(request, "Login failed while fetching your osu! profile. Please try again.")
+                    return redirect('error_page')
                 return redirect('home')  # Redirect to your app page after login
             else:
                 messages.error(request, "Failed to retrieve access token.")
@@ -141,7 +149,7 @@ def save_user_data(access_token, request):
                 user = User.objects.create(username=username)
 
             # Attach or create profile with the osu_id
-            existing_profile = getattr(user, 'userprofile', None)
+            existing_profile = UserProfile.objects.filter(user=user).first()
             if existing_profile:
                 if existing_profile.osu_id != osu_id:
                     existing_profile.osu_id = osu_id
@@ -159,8 +167,8 @@ def save_user_data(access_token, request):
     if user_profile.banned:
         # Add an error message with the ban reason
         messages.error(request, f"You have been banned: {user_profile.ban_reason}")
-        # Redirect to the error page
-        return redirect('error_page')
+        # Signal to the caller to handle the redirect
+        raise PermissionError("Banned user attempted to log in")
 
     try:
         from django.conf import settings as dj_settings

@@ -117,8 +117,8 @@ def handle_inclusion(context, search_terms):
             if matching_tags.exists():
                 context.required_tags.update(tag.name for tag in matching_tags)
             else:
-                # If required tag does not exist, no results should be returned
-                context.beatmaps = context.beatmaps.none()
+                # Treat required non-tag terms as required general inclusion across fields
+                context.include_q &= build_inclusion_q(required_term)
         else:
             processed_terms.append(term)
     return processed_terms

@@ -198,6 +198,185 @@
         .done(function(){ location.reload(); })
         .fail(function(error){ alert('Failed to update: ' + (error.responseJSON && error.responseJSON.error)); });
     });
+
+    // -----------------------------
+    // Click-to-filter helpers
+    // -----------------------------
+    function buildSearchUrl() {
+      var basePath = '/search_results/';
+      var url = new URL(basePath, window.location.origin);
+      try {
+        var current = new URL(window.location.href);
+        // Preserve existing params
+        current.searchParams.forEach(function(value, key) {
+          // Drop pagination when changing filters
+          if (key === 'page') return;
+          url.searchParams.set(key, value);
+        });
+      } catch (e) { /* no-op */ }
+      return url;
+    }
+
+    function appendQueryTokens(url, tokens) {
+      if (!tokens || !tokens.length) return url;
+      var existing = url.searchParams.get('query') || '';
+      var addition = tokens.join(' ').trim();
+      var combined = (existing ? (existing + ' ') : '') + addition;
+      url.searchParams.set('query', combined.trim());
+      return url;
+    }
+
+    function toggleStatusParam(url, statusText) {
+      var st = String(statusText || '').toLowerCase();
+      var key = null, val = null;
+      if (st.indexOf('ranked') !== -1 || st.indexOf('approved') !== -1) { key = 'status_ranked'; val = 'ranked'; }
+      else if (st.indexOf('loved') !== -1) { key = 'status_loved'; val = 'loved'; }
+      else { key = 'status_unranked'; val = 'unranked'; }
+      if (url.searchParams.has(key)) { url.searchParams.delete(key); }
+      else { url.searchParams.set(key, val); }
+      return url;
+    }
+
+    function navTo(url) { window.location.href = url.toString(); }
+
+    // Numeric parsing helpers
+    function parseFloatSafe(text) {
+      var m = String(text || '').match(/[-+]?[0-9]*\.?[0-9]+/);
+      return m ? parseFloat(m[0]) : NaN;
+    }
+    function parseIntFromParens(text) {
+      var m = String(text || '').match(/\((\d+)\)/);
+      if (m) return parseInt(m[1], 10);
+      var m2 = String(text || '').match(/(\d+)\s*$/);
+      return m2 ? parseInt(m2[1], 10) : NaN;
+    }
+
+    function clamp(num, min, max) {
+      return Math.max(min, Math.min(max, num));
+    }
+
+    function fmt(num, decimals) {
+      var d = (typeof decimals === 'number') ? decimals : 1;
+      var n = Number(num);
+      if (!isFinite(n)) return '';
+      return (d <= 0) ? String(Math.round(n)) : n.toFixed(d);
+    }
+
+    // PP mod pills (NM/HD/HR/DT/HT/EZ/FL) -> ±15%
+    $card.on('click', '.pp-pill', function() {
+      var $pill = $(this);
+      var mod = ($pill.find('.pp-mod').text() || '').trim().toUpperCase();
+      if (!mod) return;
+      var val = parseFloatSafe($pill.find('.pp-val').text());
+      if (!isFinite(val)) return;
+      var min = Math.max(0, val * 0.85);
+      var max = val * 1.15;
+      var tokens = [mod + '>=' + fmt(min, 1), mod + '<=' + fmt(max, 1)];
+      var url = buildSearchUrl();
+      appendQueryTokens(url, tokens);
+      navTo(url);
+    });
+
+    // Star rating (first focus-stat without status class) -> set star_min/star_max (±15%)
+    $card.on('click', '.beatmap-stats .focus-stat', function() {
+      var $el = $(this);
+      if ($el.hasClass('status-pill')) return; // handled separately
+      var text = $el.text().trim();
+      if (text.indexOf('★') !== 0) return;
+      var rating = parseFloatSafe(text);
+      if (!isFinite(rating)) return;
+      var starMin = Math.max(0, rating * 0.85);
+      var starMax = rating * 1.15;
+      var url = buildSearchUrl();
+      url.searchParams.set('star_min', fmt(starMin, 2));
+      url.searchParams.set('star_max', fmt(starMax, 2));
+      navTo(url);
+    });
+
+    // Status pill -> toggle corresponding status_* param
+    $card.on('click', '.beatmap-stats .status-pill', function() {
+      var $el = $(this);
+      var st = ($el.text() || '').trim();
+      var url = buildSearchUrl();
+      toggleStatusParam(url, st);
+      navTo(url);
+    });
+
+    // CS/HP/OD/AR -> ±1.0
+    $card.on('click', '.beatmap-stats span', function() {
+      var t = ($(this).text() || '').trim();
+      // Guard out non-stat spans
+      if (/^\|$/.test(t)) return;
+      var m = t.match(/^(CS|HP|OD|AR):\s*([0-9]*\.?[0-9]+)/i);
+      if (!m) return;
+      var key = m[1].toUpperCase();
+      var val = parseFloat(m[2]);
+      if (!isFinite(val)) return;
+      var min = clamp(val - 1.0, 0, 10);
+      var max = clamp(val + 1.0, 0, 10);
+      var tokens = [key + '>=' + fmt(min, 1), key + '<=' + fmt(max, 1)];
+      var url = buildSearchUrl();
+      appendQueryTokens(url, tokens);
+      navTo(url);
+    });
+
+    // BPM -> ±15%
+    $card.on('click', '.beatmap-stats .minor-stat', function() {
+      var text = ($(this).text() || '').trim();
+      var url = buildSearchUrl();
+      // BPM
+      if (/^BPM:/i.test(text)) {
+        var bpm = parseFloatSafe(text);
+        if (!isFinite(bpm)) return;
+        var bmin = Math.max(0, bpm * 0.85);
+        var bmax = bpm * 1.15;
+        appendQueryTokens(url, ['BPM>=' + fmt(bmin, 0), 'BPM<=' + fmt(bmax, 0)]);
+        navTo(url);
+        return;
+      }
+      // Length (seconds inside parentheses) -> ±15%
+      if (/^Length:/i.test(text)) {
+        var secs = parseIntFromParens(text);
+        if (!isFinite(secs)) secs = parseFloatSafe(text);
+        if (!isFinite(secs)) return;
+        var lmin = Math.max(0, Math.floor(secs * 0.85));
+        var lmax = Math.max(0, Math.ceil(secs * 1.15));
+        appendQueryTokens(url, ['LENGTH>=' + String(lmin), 'LENGTH<=' + String(lmax)]);
+        navTo(url);
+        return;
+      }
+      // Year -> ±1
+      if (/^Year:/i.test(text)) {
+        var year = parseIntFromParens(text);
+        if (!isFinite(year)) year = parseInt(String(text).replace(/[^0-9]/g, ''), 10);
+        if (!isFinite(year)) return;
+        appendQueryTokens(url, ['YEAR>=' + String(year - 1), 'YEAR<=' + String(year + 1)]);
+        navTo(url);
+        return;
+      }
+    });
+
+    // Mapper click -> ."listed_owner"
+    $wrapper.on('click', '.mapper-display', function() {
+      var name = ($(this).text() || '').trim();
+      if (!name) return;
+      var needsQuote = /\s/.test(name);
+      var token = needsQuote ? '."' + name.replace(/"/g, '') + '"' : '."' + name.replace(/"/g, '') + '"';
+      var url = buildSearchUrl();
+      appendQueryTokens(url, [token]);
+      navTo(url);
+    });
+
+    // Artist click -> ."artist"
+    $wrapper.on('click', 'h3.artist', function() {
+      var raw = ($(this).text() || '').trim();
+      var name = raw.replace(/^Artist:\s*/i, '').trim();
+      if (!name) return;
+      var token = '."' + name.replace(/"/g, '') + '"';
+      var url = buildSearchUrl();
+      appendQueryTokens(url, [token]);
+      navTo(url);
+    });
   }
 
   // Expose a global initializer for dynamically inserted cards

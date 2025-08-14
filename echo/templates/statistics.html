@@ -15,7 +15,7 @@
 
   <form method="get" action="" class="stats-form">
     <div class="search-row">
-      <input type="text" name="user" placeholder="osu! username or id" value="{{ input_user|default:resolved_username }}">
+      <input type="text" name="user" placeholder="osu! username or id" value="{{ input_user|default:resolved_username|default:'' }}">
       <button type="submit">Load User</button>
     </div>
     {% if resolve_error %}

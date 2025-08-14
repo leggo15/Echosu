@@ -660,6 +660,15 @@ def admin_refresh_beatmaps(request):
                     except Exception:
                         pass
 
+                # Ensure listed owner fields are populated every refresh
+                try:
+                    preferred_name = (beatmap.original_creator or '').strip() or (beatmap.creator or '').strip() or (set_owner_name or '')
+                    preferred_id = (beatmap.original_creator_id or '') or (str(set_owner_id) if set_owner_id else '')
+                    beatmap.listed_owner = preferred_name
+                    beatmap.listed_owner_id = preferred_id or None
+                except Exception:
+                    pass
+
                 beatmap.version = getattr(beatmap_data, 'version', beatmap.version)
                 beatmap.total_length = getattr(beatmap_data, 'total_length', beatmap.total_length)
                 beatmap.bpm = getattr(beatmap_data, 'bpm', beatmap.bpm)
@@ -703,6 +712,18 @@ def admin_refresh_beatmaps(request):
                 get_or_compute_modded_pps(beatmap)
                 # 1-second window to match existing UI usage
                 get_or_compute_timeseries(beatmap, window_seconds=1)
+            except Exception:
+                pass
+
+            # Best-effort: assign genres using external services
+            try:
+                from ..fetch_genre import fetch_genres, get_or_create_genres
+                genres = fetch_genres(beatmap.artist or '', beatmap.title or '')
+                if genres:
+                    genre_objects = get_or_create_genres(genres)
+                    beatmap.genres.set(genre_objects)
+                else:
+                    beatmap.genres.clear()
             except Exception:
                 pass
         except Exception as exc:

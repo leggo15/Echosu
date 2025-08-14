@@ -122,6 +122,7 @@
   // Bulk Download Manager
   // -----------------------------
   const MAX_SELECTED = 30;
+  const BULK_DIRECT_DELAY_MS = 3000; // delay between direct link calls
   const STORAGE_KEY = 'bulkSelectedMaps:v1';
   const bulkState = {
     // Map of beatmap_id -> { beatmapId, beatmapsetId, title }
@@ -338,7 +339,7 @@
     var items = Array.from(bulkState.selected.values());
     if (items.length === 0) return;
     var delay = 0;
-    var stepMs = 250;
+    var stepMs = BULK_DIRECT_DELAY_MS;
     items.forEach(function(item) {
       setTimeout(function() {
         var url = 'osu://b/' + item.beatmapId;

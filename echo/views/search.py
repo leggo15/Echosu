@@ -203,7 +203,10 @@ def search_results(request):
                 .order_by('-tag_weight')
             )
         else:
-            qs = qs.order_by('-favourite_count', '-playcount')
+            # When sorting by popularity, compute a numeric popularity score so it can be displayed
+            qs = qs.annotate(
+                popularity=F('favourite_count') * Value(0.02) + F('playcount') * Value(0.0001)
+            ).order_by('-popularity')
         return qs
 
     # -------------------------------------------------------------

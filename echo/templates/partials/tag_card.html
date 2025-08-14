@@ -159,11 +159,11 @@
           </div>
           <div class="applied-tags" role="list" aria-label="Applied tags">Tags:</div>
         </div>
-        {% if request.path == '/' %}
-          {% if beatmap.tag_weight and sort == 'tag_weight' %}
-            <i class="weight">[{{ beatmap.tag_weight|floatformat:"2" }}]</i>
+        {% if request.path == '/' or request.path == '/search_results/' %}
+          {% if sort == 'tag_weight' %}
+            <i class="weight">[{{ beatmap.tag_weight|default_if_none:0|floatformat:"2" }}]</i>
           {% else %}
-          <i class="weight">[{{ beatmap.popularity|floatformat:"2" }}]</i>
+            <i class="weight">[{{ beatmap.popularity|default_if_none:0|floatformat:"2" }}]</i>
           {% endif %}
         {% endif %}
       </div>

@@ -122,7 +122,7 @@
   // Bulk Download Manager
   // -----------------------------
   const MAX_SELECTED = 30;
-  const BULK_DIRECT_DELAY_MS = 3000; // delay between direct link calls
+  const BULK_DIRECT_DELAY_MS = 10000; // delay between direct link calls
   const STORAGE_KEY = 'bulkSelectedMaps:v1';
   const bulkState = {
     // Map of beatmap_id -> { beatmapId, beatmapsetId, title }

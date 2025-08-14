@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import List, Tuple, Dict
+import math
 
 def normalize_intervals(intervals: List[Tuple[float, float]], total_length_s: float | None = None) -> List[Tuple[float, float]]:
     """Clean and sort intervals; clip to [0, total_length_s] if provided.
@@ -53,7 +54,13 @@ def consensus_intervals(user_intervals: List[List[Tuple[float, float]]], thresho
     if not events:
         return []
     events.sort()
-    needed = max(1, int(round(len(user_intervals) * threshold_ratio)))
+    num_users = len(user_intervals)
+    # Use ceiling so that 50% of 5 users -> 3 (not 2). Avoid banker's rounding.
+    needed = max(1, int(math.ceil(num_users * float(threshold_ratio))))
+    # Product decision: when exactly two users provided intervals and the threshold is
+    # 50% or lower, require both to agree to show overlap (strict intersection for 2 users).
+    if num_users == 2 and threshold_ratio <= 0.5:
+        needed = 2
     on = 0
     res: List[Tuple[float, float]] = []
     prev_t = events[0][0]

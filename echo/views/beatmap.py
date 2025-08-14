@@ -155,28 +155,45 @@ def tag_timestamps(request, beatmap_id: int):
     tag_id = request.GET.get('tag_id')
     only_user = request.GET.get('user') == 'me'
 
-    qs = TagApplication.objects.filter(beatmap=beatmap).select_related('tag', 'user')
+    qs = (
+        TagApplication.objects
+        .filter(beatmap=beatmap)
+        .select_related('tag', 'user')
+    )
     if tag_id:
         qs = qs.filter(tag_id=tag_id)
 
-    # Aggregate consensus
+    # Aggregate consensus per tag, grouping intervals by user (exclude predictions/null users)
     aggregated = []
     tags = {}
     for ta in qs:
-        if ta.tag_id not in tags:
-            tags[ta.tag_id] = {
-                'tag_id': ta.tag_id,
+        tag_id_int = ta.tag_id
+        if tag_id_int not in tags:
+            tags[tag_id_int] = {
+                'tag_id': tag_id_int,
                 'tag_name': ta.tag.name,
                 'users': set(),
-                'user_intervals': [],
+                'user_to_intervals': {},  # user_id -> List[Tuple[float,float]]
             }
-        tags[ta.tag_id]['users'].add(ta.user_id)
-        intervals = (ta.timestamp or {}).get('intervals') if isinstance(ta.timestamp, dict) else None
-        if intervals:
-            tags[ta.tag_id]['user_intervals'].append([(float(s), float(e)) for s, e in intervals])
+        # Count only real users (exclude predictions and null users) towards user_count
+        if ta.user_id is not None and not getattr(ta, 'is_prediction', False):
+            tags[tag_id_int]['users'].add(ta.user_id)
+            # Collect intervals per user
+            if isinstance(ta.timestamp, dict):
+                raw = (ta.timestamp or {}).get('intervals') or []
+                if raw:
+                    pairs = [(float(s), float(e)) for s, e in raw]
+                    lst = tags[tag_id_int]['user_to_intervals'].setdefault(ta.user_id, [])
+                    lst.extend(pairs)
 
     for tag_data in tags.values():
-        intervals = consensus_intervals(tag_data['user_intervals'], threshold_ratio=threshold, total_length_s=beatmap.total_length)
+        # Merge intervals per user first, then compute consensus over users
+        per_user_lists = []
+        for _uid, ivs in tag_data['user_to_intervals'].items():
+            merged = normalize_intervals(ivs, beatmap.total_length)
+            if merged:
+                per_user_lists.append(merged)
+        intervals = consensus_intervals(per_user_lists, threshold_ratio=threshold, total_length_s=beatmap.total_length)
         aggregated.append({
             'tag_id': tag_data['tag_id'],
             'tag_name': tag_data['tag_name'],

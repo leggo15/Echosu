@@ -15,6 +15,7 @@ from .views.beatmap import update_beatmap_info
 class BeatmapAdmin(admin.ModelAdmin):
     list_display = ('beatmap_id', 'title', 'artist', 'creator', 'status')
     search_fields = ('beatmap_id', 'title', 'artist', 'creator')
+    change_list_template = 'admin/echo/beatmap/change_list.html'
 
     def get_urls(self):
         urls = super().get_urls()

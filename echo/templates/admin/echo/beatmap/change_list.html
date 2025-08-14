@@ -1,0 +1,11 @@
+{% extends "admin/change_list.html" %}
+{% load static %}
+
+{% block object-tools-items %}
+  {{ block.super }}
+  <li>
+    <a href="{% url 'admin:echo_beatmap_refresh_all' %}" class="addlink">Refresh all beatmaps</a>
+  </li>
+{% endblock %}
+
+

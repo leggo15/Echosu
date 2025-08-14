@@ -30,17 +30,19 @@
             class="beatmap-cover"
             src="{% if beatmap.cover_image_url %}{{ beatmap.cover_image_url }}{% elif beatmap.beatmapset_id %}https://assets.ppy.sh/beatmaps/{{ beatmap.beatmapset_id }}/covers/cover.jpg{% endif %}"
             alt="{{ beatmap.title }}"
+            loading="lazy"
+            decoding="async"
           >
         </a>
-        {% if beatmap.beatmapset_id %}
-          <audio controls class="audio">
+          {% if beatmap.beatmapset_id %}
+          <audio controls class="audio" preload="none">
             <source src="//b.ppy.sh/preview/{{ beatmap.beatmapset_id }}.mp3" type="audio/mpeg">
           </audio>
-        {% endif %}
+          {% endif %}
 
         <div class="beatmap-actions beatmap-actions--secondary">
           {% if beatmap.beatmapset_id %}
-            <a href="https://osu.ppy.sh/beatmapsets/{{ beatmap.beatmapset_id }}/#{{ beatmap.mode }}/{{ beatmap.beatmap_id }}" class="beatmap-link" target="_blank">View on osu!</a>
+            <a href="https://osu.ppy.sh/beatmapsets/{{ beatmap.beatmapset_id }}/#{{ beatmap.mode }}/{{ beatmap.beatmap_id }}" class="beatmap-link" target="_blank" rel="noopener">View on osu!</a>
           {% endif %}
           <!-- Only display details button if NOT loaded on the beatmap_detail page-->
           {% if not request.path == '/beatmap_detail/'|add:beatmap.beatmap_id|add:'/' %}

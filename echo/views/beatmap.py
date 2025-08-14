@@ -92,20 +92,10 @@ def beatmap_detail(request, beatmap_id):
 
 
 
-    # Compute or fetch cached difficulty time-series in background of page render
-    # so that the client JSON endpoint is fast on first load.
-    try:
-        get_or_compute_timeseries(beatmap, window_seconds=1)
-    except Exception:
-        pass
-
-    # Compute PP (cached) for display on the card
-    try:
-        pp_value = get_or_compute_pp(beatmap)
-        if pp_value is not None:
-            beatmap.pp = pp_value
-    except Exception:
-        pass
+    # NOTE: Intentionally avoid computing heavy data (timeseries, PP) synchronously
+    # during page render to keep the detail page responsive. The JS graph will
+    # fetch the timeseries asynchronously via the JSON endpoint. PP should be
+    # precomputed offline or shown only if already cached on the model.
     try:
         beatmap.length_formatted = format_length_hms(beatmap.total_length)
     except Exception:

@@ -36,14 +36,14 @@
     // Auto-dismiss flash messages so they don't block UI
     var flashMessages = document.querySelectorAll('.messages li');
     if (flashMessages.length) {
-      setTimeout(function() {
+      window.setTimeout(function() {
         flashMessages.forEach(function(item) { item.classList.add('fade-out'); });
-      }, 3000);
-      setTimeout(function() {
+      }, 2000);
+      window.setTimeout(function() {
         flashMessages.forEach(function(item) {
           if (item && item.parentNode) { item.parentNode.removeChild(item); }
         });
-      }, 4500);
+      }, 3500);
     }
 
     // Expose a reusable initializer so dynamically inserted cards get the defaults too

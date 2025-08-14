@@ -368,6 +368,7 @@ def search_results(request):
     # Lightweight queryset hints to avoid unnecessary payloads/N+1s
     beatmaps = beatmaps.defer('rosu_timeseries').prefetch_related('genres')
 
+    # Server-side paginate to a modest page size to reduce template rendering cost
     paginator = Paginator(beatmaps, 10)
     page_obj = paginator.get_page(request.GET.get('page'))
 

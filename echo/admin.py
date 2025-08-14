@@ -6,6 +6,8 @@ from django.contrib.admin.views.decorators import staff_member_required
 from django.http import HttpRequest
 from django.test.client import RequestFactory
 import time
+import threading
+from django.contrib.auth import get_user_model
 
 from .models import Beatmap, UserProfile, Tag, TagApplication, TagDescriptionHistory
 from .models import APIRequestLog
@@ -28,19 +30,26 @@ class BeatmapAdmin(admin.ModelAdmin):
         if not request.user.is_staff:
             self.message_user(request, 'Permission denied.', level=messages.ERROR)
             return redirect('..')
-        success = 0
-        failed = 0
-        for bm_id in Beatmap.objects.values_list('beatmap_id', flat=True).iterator(chunk_size=500):
+        
+        def _worker(user_id: int, delay_s: int = 5):
+            User = get_user_model()
+            try:
+                user = User.objects.get(id=user_id)
+            except User.DoesNotExist:
+                return
             rf = RequestFactory()
-            req = rf.post('/update_beatmap_info/', {'beatmap_id': bm_id})
-            req.user = request.user
-            resp = update_beatmap_info(req)
-            if getattr(resp, 'status_code', 500) == 200:
-                success += 1
-            else:
-                failed += 1
-            time.sleep(5)
-        self.message_user(request, f"Refresh complete. Success: {success}, Failed: {failed}.")
+            for bm_id in Beatmap.objects.values_list('beatmap_id', flat=True).iterator(chunk_size=500):
+                try:
+                    req = rf.post('/update_beatmap_info/', {'beatmap_id': bm_id})
+                    req.user = user
+                    update_beatmap_info(req)
+                except Exception:
+                    pass
+                time.sleep(delay_s)
+
+        t = threading.Thread(target=_worker, args=(request.user.id, 5), daemon=True)
+        t.start()
+        self.message_user(request, 'Background refresh started. You may close this tab.')
         return redirect('..')
 admin.site.register(UserProfile)
 admin.site.register(Tag)

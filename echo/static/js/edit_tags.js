@@ -15,9 +15,38 @@ document.addEventListener('DOMContentLoaded', function () {
   function showLoading() { loadingSpinner.style.display = 'block'; }
   function hideLoading() { loadingSpinner.style.display = 'none'; }
   function showMessage(message, type) {
-    if (!messageArea) return;
-    messageArea.innerHTML = `<p class="${type}">${message}</p>`;
-    setTimeout(() => { if (messageArea) { messageArea.innerHTML = ''; } }, type === 'success' ? 3000 : 5000);
+    // Prefer global flash messages list at top of page
+    var ul = document.querySelector('.messages');
+    if (!ul) {
+      try {
+        // Prefer inserting after navbar for correct stacking/position
+        var nav = document.querySelector('nav');
+        ul = document.createElement('ul');
+        ul.className = 'messages';
+        if (nav && nav.parentNode) {
+          nav.parentNode.insertBefore(ul, nav.nextSibling);
+        } else {
+          document.body.insertBefore(ul, document.body.firstChild);
+        }
+      } catch (e) { /* fall through to local */ }
+    }
+    if (ul) {
+      var li = document.createElement('li');
+      li.className = type || '';
+      li.textContent = message;
+      ul.appendChild(li);
+      // Auto-dismiss similar to core.js timings
+      setTimeout(function(){ li.classList.add('fade-out'); }, 2000);
+      setTimeout(function(){ 
+        if (li && li.parentNode) { li.parentNode.removeChild(li); }
+      }, 3500);
+      return;
+    }
+    // Fallback to local message area if global not available
+    if (messageArea) {
+      messageArea.innerHTML = `<p class="${type}">${message}</p>`;
+      setTimeout(() => { if (messageArea) { messageArea.innerHTML = ''; } }, type === 'success' ? 3000 : 5000);
+    }
   }
 
   descriptionFields.forEach(function(field) {

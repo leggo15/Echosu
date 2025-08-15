@@ -323,13 +323,33 @@
             });
         }
 
-        // Function to display messages
+        // Function to display messages at the top of the page
         function showMessage(message, type) {
-            messageArea.innerHTML = `<p class="${type}">${message}</p>`;
-            // Remove the message after a delay
-            setTimeout(() => {
-                messageArea.innerHTML = '';
-            }, type === 'success' ? 3000 : 5000);
+            // Prefer global flash messages list at top of page
+            var ul = document.querySelector('.messages');
+            if (!ul) {
+                try {
+                    ul = document.createElement('ul');
+                    ul.className = 'messages';
+                    document.body.insertBefore(ul, document.body.firstChild);
+                } catch (e) { /* fall through to local */ }
+            }
+            if (ul) {
+                var li = document.createElement('li');
+                li.className = type || '';
+                li.textContent = message;
+                ul.appendChild(li);
+                setTimeout(function(){ li.classList.add('fade-out'); }, 2000);
+                setTimeout(function(){
+                    if (li && li.parentNode) { li.parentNode.removeChild(li); }
+                }, 3500);
+                return;
+            }
+            // Fallback to local message area if global not available
+            if (messageArea) {
+                messageArea.innerHTML = `<p class="${type}">${message}</p>`;
+                setTimeout(() => { if (messageArea) { messageArea.innerHTML = ''; } }, type === 'success' ? 3000 : 5000);
+            }
         }
 
         // Functions to show and hide the loading spinner

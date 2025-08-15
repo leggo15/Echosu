@@ -33,18 +33,21 @@
       });
     }
 
-    // Auto-dismiss flash messages so they don't block UI
-    var flashMessages = document.querySelectorAll('.messages li');
-    if (flashMessages.length) {
+    // Auto-dismiss flash messages without affecting layout
+    function bindFlashLifecycle(scope) {
+      var list = (scope || document).querySelector('.messages');
+      var items = list ? list.querySelectorAll('li') : [];
+      if (!items.length) return;
       window.setTimeout(function() {
-        flashMessages.forEach(function(item) { item.classList.add('fade-out'); });
+        items.forEach(function(item) { item.classList.add('fade-out'); });
       }, 2000);
       window.setTimeout(function() {
-        flashMessages.forEach(function(item) {
+        items.forEach(function(item) {
           if (item && item.parentNode) { item.parentNode.removeChild(item); }
         });
       }, 3500);
     }
+    bindFlashLifecycle(document);
 
     // Expose a reusable initializer so dynamically inserted cards get the defaults too
     function initAudioDefaults(root) {

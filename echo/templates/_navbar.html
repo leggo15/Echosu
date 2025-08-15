@@ -5,7 +5,7 @@
 
 <!-- Display messages -->
 {% if messages %}
-<ul class="messages">
+<ul class="messages" style="position:fixed; top:60px; left:0; right:0; z-index:5000;">
     {% for message in messages %}
         <li class="{{ message.tags }}">{{ message }}</li>
     {% endfor %}
@@ -77,7 +77,7 @@
 <form method="post" action="{% url 'quick_add_beatmap' %}" class="floating-add-beatmap" aria-label="Quick add beatmap">
   <header class="floating-add-header">Add beatmap</header>
   <div class="floating-add-body">
-    <span class="floating-add-body-text">Log in to add beatmaps</span>
+    <span class="">Log in to add beatmaps</span>
   </div>
 </form>
 {% endif %}

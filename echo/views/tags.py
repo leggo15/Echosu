@@ -135,14 +135,11 @@ def get_tags_bulk(request):
     _ip = request.GET.get('include_predicted')
     include_predicted = False if (_ip is not None and str(_ip).lower() in ['0', 'false', 'off']) else True
     
-    # Single query for all beatmaps
-    beatmaps = Beatmap.objects.filter(beatmap_id__in=beatmap_ids)
-    
     # Single query for all tag applications with related data
     tag_apps = (
         TagApplication.objects
         .filter(beatmap__beatmap_id__in=beatmap_ids)
-        .select_related('tag')
+        .select_related('beatmap', 'tag', 'tag__description_author')
         .only('beatmap__beatmap_id', 'user_id', 'tag__id', 'tag__name', 'tag__description', 'tag__description_author__username')
     )
     
@@ -152,25 +149,23 @@ def get_tags_bulk(request):
         user_tags = set(
             TagApplication.objects
             .filter(user=user, beatmap__beatmap_id__in=beatmap_ids)
-            .values_list('beatmap__beatmap_id', 'tag__name', flat=True)
+            .values_list('beatmap__beatmap_id', 'tag__name')
         )
     
     # Build response structure efficiently
-    result = {}
-    for beatmap_id in beatmap_ids:
-        result[beatmap_id] = []
+    result = {bm_id: [] for bm_id in beatmap_ids}
     
     # Process tag applications and build tag data
     tag_data = defaultdict(lambda: defaultdict(list))
     for app in tag_apps:
-        beatmap_id = app.beatmap.beatmap_id
+        bm_id = app.beatmap.beatmap_id
         tag_name = app.tag.name
         
         if app.user_id:
             # User-applied tag
-            tag_data[beatmap_id][tag_name].append({
+            tag_data[bm_id][tag_name].append({
                 'name': tag_name,
-                'is_applied_by_user': (beatmap_id, tag_name) in user_tags,
+                'is_applied_by_user': (bm_id, tag_name) in user_tags,
                 'is_predicted': False,
                 'apply_count': 1,
                 'description': app.tag.description or '',
@@ -178,7 +173,7 @@ def get_tags_bulk(request):
             })
         elif include_predicted:
             # Predicted tag
-            tag_data[beatmap_id][tag_name].append({
+            tag_data[bm_id][tag_name].append({
                 'name': tag_name,
                 'is_applied_by_user': False,
                 'is_predicted': True,
@@ -188,17 +183,14 @@ def get_tags_bulk(request):
             })
     
     # Aggregate apply counts and build final response
-    for beatmap_id in tag_data:
+    for bm_id, tags_for_bm in tag_data.items():
         final_tags = []
-        for tag_name, tag_instances in tag_data[beatmap_id].items():
+        for tag_name, tag_instances in tags_for_bm.items():
             if tag_instances:
-                # Use the first instance as base and aggregate counts
                 base_tag = tag_instances[0].copy()
                 base_tag['apply_count'] = len(tag_instances)
                 final_tags.append(base_tag)
-        
-        # Sort by apply count (descending)
-        result[beatmap_id] = sorted(final_tags, key=lambda x: -x['apply_count'])
+        result[bm_id] = sorted(final_tags, key=lambda x: (-x['apply_count'], x['name']))
     
     return JsonResponse({'tags': result})
 # ----------------------------- Ownership editing ----------------------------- #

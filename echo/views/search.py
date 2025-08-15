@@ -37,6 +37,7 @@ from django.db.models import (
     Subquery,
     OuterRef,
 )
+from django.db.models.functions import Coalesce
 from django.shortcuts import render
 
 # ---------------------------------------------------------------------------
@@ -142,13 +143,54 @@ def search_results(request):
         if predicted_mode == 'include':
             total_tag_count_expr = Count('tags', distinct=True)
         else:  # exclude and only: count only user-applied applications for denominator
-            total_tag_count_expr = Count('tagapplication', filter=Q(tagapplication__user__isnull=False))
+                        total_tag_count_expr = Count('tagapplication__tag', filter=Q(tagapplication__user__isnull=False), distinct=True)
         if sort == 'tag_weight':
-            # Weight factor for predicted tags (0.1 when included/only, else 0)
+            # Weight factor for predicted tags (0.5 when included/only, else 0)
             p_w = Value(0.5 if predicted_mode in ['include', 'only'] else 0.0)
+
+            # Build subqueries that are independent of the include_tags filter join
+            base_ta_sq = TagApplication.objects.filter(beatmap_id=OuterRef('id'))
+            if predicted_mode == 'exclude':
+                base_ta_sq = base_ta_sq.filter(user__isnull=False)
+            elif predicted_mode == 'only':
+                base_ta_sq = base_ta_sq.filter(user__isnull=True)
+
+            total_app_subq = (
+                base_ta_sq
+                .values('beatmap_id')
+                .annotate(cnt=Count('id'))
+                .values('cnt')[:1]
+            )
+            matched_app_subq = (
+                base_ta_sq
+                .filter(tag__name__in=include_tags)
+                .values('beatmap_id')
+                .annotate(cnt=Count('id'))
+                .values('cnt')[:1]
+            )
+            # Distinct tag names present on map (and matched) irrespective of join filters
+            distinct_tag_total_subq = (
+                base_ta_sq
+                .values('beatmap_id')
+                .annotate(cnt=Count('tag_id', distinct=True))
+                .values('cnt')[:1]
+            )
+            matched_distinct_subq = (
+                base_ta_sq
+                .filter(tag__name__in=include_tags)
+                .values('beatmap_id')
+                .annotate(cnt=Count('tag_id', distinct=True))
+                .values('cnt')[:1]
+            )
 
             qs = (
                 qs.annotate(
+                    # Per-beatmap total and matched tag application counts (non-distinct)
+                    total_app_count=Coalesce(Subquery(total_app_subq), Value(0)),
+                    matched_app_count=Coalesce(Subquery(matched_app_subq), Value(0)),
+                    # Per-beatmap distinct tag name counts
+                    total_distinct_count=Coalesce(Subquery(distinct_tag_total_subq), Value(0)),
+                    matched_distinct_count=Coalesce(Subquery(matched_distinct_subq), Value(0)),
                     # User vs predicted counts
                     u_tag_match_count=Count(
                         'tagapplication__tag',
@@ -191,17 +233,26 @@ def search_results(request):
                     weighted_tag_match=F('u_tag_match_count') + F('p_tag_match_count') * p_w,
                 )
                 .annotate(
-                    tag_miss_match_count=Value(len(include_tags), output_field=IntegerField()) - F('matched_distinct_total'),
-                    tag_surplus_count=F('total_tag_count') - F('matched_distinct_total'),
+                    # 1) Missing distinct search tags not present on map
+                    tag_miss_match_count=Value(len(include_tags), output_field=IntegerField()) - F('matched_distinct_count'),
+                    # 2) Distinct extra tag names on map that are not in the search
+                    tag_surplus_count_distinct=F('total_distinct_count') - F('matched_distinct_count'),
+                    # 3) Extra duplicate applications beyond the first of tags not in the search
+                    tag_surplus_count=(F('total_app_count') - F('matched_app_count')) - F('tag_surplus_count_distinct'),
                     tag_weight=(
                         (F('weighted_exact_distinct') * Value(5.0) +
                          F('weighted_exact_total') * Value(1.0) +
                          F('weighted_tag_match') * Value(0.1)) /
-                        (F('tag_miss_match_count') * Value(1.0) + (F('tag_surplus_count') * Value(3.0)))
+                        (
+                            (F('tag_miss_match_count') * Value(3)) +
+                            (F('tag_surplus_count_distinct') * Value(5)) +
+                            (F('tag_surplus_count') * Value(10))
+                        )
                     ),
                 )
                 .order_by('-tag_weight')
             )
+            
         else:
             # When sorting by popularity, compute a numeric popularity score so it can be displayed
             qs = qs.annotate(

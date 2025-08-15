@@ -16,6 +16,7 @@
                     <a 
                         href="{% url 'search_results' %}?query={{ '"'|add:tag.name|add:'"'|urlencode }}"
                         class="tag-pill"
+                        data-name="{{ tag.name|lower }}"
                         aria-label="Search results for tag {{ tag.name }}"
                     >
                         <span class="pill-name">{{ tag.name }} </span>
@@ -32,7 +33,7 @@
         <input type="text" id="tag-search" class="search-field" placeholder="Search tags..." aria-label="Search Tags" />
         <ul class="tag-list" id="tag-list">
             {% for tag in tags %}
-                <li class="tag-item">
+                <li class="tag-item" data-name="{{ tag.name|lower }}">
                     <a href="{% url 'search_results' %}?query={{ '"'|add:tag.name|add:'"'|urlencode }}" 
                        class="tag-link" 
                        aria-label="Search results for tag {{ tag.name }}">
@@ -54,65 +55,134 @@
                 <li class="no-tags-message">No tags available.</li>
             {% endfor %}
         </ul>
+
+        <!-- Contributors Leaderboard -->
+        <section class="contributors-leaderboard" aria-labelledby="contributors-heading">
+            <h2 id="contributors-heading">Top Contributors</h2>
+            <div class="leaderboard">
+                <table class="leaderboard-table">
+                    <thead>
+                        <tr>
+                            <th>User</th>
+                            <th>Tag Applications</th>
+                            <th>Unique Maps Tagged</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if current_user_stats %}
+                            <tr class="current-user-row">
+                                <td>{{ current_user_stats.username|default:'You' }}</td>
+                                <td>{{ current_user_stats.tag_count }}</td>
+                                <td>{{ current_user_stats.unique_maps }}</td>
+                            </tr>
+                            <tr><td colspan="3"><hr></td></tr>
+                        {% endif %}
+                        {% for row in leaderboard %}
+                            <tr>
+                                <td>{{ row.user__username|default:'Anonymous' }}</td>
+                                
+                                <td>{{ row.tag_count }}</td>
+                                <td>{{ row.unique_maps }}</td>
+                            </tr>
+                        {% empty %}
+                            <tr>
+                                <td colspan="3">No contributions yet.</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
     </div>
+{% endblock %}
 
-    <script>
-        $(document).ready(function(){
-            // Function to highlight matching text
-            function highlightMatch(text, query) {
-                if (!query) return text;
-                var regex = new RegExp('(' + query + ')', 'gi');
-                return text.replace(regex, '<span class="highlight">$1</span>');
+{% block foot_js %}
+<script>
+    $(document).ready(function(){
+        // Escape user input for safe regex usage
+        function escapeRegExp(string) {
+            return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        }
+
+        // Function to highlight matching text
+        function highlightMatch(text, escapedQuery) {
+            if (!escapedQuery) return text;
+            var regex = new RegExp('(' + escapedQuery + ')', 'gi');
+            return text.replace(regex, '<span class="highlight">$1</span>');
+        }
+
+        // Debounce function to limit the rate of function execution
+        function debounce(func, delay) {
+            let debounceTimer;
+            return function() {
+                const context = this;
+                const args = arguments;
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(() => func.apply(context, args), delay);
             }
+        }
 
-            // Debounce function to limit the rate of function execution
-            function debounce(func, delay) {
-                let debounceTimer;
-                return function() {
-                    const context = this;
-                    const args = arguments;
-                    clearTimeout(debounceTimer);
-                    debounceTimer = setTimeout(() => func.apply(context, args), delay);
-                }
-            }
-
-            // Event listener for search input with debounce
-            $('#tag-search').on('input', debounce(function(){
-                var query = $(this).val().toLowerCase();
-                var hasVisibleTags = false;
-
-                $('#tag-list .tag-item').each(function(){
-                    var tagLink = $(this).find('.tag-link');
-                    var tagNameElement = tagLink.find('.tag-name');
-                    var tagName = tagNameElement.text().toLowerCase();
-
-                    if(tagName.includes(query)){
-                        // Highlight the matching part
-                        var originalText = tagNameElement.text();
-                        var highlightedText = highlightMatch(originalText, query);
-                        tagNameElement.html(highlightedText);
-                        $(this).show();
-                        hasVisibleTags = true;
-                    } else {
-                        // Remove any existing highlights and hide the tag
-                        var originalText = tagNameElement.text();
-                        tagNameElement.text(originalText);
-                        $(this).hide();
-                    }
-                });
-
-                // Show 'No matching tags found.' message if applicable
-                if(query.length > 0 && !hasVisibleTags){
-                    if($('#tag-list .no-results').length === 0){
-                        $('#tag-list').append('<li class="no-tags-message no-results">No matching tags found.</li>');
-                    }
-                } else {
-                    $('#tag-list .no-tags-message.no-results').remove();
-                }
-            }, 300)); // 300ms delay
-
-            // Tooltip functionality
-            // Note: tooltips for .tag-name can be handled by a dedicated JS if needed later
+        // Preserve original text for highlight reset
+        $('.tag-name').each(function(){
+            $(this).attr('data-original', $(this).text());
         });
-    </script>
+        $('.pill-name').each(function(){
+            $(this).attr('data-original', $(this).text());
+        });
+
+        function applyFilter(rawQuery){
+            var query = (rawQuery || '').toLowerCase();
+            var escaped = escapeRegExp(query);
+            var hasVisibleTags = false;
+            var hasVisibleTop = false;
+
+            // Filter main tag list
+            $('#tag-list .tag-item').each(function(){
+                var itemName = ($(this).attr('data-name') || '').toLowerCase();
+                var tagNameElement = $(this).find('.tag-name');
+                var originalText = tagNameElement.attr('data-original') || tagNameElement.text();
+                if(!query || itemName.includes(query)){
+                    tagNameElement.html(query ? highlightMatch(originalText, escaped) : originalText);
+                    $(this).show();
+                    hasVisibleTags = true;
+                } else {
+                    tagNameElement.html(originalText);
+                    $(this).hide();
+                }
+            });
+
+            // Optionally filter top tags as well for consistency
+            $('.top-tags .tag-pill').each(function(){
+                var pillName = ($(this).attr('data-name') || '').toLowerCase();
+                var pillNameElement = $(this).find('.pill-name');
+                var originalPill = pillNameElement.attr('data-original') || pillNameElement.text();
+                if(!query || pillName.includes(query)){
+                    pillNameElement.html(query ? highlightMatch(originalPill, escaped) : originalPill);
+                    $(this).show();
+                    hasVisibleTop = true;
+                } else {
+                    pillNameElement.html(originalPill);
+                    $(this).hide();
+                }
+            });
+
+            // Show 'No matching tags found.' message if applicable
+            if(query.length > 0 && !hasVisibleTags){
+                if($('#tag-list .no-results').length === 0){
+                    $('#tag-list').append('<li class="no-tags-message no-results">No matching tags found.</li>');
+                }
+            } else {
+                $('#tag-list .no-tags-message.no-results').remove();
+            }
+        }
+
+        // Event listener for search input with debounce
+        $('#tag-search').on('input', debounce(function(){
+            applyFilter($(this).val());
+        }, 300));
+
+        // Apply filter on load if there's prefilled value (e.g., back navigation)
+        applyFilter($('#tag-search').val());
+    });
+</script>
 {% endblock %}

@@ -97,7 +97,7 @@
                     </div>
                     <input type="hidden" name="star_min" id="star_min" value="{{ request.GET.star_min|default:0 }}">
                     <input type="hidden" name="star_max" id="star_max" value="{{ request.GET.star_max|default:10 }}">
-                    <input type="hidden" name="sort" value="{{ sort }}">
+                    <input type="hidden" name="sort" id="main-sort" value="{{ request.GET.sort }}">
                 </div>
 
                 <!-- Add status filter toggle buttons -->
@@ -177,7 +177,7 @@
             {% endif %}
             
             <label for="sort">Sort by:</label>
-            <select name="sort" id="sort" onchange="this.form.submit()">
+            <select name="sort" id="sort" onchange="document.getElementById('main-sort').value=this.value; document.querySelector('form.beatmap-form').submit();">
                 <option value="tag_weight" {% if sort == 'tag_weight' %}selected{% endif %}>Tag Weight</option>
                 <option value="popularity" {% if sort == 'popularity' %}selected{% endif %}>Popularity</option>
             </select>
@@ -217,4 +217,31 @@
   <script src="{% static 'js/search_filters.js' %}"></script>
   <script src="{% static 'js/tagging.js' %}"></script>
   <script src="{% static 'js/collapsible_descriptions.js' %}"></script>
+  <script>
+    (function() {
+      var sortSelect = document.getElementById('sort');
+      var mainSort = document.getElementById('main-sort');
+      var mainForm = document.querySelector('form.beatmap-form');
+      var queryInput = document.getElementById('tag-input');
+      if (!sortSelect || !mainSort || !mainForm) return;
+      var sortTouched = false;
+      var initialQuery = (queryInput && queryInput.value) ? queryInput.value : '';
+      sortSelect.addEventListener('change', function() {
+        sortTouched = true;
+        mainSort.value = sortSelect.value;
+      });
+      mainForm.addEventListener('submit', function() {
+        var currentQuery = (queryInput && queryInput.value) ? queryInput.value : '';
+        if (sortTouched) {
+          mainSort.value = sortSelect.value;
+        } else {
+          // If transitioning from empty query to non-empty, let backend choose default (clear sort)
+          if (initialQuery.trim() === '' && currentQuery.trim() !== '') {
+            mainSort.value = '';
+          }
+          // else: keep whatever came from URL so user's prior explicit choice persists
+        }
+      });
+    })();
+  </script>
 {% endblock %}

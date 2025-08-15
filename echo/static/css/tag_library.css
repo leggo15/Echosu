@@ -1,3 +1,42 @@
+/* Tag Library specific styles */
+
+/* Keep the main tag list at a fixed height with scrolling */
+#tag-list.tag-list {
+  height: 420px;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+/* Keep the leaderboard at a fixed height with scrolling */
+.contributors-leaderboard .leaderboard {
+  height: 420px;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+/* Optional niceties */
+.leaderboard-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.leaderboard-table th,
+.leaderboard-table td {
+  padding: 6px 8px;
+  text-align: left;
+}
+
+.leaderboard-table thead th {
+  position: sticky;
+  top: 0;
+  background: #e7dadf;
+  z-index: 1;
+}
+
+.current-user-row {
+  font-weight: 600;
+}
+
 /* Tag Library page styles extracted from inline */
 .container { max-width: 800px; margin: 40px auto; padding: 20px; background-color: #fdfdfd; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
 .search-field { width: 100%; padding: 12px 20px; margin-bottom: 20px; box-sizing: border-box; border: 2px solid #ccc; border-radius: 4px; font-size: 16px; }

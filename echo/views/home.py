@@ -69,7 +69,7 @@ def error_page_view(request):
 
 
 def tag_library(request):
-    '''Alphabetical list of all tags with beatmap counts, plus top 50 by usage.'''
+    '''Alphabetical list of all tags with beatmap counts, plus top 50 by usage, and a contributors leaderboard.'''
     tags = (
         Tag.objects
         .select_related('description_author')
@@ -91,7 +91,38 @@ def tag_library(request):
         .order_by('-map_count', 'name')[:50]
     )
 
-    return render(request, 'tag_library.html', {'tags': tags, 'top_tags': top_tags})
+    # Contributors leaderboard: total number of user tag applications per user (exclude predictions / null users)
+    leaderboard_qs = TagApplication.objects.filter(user__isnull=False)
+    leaderboard = (
+        leaderboard_qs
+        .values('user__username')
+        .annotate(
+            tag_count=Count('id'),
+            unique_maps=Count('beatmap', distinct=True),
+        )
+        .order_by('-tag_count', 'user__username')[:100]
+    )
+
+    current_user_stats = None
+    if request.user.is_authenticated:
+        current_user_stats = (
+            TagApplication.objects
+            .filter(user=request.user)
+            .aggregate(
+                tag_count=Count('id'),
+                unique_maps=Count('beatmap', distinct=True),
+            )
+        )
+        current_user_stats['username'] = request.user.username
+
+    context = {
+        'tags': tags,
+        'top_tags': top_tags,
+        'leaderboard': leaderboard,
+        'current_user_stats': current_user_stats,
+    }
+
+    return render(request, 'tag_library.html', context)
 
 
 def custom_404_view(request, exception):

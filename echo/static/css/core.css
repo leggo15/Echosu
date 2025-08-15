@@ -102,6 +102,7 @@ nav { background-color: #cc1177; padding: 10px 0; display: flex; justify-content
   align-items: center;
   gap: 8px;
   padding: 8px 10px;
+  color: #2b2b2b;
 }
 .floating-add-beatmap input[type="text"] {
   width: 180px;

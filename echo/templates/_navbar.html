@@ -73,7 +73,15 @@
     <button type="submit" title="Add">Add</button>
   </div>
 </form>
+{% else %}
+<form method="post" action="{% url 'quick_add_beatmap' %}" class="floating-add-beatmap" aria-label="Quick add beatmap">
+  <header class="floating-add-header">Add beatmap</header>
+  <div class="floating-add-body">
+    <span class="floating-add-body-text">Log in to add beatmaps</span>
+  </div>
+</form>
 {% endif %}
+
 <!-- Bulk Download panel (always visible) -->
 <section class="bulk-download-panel" aria-label="Bulk download">
   <header class="bulk-download-header">Bulk download</header>

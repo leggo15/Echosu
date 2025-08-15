@@ -54,12 +54,7 @@ class Beatmap(models.Model):
 
 
 def get_default_user():
-    # Try to get the user with the username 'The Emperor'
-    try:
-        return User.objects.get(username='The Emperor')
-    except User.DoesNotExist:
-        # If the user doesn't exist, fall back to the user with the osu_id '4978940'
-        return UserProfile.objects.get(osu_id='4978940').user
+    return UserProfile.objects.get(osu_id='4978940').user
 
 
 class UserProfile(models.Model):
@@ -223,4 +218,5 @@ class APIRequestLog(models.Model):
     path = models.CharField(max_length=255)
 
     def __str__(self):
-        return f"{self.user.username} - {self.method} {self.path} at {self.timestamp}"
+        username = getattr(self.user, 'username', 'anonymous')
+        return f"{username} - {self.method} {self.path} at {self.timestamp}"

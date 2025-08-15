@@ -361,7 +361,7 @@
       var name = ($(this).text() || '').trim();
       if (!name) return;
       var needsQuote = /\s/.test(name);
-      var token = needsQuote ? '."' + name.replace(/"/g, '') + '"' : '."' + name.replace(/"/g, '') + '"';
+      var token = needsQuote ? '"' + name.replace(/"/g, '') + '"' : '"' + name.replace(/"/g, '') + '"';
       var url = buildSearchUrl();
       appendQueryTokens(url, [token]);
       navTo(url);
@@ -372,7 +372,7 @@
       var raw = ($(this).text() || '').trim();
       var name = raw.replace(/^Artist:\s*/i, '').trim();
       if (!name) return;
-      var token = '."' + name.replace(/"/g, '') + '"';
+      var token = '"' + name.replace(/"/g, '') + '"';
       var url = buildSearchUrl();
       appendQueryTokens(url, [token]);
       navTo(url);

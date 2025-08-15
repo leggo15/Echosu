@@ -401,13 +401,16 @@ def edit_tags(request):
             return JsonResponse({'status': 'error', 'message': 'Description contains inappropriate language.'}, status=400)
 
         tag = get_object_or_404(Tag, id=tag_id)
+        if tag.is_locked:
+            return JsonResponse({'status': 'error', 'message': 'This description is locked and cannot be edited.'}, status=403)
         old_description = tag.description
         word_diff_count = count_word_differences(old_description, processed_description)
 
         tag.description = processed_description
         if word_diff_count >= 3:
             tag.description_author = user
-        tag.save()
+        # Save with user for history/audit
+        tag.save(user=user)
 
         return JsonResponse({
             'status': 'success',
@@ -502,23 +505,32 @@ def update_tag_description(request):
         return JsonResponse({'status': 'error', 'message': 'Permission denied.'}, status=403)
 
     tag = get_object_or_404(Tag, id=tag_id)
-    if len(new_description) == 0:
+    if tag.is_locked:
+        return JsonResponse({'status': 'error', 'message': 'This description is locked and cannot be edited.'}, status=403)
+
+    processed_description = sanitize_description(new_description)
+    if len(processed_description) == 0:
         return JsonResponse({'status': 'error', 'message': 'Description cannot be empty.'}, status=400)
-    if len(new_description) > 100:
+    if len(processed_description) > 100:
         return JsonResponse({'status': 'error', 'message': 'Description cannot exceed 100 characters.'}, status=400)
-    if not ALLOWED_DESCRIPTION_PATTERN.match(new_description):
+    if not ALLOWED_DESCRIPTION_PATTERN.match(processed_description):
         msg = (
             'Description contains invalid characters. Allowed: letters, numbers, '
             'spaces, and basic punctuation (. , ! ? - _ / \' ").'
         )
         return JsonResponse({'status': 'error', 'message': msg}, status=400)
-    if profanity.contains_profanity(new_description):
+    if profanity.contains_profanity(processed_description):
         return JsonResponse({'status': 'error', 'message': 'Tag contains inappropriate language.'}, status=400)
+
+    # Optional: update author only on meaningful change
+    word_diff_count = count_word_differences(tag.description, processed_description)
 
     try:
         with transaction.atomic():
-            tag.description = new_description
-            tag.save()
+            tag.description = processed_description
+            if word_diff_count >= 3:
+                tag.description_author = user
+            tag.save(user=user)
         return JsonResponse({'status': 'success', 'message': 'Description updated successfully.'})
     except Exception:
         return JsonResponse({'status': 'error', 'message': 'Internal server error.'}, status=500)

@@ -5,6 +5,7 @@
 {% block title %}Edit Tags Descriptions{% endblock %}
 {% block head_css %}
   <link rel="stylesheet" href="{% static 'css/edit_tags.css' %}">
+  <link rel="stylesheet" href="{% static 'css/search_filters.css' %}">
 {% endblock %}
 
 {% block content %}
@@ -16,60 +17,74 @@
             </h2>
             <div class="collapsible-description-content" id="add-beatmap-content" aria-hidden="true">
                 <p>Welcome, you might wonder when you got access to this page? well this appears after youve applied tags on a certain amount of maps.</p> 
-                <p>Here anyone can write a description for any tag. Then people can vote for these tags, where downvotes count negativly and upvotes count positivly, if a description reaches 10 total votes, it locks and can no longer be edited.</p>
+                <p>Here anyone can write a description for any tag. Then people can vote for these tag descriptions, where downvotes count negativly and upvotes count positivly, if a description reaches 10 positive votes, it locks and can no longer be edited.</p>
             </div>
-            <p>(Page is still under construction and far from final.)</p>
             
             <!-- Search Form -->
-            <form method="get" action="{% url 'edit_tags' %}" class="tag-search-form">
-                <input type="text" name="search" placeholder="Search tags..." value="{{ search_query }}">
-                <button type="submit" class="generic_btn">Search</button>
+            <form method="get" action="{% url 'edit_tags' %}" class="beatmap-form filters-card">
+                <div class="filters-grid filters-grid--tight">
+                    <div class="filter-mode" style="grid-column: span 12;">
+                        <label for="search">Search tags</label>
+                        <input type="text" name="search" id="search" placeholder="Search tags..." value="{{ search_query }}" class="search-input">
+                    </div>
+                    <div class="filter-mode" style="grid-column: span 4; align-self: end;">
+                        <button type="submit" class="search-btn">Search</button>
+                    </div>
+                </div>
             </form>
             
             <!-- Tags Table -->
-            <table>
+            <div class="filters-card">
+            <table class="tags-table">
                 <thead>
                     <tr>
                         <th>Tag Name</th>
                         <th class="narrow-column">Votes</th>
-                        <th>Description</th>
+                        <th>Description <span class="muted">(max 100)</span></th>
                         <th>Edited By</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for tag in tags %}
                     <tr>
-                        <td>{{ tag.name }}</td>
+                        <td>
+                            {{ tag.name }}
+                            {% if tag.is_locked %}
+                                <span class="lock-badge" title="Locked by votes">Locked</span>
+                            {% endif %}
+                        </td>
                         <td>
                             {% if not tag.is_locked %}
                             <div class="vote-section" data-tag-id="{{ tag.id }}">
-
-                                {% if user.is_staff %}
-                                <span class="vote-count upvote-count">{{ tag.upvotes }}</span>
-                                {% endif %}
-
-                                <button class="upvote-btn generic_btn {% if tag.is_locked %}disabled-btn{% endif %}"
-                                        {% if tag.is_locked or user_votes|get_item:tag.id %}
-                                        disabled
-                                        {% endif %}
-                                        {% if user_votes|get_item:tag.id == 'upvote' %}
-                                        style="background-color: green;"
-                                        {% endif %}>
+                                <div class="vote-group vote-group--up">
+                                    <button class="vote-btn upvote-btn generic_btn {% if tag.is_locked %}disabled-btn{% endif %}"
+                                            {% if tag.is_locked or user_votes|get_item:tag.id %}
+                                            disabled
+                                            {% endif %}
+                                            {% if user_votes|get_item:tag.id == 'upvote' %}
+                                            style="background-color: green;"
+                                            {% endif %}>
                                         ▲
-                                </button>
-                                <button class="downvote-btn generic_btn {% if tag.is_locked %}disabled-btn{% endif %}"
-                                        {% if tag.is_locked or user_votes|get_item:tag.id %}
-                                        disabled
-                                        {% endif %}
-                                        {% if user_votes|get_item:tag.id == 'downvote' %}
-                                        style="background-color: red;"
-                                        {% endif %}>
+                                    </button>
+                                    {% if user.is_staff %}
+                                      <span class="vote-count upvote-count">{{ tag.upvotes }}</span>
+                                    {% endif %}
+                                </div>
+                                <div class="vote-sep" aria-hidden="true"></div>
+                                <div class="vote-group vote-group--down">
+                                    {% if user.is_staff %}
+                                      <span class="vote-count downvote-count">{{ tag.downvotes }}</span>
+                                    {% endif %}
+                                    <button class="vote-btn downvote-btn generic_btn {% if tag.is_locked %}disabled-btn{% endif %}"
+                                            {% if tag.is_locked or user_votes|get_item:tag.id %}
+                                            disabled
+                                            {% endif %}
+                                            {% if user_votes|get_item:tag.id == 'downvote' %}
+                                            style="background-color: red;"
+                                            {% endif %}>
                                         ▼
-                                </button>
-
-                                {% if user.is_staff %}
-                                <span class="vote-count downvote-count">{{ tag.downvotes }}</span>
-                                {% endif %}
+                                    </button>
+                                </div>
                             </div>
                             {% else %}
                                 <p> Vote is locked. </p>
@@ -77,7 +92,13 @@
                         </td>
                         
                         <td>
-                            <textarea class="tag-description" data-tag-id="{{ tag.id }}" rows="2" cols="50" {% if tag.is_locked %}disabled{% endif %}>{{ tag.description }}</textarea>
+                            <div class="desc-wrapper">
+                                <textarea class="tag-description" data-tag-id="{{ tag.id }}" rows="2" cols="50" maxlength="100" {% if tag.is_locked %}disabled{% endif %}>{{ tag.description }}</textarea>
+                                <div class="desc-footer">
+                                    <span class="char-count" data-for="{{ tag.id }}">{{ tag.description|length }}/100</span>
+                                    <span class="save-hint">Auto-saves after pause</span>
+                                </div>
+                            </div>
                         </td>
                         <td>
                             {% if tag.description_author %}
@@ -90,9 +111,10 @@
                     {% endfor %}
                 </tbody>
             </table>
+            </div>
             
             <!-- Pagination Controls -->
-            <div class="pagination">
+            <div class="pagination" style="margin-top: 14px;">
                 <span class="step-links">
                     {% if tags.has_previous %}
                         <a href="?search={{ search_query }}&page=1">&laquo; first</a>
@@ -122,6 +144,7 @@
 {% endblock %}
 
 {% block foot_js %}
+<script src="{% static 'js/collapsible_descriptions.js' %}"></script>
 <script>
     document.addEventListener('DOMContentLoaded', function () {
         const descriptionFields = document.querySelectorAll('.tag-description');
@@ -135,6 +158,9 @@
             field.addEventListener('input', function() {
                 const tagId = field.getAttribute('data-tag-id');
                 const newDescription = field.value.trim();
+                // live char count
+                const counter = document.querySelector(`.char-count[data-for="${tagId}"]`);
+                if (counter) { counter.textContent = `${newDescription.length}/100`; }
 
                 // Clear existing timer if any
                 if (debounceTimers[tagId]) {
@@ -162,20 +188,24 @@
                         if (data.status === 'success') {
                             showMessage(`${data.message} Author: ${data.description_author}`, 'success');
                             // Update the author display in the table
-                            const authorCell = field.closest('tr').querySelector('td:nth-child(4)');
-                            authorCell.textContent = data.description_author;
+                            const row = field.closest('tr');
+                            if (row) {
+                                const authorCell = row.querySelector('td:nth-child(4)');
+                                if (authorCell) { authorCell.textContent = data.description_author; }
+                            }
                             // Reset vote counts in the UI
-                            const voteSection = field.closest('td').querySelector('.vote-section');
-                            voteSection.querySelector('.upvote-count').textContent = data.upvotes;
-                            voteSection.querySelector('.downvote-count').textContent = data.downvotes;
-                            // Enable voting buttons
-                            voteSection.querySelector('.upvote-btn').disabled = false;
-                            voteSection.querySelector('.downvote-btn').disabled = false;
-                            voteSection.querySelector('.upvote-btn').classList.remove('disabled-btn');
-                            voteSection.querySelector('.downvote-btn').classList.remove('disabled-btn');
-                            // Reset button styles
-                            voteSection.querySelector('.upvote-btn').style.backgroundColor = '';
-                            voteSection.querySelector('.downvote-btn').style.backgroundColor = '';
+                            const td = field.closest('tr')?.querySelector('td:nth-child(2)');
+                            const voteSection = td ? td.querySelector('.vote-section') : null;
+                            if (voteSection) {
+                                const upC = voteSection.querySelector('.upvote-count');
+                                const dnC = voteSection.querySelector('.downvote-count');
+                                if (upC) upC.textContent = data.upvotes;
+                                if (dnC) dnC.textContent = data.downvotes;
+                                const upB = voteSection.querySelector('.upvote-btn');
+                                const dnB = voteSection.querySelector('.downvote-btn');
+                                if (upB) { upB.disabled = false; upB.classList.remove('disabled-btn'); upB.style.backgroundColor = ''; }
+                                if (dnB) { dnB.disabled = false; dnB.classList.remove('disabled-btn'); dnB.style.backgroundColor = ''; }
+                            }
                         } else {
                             showMessage(data.message, 'error');
                         }

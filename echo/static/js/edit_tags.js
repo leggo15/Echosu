@@ -15,14 +15,17 @@ document.addEventListener('DOMContentLoaded', function () {
   function showLoading() { loadingSpinner.style.display = 'block'; }
   function hideLoading() { loadingSpinner.style.display = 'none'; }
   function showMessage(message, type) {
+    if (!messageArea) return;
     messageArea.innerHTML = `<p class="${type}">${message}</p>`;
-    setTimeout(() => { messageArea.innerHTML = ''; }, type === 'success' ? 3000 : 5000);
+    setTimeout(() => { if (messageArea) { messageArea.innerHTML = ''; } }, type === 'success' ? 3000 : 5000);
   }
 
   descriptionFields.forEach(function(field) {
     field.addEventListener('input', function() {
       const tagId = field.getAttribute('data-tag-id');
       const newDescription = field.value.trim();
+      const cc = document.querySelector(`.char-count[data-for="${tagId}"]`);
+      if (cc) { cc.textContent = `${newDescription.length}/100`; }
       if (debounceTimers[tagId]) clearTimeout(debounceTimers[tagId]);
       debounceTimers[tagId] = setTimeout(function() {
         showLoading();
@@ -35,17 +38,23 @@ document.addEventListener('DOMContentLoaded', function () {
         .then(data => {
           if (data.status === 'success') {
             showMessage(`${data.message} Author: ${data.description_author}`, 'success');
-            const authorCell = field.closest('tr').querySelector('td:nth-child(4)');
-            authorCell.textContent = data.description_author;
-            const voteSection = field.closest('td').querySelector('.vote-section');
-            voteSection.querySelector('.upvote-count').textContent = data.upvotes;
-            voteSection.querySelector('.downvote-count').textContent = data.downvotes;
-            voteSection.querySelector('.upvote-btn').disabled = false;
-            voteSection.querySelector('.downvote-btn').disabled = false;
-            voteSection.querySelector('.upvote-btn').classList.remove('disabled-btn');
-            voteSection.querySelector('.downvote-btn').classList.remove('disabled-btn');
-            voteSection.querySelector('.upvote-btn').style.backgroundColor = '';
-            voteSection.querySelector('.downvote-btn').style.backgroundColor = '';
+            const row = field.closest('tr');
+            if (row) {
+              const authorCell = row.querySelector('td:nth-child(4)');
+              if (authorCell) { authorCell.textContent = data.description_author; }
+              const votesTd = row.querySelector('td:nth-child(2)');
+              const voteSection = votesTd ? votesTd.querySelector('.vote-section') : null;
+              if (voteSection) {
+                const upC = voteSection.querySelector('.upvote-count');
+                const dnC = voteSection.querySelector('.downvote-count');
+                if (upC) upC.textContent = data.upvotes;
+                if (dnC) dnC.textContent = data.downvotes;
+                const upB = voteSection.querySelector('.upvote-btn');
+                const dnB = voteSection.querySelector('.downvote-btn');
+                if (upB) { upB.disabled = false; upB.classList.remove('disabled-btn'); upB.style.backgroundColor = ''; }
+                if (dnB) { dnB.disabled = false; dnB.classList.remove('disabled-btn'); dnB.style.backgroundColor = ''; }
+              }
+            }
           } else { showMessage(data.message, 'error'); }
         })
         .catch(() => showMessage('An error occurred while updating the description.', 'error'))

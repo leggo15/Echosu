@@ -1,13 +1,34 @@
 /* Edit Tags page styles extracted from legacy master.css */
-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+table.tags-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
 th, td { padding: 12px; border: 1px solid #ddd; text-align: left; }
 textarea { width: 100%; resize: vertical; }
 .tag-search-form { margin-top: 20px; margin-bottom: 20px; }
 #loading-spinner { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 1000; }
-.vote-section { margin-top: 10px; display: flex; flex-direction: column; align-items: center; gap: 5px; }
-.vote-section button { margin-right: 5px; }
-.vote-count { margin-right: 15px; }
+.vote-section { margin-top: 0; display: inline-flex; align-items: center; gap: 10px; }
+.vote-group { display: inline-flex; align-items: center; gap: 8px; padding: 2px 6px; border-radius: 10px; background: #f8fafc; border: 1px solid #e5e7eb; }
+.vote-group--up .vote-btn { border-color: #79c57a; }
+.vote-group--down .vote-btn { border-color: #e37a78; }
+.vote-sep { width: 6px; height: 1px; background: transparent; }
+.vote-btn { line-height: 1; padding: 6px 8px; border-radius: 8px; }
+.vote-count { min-width: 20px; text-align: center; font-weight: 700; color: #374151; }
 .disabled-btn { background-color: #6c757d !important; cursor: not-allowed !important; }
 .narrow-column { width: 30px; text-align: center; }
+
+.desc-wrapper { display: flex; flex-direction: column; gap: 6px; }
+.desc-footer { display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: #6b7280; }
+.char-count { font-variant-numeric: tabular-nums; }
+.save-hint { font-style: italic; }
+.lock-badge { margin-left: 8px; font-size: 11px; padding: 2px 6px; border-radius: 10px; background-color: #f3f4f6; border: 1px solid #e5e7eb; color: #374151; }
+.muted { color: #6b7280; font-weight: normal; font-size: 12px; }
+
+/* Align with filters-card visuals */
+.tags-table {
+  background: #ffffff;
+  border-radius: 12px;
+  overflow: hidden;
+}
+.tags-table thead th { background: #f8fafc; color: #374151; font-weight: 700; }
+.tags-table tr:nth-child(even) td { background: #fcfdff; }
+.tags-table tr:hover td { background: #f5f7fb; }
 
 

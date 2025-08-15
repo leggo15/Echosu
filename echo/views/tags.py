@@ -33,6 +33,7 @@ from django.shortcuts import get_object_or_404, render
 from django.core.paginator import Paginator
 from django.views.decorators.http import require_POST
 from ossapi.enums import UserLookupKey
+from collections import defaultdict
 
 # ---------------------------------------------------------------------------
 # Local application imports
@@ -53,56 +54,60 @@ def get_tags(request):
     _ip = request.GET.get('include_predicted')
     include_predicted = False if (_ip is not None and str(_ip).lower() in ['0', 'false', 'off']) else True
 
-    # Fetch all tag applications for this beatmap
+    # Fetch all tag applications for this beatmap with optimized queries
     applications = (
         TagApplication.objects
         .filter(beatmap=beatmap)
-        .select_related('tag')
+        .select_related('tag', 'tag__description_author')
+        .only('user_id', 'tag__id', 'tag__name', 'tag__description', 'tag__description_author__username')
     )
 
     # Build structures: user-applied counts (exclude predictions), prediction presence per tag
     user_counts = {}
     has_prediction = {}
+    user_tag_names = set()
+    
     for app in applications:
         tag_name = app.tag.name
         if app.user_id:
             user_counts[tag_name] = user_counts.get(tag_name, 0) + 1
+            if app.user_id == user.id:
+                user_tag_names.add(tag_name)
         else:
             # user is null → predicted
             has_prediction[tag_name] = True
 
-    if request.user.is_authenticated:
-        user_tag_names = set(
-            TagApplication.objects
-            .filter(user=user, beatmap=beatmap)
-            .values_list('tag__name', flat=True)
-        )
-    else:
-        user_tag_names = set()
-
     # Construct response: include predicted-only tags as orange unless any user has applied
-    # Collect unique Tag objects involved
-    tag_objs = {app.tag.name: app.tag for app in applications}
-    tags_with_counts_list = []
-    for name, tag_obj in tag_objs.items():
-        count = user_counts.get(name, 0)
-        is_predicted_only = has_prediction.get(name, False) and count == 0
-        # Skip predicted-only when not included by toggle
-        if is_predicted_only and not include_predicted:
-            continue
-        tags_with_counts_list.append({
-            'name': name,
-            'description': getattr(tag_obj, 'description', '') or 'No description available.',
-            'description_author': getattr(getattr(tag_obj, 'description_author', None), 'username', ''),
+    tags = []
+    
+    # Add user-applied tags
+    for tag_name, count in user_counts.items():
+        tags.append({
+            'name': tag_name,
+            'is_applied_by_user': tag_name in user_tag_names,
+            'is_predicted': False,
             'apply_count': count,
-            'is_applied_by_user': name in user_tag_names,
-            'is_predicted': bool(is_predicted_only),
+            'description': next((app.tag.description for app in applications if app.tag.name == tag_name and app.user_id), ''),
+            'description_author': next((getattr(app.tag.description_author, 'username', '') for app in applications if app.tag.name == tag_name and app.user_id), '')
         })
-
-    # Also consider predicted tags without any TagApplication user rows if repository stores predictions separately
-    # (Left as-is for current model where predictions are TagApplication rows with user=null)
-
-    return JsonResponse(tags_with_counts_list, safe=False)
+    
+    # Add predicted tags if enabled
+    if include_predicted:
+        for tag_name in has_prediction:
+            if tag_name not in user_counts:  # Only add if no user has applied
+                tags.append({
+                    'name': tag_name,
+                    'is_applied_by_user': False,
+                    'is_predicted': True,
+                    'apply_count': 0,
+                    'description': next((app.tag.description for app in applications if app.tag.name == tag_name and not app.user_id), ''),
+                    'description_author': next((getattr(app.tag.description_author, 'username', '') for app in applications if app.tag.name == tag_name and not app.user_id), '')
+                })
+    
+    # Sort by apply count (descending), then by name
+    tags.sort(key=lambda x: (-x['apply_count'], x['name']))
+    
+    return JsonResponse(tags, safe=False)
 
 
 def search_tags(request):
@@ -116,6 +121,86 @@ def search_tags(request):
         .order_by('-beatmap_count')
     )
     return JsonResponse(list(tags), safe=False)
+
+
+def get_tags_bulk(request):
+    '''Retrieve tags for multiple beatmaps in one request to eliminate N+1 queries.'''
+    beatmap_ids = request.GET.getlist('beatmap_ids[]')
+    user = request.user
+    
+    if not beatmap_ids:
+        return JsonResponse({'tags': {}})
+    
+    # Default to including predicted unless explicitly disabled
+    _ip = request.GET.get('include_predicted')
+    include_predicted = False if (_ip is not None and str(_ip).lower() in ['0', 'false', 'off']) else True
+    
+    # Single query for all beatmaps
+    beatmaps = Beatmap.objects.filter(beatmap_id__in=beatmap_ids)
+    
+    # Single query for all tag applications with related data
+    tag_apps = (
+        TagApplication.objects
+        .filter(beatmap__beatmap_id__in=beatmap_ids)
+        .select_related('tag')
+        .only('beatmap__beatmap_id', 'user_id', 'tag__id', 'tag__name', 'tag__description', 'tag__description_author__username')
+    )
+    
+    # Single query for user's tags across all beatmaps (if authenticated)
+    user_tags = set()
+    if user.is_authenticated:
+        user_tags = set(
+            TagApplication.objects
+            .filter(user=user, beatmap__beatmap_id__in=beatmap_ids)
+            .values_list('beatmap__beatmap_id', 'tag__name', flat=True)
+        )
+    
+    # Build response structure efficiently
+    result = {}
+    for beatmap_id in beatmap_ids:
+        result[beatmap_id] = []
+    
+    # Process tag applications and build tag data
+    tag_data = defaultdict(lambda: defaultdict(list))
+    for app in tag_apps:
+        beatmap_id = app.beatmap.beatmap_id
+        tag_name = app.tag.name
+        
+        if app.user_id:
+            # User-applied tag
+            tag_data[beatmap_id][tag_name].append({
+                'name': tag_name,
+                'is_applied_by_user': (beatmap_id, tag_name) in user_tags,
+                'is_predicted': False,
+                'apply_count': 1,
+                'description': app.tag.description or '',
+                'description_author': getattr(app.tag.description_author, 'username', '') if app.tag.description_author else ''
+            })
+        elif include_predicted:
+            # Predicted tag
+            tag_data[beatmap_id][tag_name].append({
+                'name': tag_name,
+                'is_applied_by_user': False,
+                'is_predicted': True,
+                'apply_count': 1,
+                'description': app.tag.description or '',
+                'description_author': getattr(app.tag.description_author, 'username', '') if app.tag.description_author else ''
+            })
+    
+    # Aggregate apply counts and build final response
+    for beatmap_id in tag_data:
+        final_tags = []
+        for tag_name, tag_instances in tag_data[beatmap_id].items():
+            if tag_instances:
+                # Use the first instance as base and aggregate counts
+                base_tag = tag_instances[0].copy()
+                base_tag['apply_count'] = len(tag_instances)
+                final_tags.append(base_tag)
+        
+        # Sort by apply count (descending)
+        result[beatmap_id] = sorted(final_tags, key=lambda x: -x['apply_count'])
+    
+    return JsonResponse({'tags': result})
 # ----------------------------- Ownership editing ----------------------------- #
 
 @login_required

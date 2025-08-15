@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from .models import TagApplication, Tag, Beatmap, UserProfile
 from django.contrib.auth.models import User
+from django.db import transaction
 
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
@@ -87,36 +88,41 @@ class TagApplicationToggleSerializer(serializers.Serializer):
             raise serializers.ValidationError("Beatmap does not exist.")
 
         results = []
-
-        for tag_name in tags:
-            try:
-                tag, _ = Tag.objects.get_or_create(name=tag_name)
-                tag_application, created = TagApplication.objects.get_or_create(
-                    tag=tag,
-                    beatmap=beatmap,
-                    user=user
-                )
-                if created:
-                    # Tag was applied
+        
+        # Batch operations for better performance
+        with transaction.atomic():
+            # Get all existing tag applications in one query
+            existing_applications = TagApplication.objects.filter(
+                beatmap=beatmap,
+                user=user,
+                tag__name__in=tags
+            ).select_related('tag')
+            
+            existing_tag_names = {app.tag.name for app in existing_applications}
+            
+            for tag_name in tags:
+                try:
+                    tag, _ = Tag.objects.get_or_create(name=tag_name)
+                    
+                    if tag_name in existing_tag_names:
+                        # Tag exists, remove it
+                        app = next(app for app in existing_applications if app.tag.name == tag_name)
+                        app.delete()
+                        results.append({"tag": tag_name, "action": "removed"})
+                    else:
+                        # Tag doesn't exist, create it
+                        TagApplication.objects.create(
+                            tag=tag,
+                            beatmap=beatmap,
+                            user=user
+                        )
+                        results.append({"tag": tag_name, "action": "applied"})
+                        
+                except Exception as e:
                     results.append({
-                        "tag": tag.name,
-                        "action": "applied"
+                        "tag": tag_name,
+                        "action": "error",
+                        "message": str(e)
                     })
-                else:
-                    # Tag was already applied; remove it
-                    tag_application.delete()
-                    # Delete the tag if no more applications exist
-                    if not TagApplication.objects.filter(tag=tag).exists():
-                        tag.delete()
-                    results.append({
-                        "tag": tag.name,
-                        "action": "removed"
-                    })
-            except Exception as e:
-                results.append({
-                    "tag": tag_name,
-                    "action": "error",
-                    "message": str(e)
-                })
 
         return results

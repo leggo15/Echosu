@@ -1,5 +1,9 @@
 // Tagging module: attaches behavior to any .tag-card instances
 (function($) {
+  // Global cache for bulk tag loading
+  var tagCache = {};
+  var pendingBulkRequests = {};
+  
   function attachTagging($card) {
     var beatmapId = $card.data('beatmap-id') || $card.attr('id')?.split('-').pop();
     var $wrapper = $card.closest('.beatmap-card-wrapper');
@@ -25,40 +29,182 @@
         });
     }
 
-    function refreshTags() {
-      if (!beatmapId) return;
-      // Pull include_predicted from current URL params so cards reflect page toggle
+    // Bulk tag loading function
+    function refreshTagsBulk(beatmapIds) {
+      if (!beatmapIds || beatmapIds.length === 0) return;
+      
+      // Filter out beatmaps that already have cached tags
+      var uncachedIds = beatmapIds.filter(function(id) {
+        return !tagCache[id] || !tagCache[id].data;
+      });
+      
+      if (uncachedIds.length === 0) {
+        // All tags are cached, just update displays
+        beatmapIds.forEach(function(id) {
+          updateTagDisplay(id, tagCache[id].data);
+        });
+        return;
+      }
+      
+      // Check if there's already a pending request for these IDs
+      var requestKey = uncachedIds.sort().join(',');
+      if (pendingBulkRequests[requestKey]) {
+        // Wait for existing request to complete
+        pendingBulkRequests[requestKey].push(function() {
+          beatmapIds.forEach(function(id) {
+            updateTagDisplay(id, tagCache[id].data);
+          });
+        });
+        return;
+      }
+      
+      // Create new pending request
+      pendingBulkRequests[requestKey] = [];
+      
+      // Pull include_predicted from current URL params
       var params = new URLSearchParams(window.location.search);
       var includePredicted = params.get('include_predicted');
-      $.ajax({ type: 'GET', url: '/get_tags/', data: { beatmap_id: beatmapId, include_predicted: includePredicted } })
-        .done(function(tags) {
-          $('.tooltip, .description-author').remove();
-          $applied.empty().append('Tags: ');
-          tags.forEach(function(tag) {
-            var tagClass = tag.is_applied_by_user ? 'tag-applied' : (tag.is_predicted ? 'tag-predicted' : 'tag-unapplied');
-            $('<span></span>')
-              .addClass('tag ' + tagClass)
-              .attr('data-tag-name', tag.name)
-              .attr('data-applied-by-user', tag.is_applied_by_user)
-              .attr('data-is-predicted', tag.is_predicted ? 'true' : 'false')
-              .attr('data-description', tag.description || '')
-              .attr('data-description-author', tag.description_author || '')
-              .attr('data-beatmap-id', beatmapId)
-              .text(tag.name + (tag.apply_count ? ' (' + tag.apply_count + ')' : ''))
-              .appendTo($applied);
-          });
-          // Backend now decides whether to show "Find Similar Maps" and builds the query.
-          // No client-side decision needed here.
+      
+      $.ajax({ 
+        type: 'GET', 
+        url: '/get_tags_bulk/', 
+        data: { beatmap_ids: uncachedIds, include_predicted: includePredicted }
+      }).done(function(data) {
+        // Cache the results
+        uncachedIds.forEach(function(id) {
+          tagCache[id] = {
+            data: data.tags[id] || [],
+            timestamp: Date.now()
+          };
         });
+        
+        // Update displays for all requested beatmaps
+        beatmapIds.forEach(function(id) {
+          updateTagDisplay(id, tagCache[id].data);
+        });
+        
+        // Execute pending callbacks
+        var callbacks = pendingBulkRequests[requestKey];
+        callbacks.forEach(function(callback) {
+          try { callback(); } catch(e) { console.error('Tag callback error:', e); }
+        });
+        
+        // Clean up
+        delete pendingBulkRequests[requestKey];
+      }).fail(function() {
+        // On failure, fall back to individual requests
+        console.warn('Bulk tag loading failed, falling back to individual requests');
+        beatmapIds.forEach(function(id) {
+          refreshTagsIndividual(id);
+        });
+        delete pendingBulkRequests[requestKey];
+      });
     }
 
+    // Individual tag loading (fallback)
+    function refreshTagsIndividual(beatmapId) {
+      if (!beatmapId) return;
+      
+      var params = new URLSearchParams(window.location.search);
+      var includePredicted = params.get('include_predicted');
+      
+      $.ajax({ 
+        type: 'GET', 
+        url: '/get_tags/', 
+        data: { beatmap_id: beatmapId, include_predicted: includePredicted } 
+      }).done(function(tags) {
+        // Cache the result
+        tagCache[beatmapId] = {
+          data: tags,
+          timestamp: Date.now()
+        };
+        updateTagDisplay(beatmapId, tags);
+      });
+    }
+
+    // Update tag display for a specific beatmap
+    function updateTagDisplay(beatmapId, tags) {
+      var $targetCard = $('#beatmap-' + beatmapId);
+      if (!$targetCard.length) return;
+      
+      var $targetApplied = $targetCard.find('.applied-tags');
+      if (!$targetApplied.length) return;
+      
+      $('.tooltip, .description-author').remove();
+      $targetApplied.empty().append('Tags: ');
+      
+      tags.forEach(function(tag) {
+        var tagClass = tag.is_applied_by_user ? 'tag-applied' : 
+                      (tag.is_predicted ? 'tag-predicted' : 'tag-unapplied');
+        
+        $('<span></span>')
+          .addClass('tag ' + tagClass)
+          .attr('data-tag-name', tag.name)
+          .attr('data-applied-by-user', tag.is_applied_by_user)
+          .attr('data-is-predicted', tag.is_predicted ? 'true' : 'false')
+          .attr('data-description', tag.description || '')
+          .attr('data-description-author', tag.description_author || '')
+          .attr('data-beatmap-id', beatmapId)
+          .text(tag.name + (tag.apply_count ? ' (' + tag.apply_count + ')' : ''))
+          .appendTo($targetApplied);
+      });
+    }
+
+    // Main refresh function - tries bulk first, falls back to individual
+    function refreshTags() {
+      if (!beatmapId) return;
+      
+      // Try to use bulk loading if we have multiple beatmaps on the page
+      var allBeatmapIds = $('.beatmap-card-wrapper').map(function() {
+        return $(this).data('beatmap-id');
+      }).get();
+      
+      if (allBeatmapIds.length > 1) {
+        refreshTagsBulk(allBeatmapIds);
+      } else {
+        refreshTagsIndividual(beatmapId);
+      }
+    }
+
+    // Cache invalidation when tags are modified
+    function invalidateTagCache(beatmapId) {
+      if (beatmapId && tagCache[beatmapId]) {
+        delete tagCache[beatmapId];
+      }
+    }
+    
+    // Clear expired cache entries (older than 5 minutes)
+    function clearExpiredCache() {
+      var now = Date.now();
+      var expiredIds = [];
+      
+      Object.keys(tagCache).forEach(function(id) {
+        if (now - tagCache[id].timestamp > 5 * 60 * 1000) { // 5 minutes
+          expiredIds.push(id);
+        }
+      });
+      
+      expiredIds.forEach(function(id) {
+        delete tagCache[id];
+      });
+    }
+    
+    // Run cache cleanup every 5 minutes
+    setInterval(clearExpiredCache, 5 * 60 * 1000);
 
     function modifyTag($tagEl, tagName, action) {
       if (!beatmapId) return;
+      
+      // Invalidate cache for this beatmap
+      invalidateTagCache(beatmapId);
+      
       $.ajax({
         type: 'POST', url: '/modify_tag/',
         data: { action: action, tag: tagName, beatmap_id: beatmapId, csrfmiddlewaretoken: csrf }
-      }).done(function() { refreshTags(); });
+      }).done(function() { 
+        // Refresh tags after modification
+        refreshTags(); 
+      });
     }
 
     // Events
@@ -389,6 +535,39 @@
       if (index % 2 === 1) { $card.addClass('tag-card--alt'); }
       attachTagging($card);
     });
+  };
+
+  // Global function to load tags for all beatmaps on the page
+  function loadAllBeatmapTags() {
+    var allBeatmapIds = $('.beatmap-card-wrapper').map(function() {
+      return $(this).data('beatmap-id');
+    }).get();
+    
+    if (allBeatmapIds.length > 1) {
+      // Use the first card's tagging instance to trigger bulk loading
+      var $firstCard = $('.tag-card').first();
+      if ($firstCard.length) {
+        var taggingInstance = $firstCard.data('tagging-instance');
+        if (taggingInstance && taggingInstance.refreshTagsBulk) {
+          taggingInstance.refreshTagsBulk(allBeatmapIds);
+        }
+      }
+    }
+  }
+  
+  // Auto-load tags when DOM is ready
+  $(document).ready(function() {
+    // Small delay to ensure all cards are rendered
+    setTimeout(loadAllBeatmapTags, 100);
+  });
+
+  // Expose functions globally for external use
+  window.TagManager = {
+    loadAllBeatmapTags: loadAllBeatmapTags,
+    clearTagCache: function() {
+      tagCache = {};
+      pendingBulkRequests = {};
+    }
   };
 
   $(function() { window.initTaggingFor(document); });

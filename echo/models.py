@@ -10,16 +10,16 @@ class Genre(models.Model):
 
 class Beatmap(models.Model):
     beatmap_id = models.CharField(max_length=255, unique=True, db_index=True)
-    beatmapset_id = models.CharField(max_length=100, blank=True, null=True)
+    beatmapset_id = models.CharField(max_length=100, blank=True, null=True, db_index=True)
     title = models.CharField(max_length=1000, null=False, blank=True)
     version = models.CharField(max_length=1000, null=False, blank=True)
     artist = models.CharField(max_length=1000, null=False, blank=True)
     genres = models.ManyToManyField(Genre, blank=True)
-    creator = models.CharField(max_length=255, null=False, blank=True)
-    original_creator = models.CharField(max_length=255, null=True, blank=True)
-    original_creator_id = models.CharField(max_length=50, null=True, blank=True)
-    listed_owner = models.CharField(max_length=255, null=True, blank=True)
-    listed_owner_id = models.CharField(max_length=50, null=True, blank=True)
+    creator = models.CharField(max_length=255, null=False, blank=True, db_index=True)
+    original_creator = models.CharField(max_length=255, null=True, blank=True, db_index=True)
+    original_creator_id = models.CharField(max_length=50, null=True, blank=True, db_index=True)
+    listed_owner = models.CharField(max_length=255, null=True, blank=True, db_index=True)
+    listed_owner_id = models.CharField(max_length=50, null=True, blank=True, db_index=True)
     cover_image_url = models.URLField(max_length=1000, null=True, blank=True)
     total_length = models.IntegerField(null=True, blank=True)
     bpm = models.FloatField(null=True, blank=True)
@@ -27,20 +27,34 @@ class Beatmap(models.Model):
     drain = models.FloatField(null=True, blank=True)
     accuracy = models.FloatField(null=True, blank=True)
     ar = models.FloatField(null=True, blank=True)
-    difficulty_rating = models.FloatField(null=True, blank=True)
-    mode = models.CharField(max_length=100, null=False, blank=True)
-    status = models.CharField(max_length=32, null=False, blank=True)
-    playcount = models.IntegerField(null=True, blank=True)
-    favourite_count = models.IntegerField(null=True, blank=True)
-    last_updated = models.DateTimeField(null=True, blank=True)
+    difficulty_rating = models.FloatField(null=True, blank=True, db_index=True)
+    mode = models.CharField(max_length=100, null=False, blank=True, db_index=True)
+    status = models.CharField(max_length=32, null=False, blank=True, db_index=True)
+    playcount = models.IntegerField(null=True, blank=True, db_index=True)
+    favourite_count = models.IntegerField(null=True, blank=True, db_index=True)
+    last_updated = models.DateTimeField(null=True, blank=True, db_index=True)
     rosu_timeseries = models.JSONField(default=dict, blank=True, null=True)
-    pp_nomod = models.FloatField(null=True, blank=True)
-    pp_hd = models.FloatField(null=True, blank=True)
-    pp_hr = models.FloatField(null=True, blank=True)
-    pp_dt = models.FloatField(null=True, blank=True)
-    pp_ht = models.FloatField(null=True, blank=True)
-    pp_ez = models.FloatField(null=True, blank=True)
-    pp_fl = models.FloatField(null=True, blank=True)
+    pp_nomod = models.FloatField(null=True, blank=True, db_index=True)
+    pp_hd = models.FloatField(null=True, blank=True, db_index=True)
+    pp_hr = models.FloatField(null=True, blank=True, db_index=True)
+    pp_dt = models.FloatField(null=True, blank=True, db_index=True)
+    pp_ht = models.FloatField(null=True, blank=True, db_index=True)
+    pp_ez = models.FloatField(null=True, blank=True, db_index=True)
+    pp_fl = models.FloatField(null=True, blank=True, db_index=True)
+
+    class Meta:
+        indexes = [
+            # Composite indexes for common query patterns
+            models.Index(fields=['mode', 'difficulty_rating']),
+            models.Index(fields=['status', 'difficulty_rating']),
+            models.Index(fields=['creator', 'status']),
+            models.Index(fields=['playcount', 'difficulty_rating']),
+            models.Index(fields=['favourite_count', 'difficulty_rating']),
+            models.Index(fields=['last_updated', 'status']),
+            # Text search optimization
+            models.Index(fields=['title', 'artist']),
+            models.Index(fields=['artist', 'title']),
+        ]
 
     def get_weighted_tags(self):
         tags = self.tags.annotate(
@@ -59,10 +73,15 @@ def get_default_user():
 
 class UserProfile(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, default=get_default_user)
-    osu_id = models.CharField(max_length=100, null=False, unique=True)
+    osu_id = models.CharField(max_length=100, null=False, unique=True, db_index=True)
     profile_pic_url = models.URLField(max_length=1000, null=True, blank=True)
-    banned = models.BooleanField(default=False)
+    banned = models.BooleanField(default=False, db_index=True)
     ban_reason = models.CharField(max_length=255, unique=False, null=False, blank=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['banned', 'osu_id']),
+        ]
 
     def __str__(self):
         return self.user.username or "Unknown User"
@@ -78,10 +97,20 @@ class Tag(models.Model):
     description = models.CharField(max_length=255, unique=False, null=False, blank=True)
     description_author = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='tag_descriptions', default=get_default_author)
     beatmaps = models.ManyToManyField(Beatmap, related_name='tags', blank=True, through='TagApplication')
-    upvotes = models.PositiveIntegerField(default=0)
-    downvotes = models.PositiveIntegerField(default=0)
-    is_locked = models.BooleanField(default=False)
-    is_recommended = models.BooleanField(default=False)
+    upvotes = models.PositiveIntegerField(default=0, db_index=True)
+    downvotes = models.PositiveIntegerField(default=0, db_index=True)
+    is_locked = models.BooleanField(default=False, db_index=True)
+    is_recommended = models.BooleanField(default=False, db_index=True)
+
+    class Meta:
+        indexes = [
+            # Vote-based sorting and filtering
+            models.Index(fields=['upvotes', 'downvotes']),
+            models.Index(fields=['is_recommended', 'upvotes']),
+            models.Index(fields=['is_locked', 'upvotes']),
+            # Text search optimization
+            models.Index(fields=['name', 'is_recommended']),
+        ]
 
     def vote_score(self):
         return self.upvotes - self.downvotes
@@ -115,12 +144,16 @@ class Tag(models.Model):
 class TagDescriptionHistory(models.Model):
     tag = models.ForeignKey(Tag, on_delete=models.CASCADE, related_name='description_histories')
     description = models.CharField(max_length=255)
-    date_written = models.DateTimeField(auto_now_add=True)
-    author = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    date_written = models.DateTimeField(auto_now_add=True, db_index=True)
+    author = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, db_index=True)
     
 
     class Meta:
         ordering = ['-date_written']
+        indexes = [
+            models.Index(fields=['tag', 'date_written']),
+            models.Index(fields=['author', 'date_written']),
+        ]
 
     def __str__(self):
         return f"{self.tag.name} - {self.date_written.strftime('%Y-%m-%d %H:%M:%S')} by {self.author}"
@@ -136,13 +169,16 @@ class Vote(models.Model):
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='votes')
     tag = models.ForeignKey(Tag, on_delete=models.CASCADE, related_name='votes')
-    vote_type = models.CharField(max_length=10, choices=VOTE_CHOICES)  # Corrected max_length
-    timestamp = models.DateTimeField(auto_now_add=True)
+    vote_type = models.CharField(max_length=10, choices=VOTE_CHOICES, db_index=True)  # Corrected max_length
+    timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
 
     class Meta:
         unique_together = ('user', 'tag')  # Ensures a user can vote only once per tag
         indexes = [
             models.Index(fields=['user', 'tag']),
+            models.Index(fields=['tag', 'vote_type']),
+            models.Index(fields=['timestamp', 'vote_type']),
+            models.Index(fields=['user', 'timestamp']),
         ]
 
     def __str__(self):
@@ -153,8 +189,8 @@ class TagApplication(models.Model):
     tag = models.ForeignKey(Tag, on_delete=models.CASCADE)
     beatmap = models.ForeignKey(Beatmap, on_delete=models.CASCADE)
     timestamp = models.JSONField(default=dict, blank=True, null=True)
-    is_prediction = models.BooleanField(default=False, help_text="Indicates if tag is predicted for this beatmap")
-    prediction_confidence = models.FloatField(default=0.0, blank=True, null=True, help_text="Confidence level of the prediction")
+    is_prediction = models.BooleanField(default=False, help_text="Indicates if tag is predicted for this beatmap", db_index=True)
+    prediction_confidence = models.FloatField(default=0.0, blank=True, null=True, help_text="Confidence level of the prediction", db_index=True)
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -162,7 +198,7 @@ class TagApplication(models.Model):
         blank=True
     )
 
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     def agreed_by_others(self):
         return TagApplication.objects.filter(
             beatmap=self.beatmap,
@@ -173,7 +209,21 @@ class TagApplication(models.Model):
 
     class Meta:
         unique_together = ('tag', 'beatmap', 'user')
-
+        indexes = [
+            # Existing indexes
+            models.Index(fields=['beatmap', 'tag']),
+            models.Index(fields=['user', 'beatmap']),
+            models.Index(fields=['tag', 'user']),
+            models.Index(fields=['is_prediction']),
+            # Additional performance indexes
+            models.Index(fields=['created_at', 'is_prediction']),
+            models.Index(fields=['beatmap', 'is_prediction']),
+            models.Index(fields=['tag', 'is_prediction']),
+            models.Index(fields=['prediction_confidence', 'is_prediction']),
+            models.Index(fields=['user', 'created_at']),
+            models.Index(fields=['beatmap', 'created_at']),
+        ]
+        
     def __str__(self):
         user_name = getattr(getattr(self, 'user', None), 'username', 'anonymous')
         try:
@@ -193,7 +243,12 @@ import hashlib
 class CustomToken(models.Model):
     key = models.CharField(max_length=128, primary_key=True)
     user = models.ForeignKey(User, related_name='auth_tokens', on_delete=models.CASCADE)
-    created = models.DateTimeField(auto_now_add=True)
+    created = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['user', 'created']),
+        ]
 
     @classmethod
     def generate_key(cls):
@@ -212,10 +267,18 @@ class CustomToken(models.Model):
 
 
 class APIRequestLog(models.Model):
-    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
-    timestamp = models.DateTimeField(auto_now_add=True)
-    method = models.CharField(max_length=10)
-    path = models.CharField(max_length=255)
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, db_index=True)
+    timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
+    method = models.CharField(max_length=10, db_index=True)
+    path = models.CharField(max_length=255, db_index=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['timestamp', 'method']),
+            models.Index(fields=['user', 'timestamp']),
+            models.Index(fields=['path', 'timestamp']),
+            models.Index(fields=['method', 'path']),
+        ]
 
     def __str__(self):
         username = getattr(self.user, 'username', 'anonymous')

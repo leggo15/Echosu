@@ -22,14 +22,9 @@
             
             <!-- Search Form -->
             <form method="get" action="{% url 'edit_tags' %}" class="beatmap-form filters-card">
-                <div class="filters-grid filters-grid--tight">
-                    <div class="filter-mode" style="grid-column: span 12;">
-                        <label for="search">Search tags</label>
-                        <input type="text" name="search" id="search" placeholder="Search tags..." value="{{ search_query }}" class="search-input">
-                    </div>
-                    <div class="filter-mode" style="grid-column: span 4; align-self: end;">
-                        <button type="submit" class="search-btn">Search</button>
-                    </div>
+                <div class="search-row">
+                    <input type="text" class="search-input" name="search" id="search" placeholder="Search tags..." value="{{ search_query }}">
+                    <button type="submit" class="search-btn">Search</button>
                 </div>
             </form>
             
@@ -101,7 +96,7 @@
                             </div>
                         </td>
                         <td>
-                            {% if tag.description_author %}
+                            {% if tag.description_author and tag.description_author.username != 'default_author' %}
                                 {{ tag.description_author.username }}
                             {% else %}
                                 N/A

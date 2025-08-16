@@ -33,6 +33,40 @@
       });
     }
 
+    // Theme toggle: persist preference in localStorage
+    try {
+      var THEME_KEY = 'theme-preference';
+      var themeToggleBtn = document.getElementById('themeToggle');
+      var docEl = document.documentElement;
+      function applyTheme(theme) {
+        if (theme === 'dark') {
+          docEl.setAttribute('data-theme', 'dark');
+          if (themeToggleBtn) themeToggleBtn.textContent = '☀️';
+        } else {
+          docEl.removeAttribute('data-theme');
+          if (themeToggleBtn) themeToggleBtn.textContent = '🌙';
+        }
+      }
+      // Initial: read saved or system preference
+      var saved = null;
+      try { saved = localStorage.getItem(THEME_KEY); } catch (e) {}
+      if (saved === 'dark' || saved === 'light') {
+        applyTheme(saved);
+      } else {
+        var prefersDark = false;
+        try { prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches; } catch (e) {}
+        applyTheme(prefersDark ? 'dark' : 'light');
+      }
+      if (themeToggleBtn) {
+        themeToggleBtn.addEventListener('click', function() {
+          var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+          var next = isDark ? 'light' : 'dark';
+          applyTheme(next);
+          try { localStorage.setItem(THEME_KEY, next); } catch (e) {}
+        });
+      }
+    } catch (e) { /* no-op */ }
+
     // Auto-dismiss flash messages without affecting layout
     function bindFlashLifecycle(scope) {
       var list = (scope || document).querySelector('.messages');

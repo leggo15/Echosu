@@ -1,6 +1,7 @@
 /* Tagging component styles (used by tag_card and any page that shows tags) */
 
-.tag-input { padding: 10px; margin-right: 5px; border-radius: 8px; border: 1px solid #ccc; }
+.tag-input { padding: 10px; margin-right: 5px; border-radius: 8px; border: 1px solid #ccc; background: #ffffff; color: #1f2937; }
+[data-theme="dark"] .tag-input { background: #0f1a30; color: #e5e7eb; border-color: #1f2937; }
 .apply-tag-btn { background-color: #28a745; color: white; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer; }
 .apply-tag-btn:hover { background-color: #218838; }
 .tag-list { list-style: none; padding: 0; margin-top: 10px; }
@@ -21,6 +22,6 @@
 .description-author { position: absolute; background-color: rgba(60, 60, 60, 0.0); color: #fff; padding: 0 0; border-radius: 4px; opacity: 0; transition: opacity 0.2s ease-in-out; z-index: 1001; pointer-events: none; font-size: 14px; font-style: italic; }
 
 /* Alternating card backgrounds for lists */
-.tag-card { background: #e7dadf; border-radius: 10px; }
-.tag-card--alt { background: #f1eeec; }
+.tag-card { background: var(--card-odd); border-radius: 10px; }
+.tag-card--alt { background: var(--card-even); }
 

@@ -93,6 +93,24 @@
   font-weight: 600;
 }
 
+/* Sorting select on results page */
+.sorting-form select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  padding: 10px 12px;
+  border: 1px solid #dbe3ef;
+  border-radius: 10px;
+  background: #f8fafc;
+  color: #111827;
+  font-weight: 600;
+}
+[data-theme="dark"] .sorting-form select {
+  background: #0f1a30;
+  color: #e5e7eb;
+  border-color: #1f2937;
+}
+
 /* Search row */
 .search-row { display: flex; gap: 10px; margin-top: 14px; }
 .search-row .search-input { flex: 1; padding: 12px 14px; border: 1px solid #dbe3ef; border-radius: 12px; background: #f8fafc; font-size: 16px; }

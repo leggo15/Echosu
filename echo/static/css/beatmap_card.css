@@ -97,8 +97,12 @@
 .weight { font-size: 12px; color: #747474; }
 .genres { font-size: 11px; color: #747474; }
 /* Make audio controls inherit the card background */
-.beatmap-card-wrapper audio { display: block; margin: 8px auto 0 auto; }
+.beatmap-card-wrapper audio { display: block; margin: 8px auto 0 auto; color-scheme: inherit; }
+/* Make audio controls blend into card background */
 .beatmap-card-wrapper audio::-webkit-media-controls-enclosure { background-color: transparent !important; box-shadow: none !important; }
+.beatmap-card-wrapper audio::-webkit-media-controls-panel { background-color: transparent !important; }
+.beatmap-card-wrapper audio::-webkit-media-controls-current-time-display,
+.beatmap-card-wrapper audio::-webkit-media-controls-time-remaining-display { color: var(--text-on-surface) !important; }
 
 /* PP by mod pills */
 .pp-mods { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0 6px 0; }

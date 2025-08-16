@@ -65,7 +65,7 @@ from ..utils import QueryContext
 # ----------------------------- Search Views ----------------------------- #
 
 def search_results(request):
-    '''Main search endpoint returning paginated beatmap results.''' 
+    '''Main search endpoint returning paginated beatmap results.'''
 
     # -------------------------------------------------------------
     # Helper functions scoped inside the view (left unchanged).
@@ -79,10 +79,10 @@ def search_results(request):
         return ' '.join(stem_word(w) for w in phrase.split())
 
     def parse_query_with_quotes(raw_query: str):
-        '''Split query, treating quoted substrings as single tokens.''' 
+        '''Split query, treating quoted substrings as single tokens.'''
         lexer = shlex.shlex(raw_query, posix=True)
         lexer.whitespace_split = True
-        lexer.quotes = '"\''
+        lexer.quotes = '\"\''
         tokens = []
         try:
             for token in lexer:
@@ -100,23 +100,16 @@ def search_results(request):
     def process_search_terms(parsed_terms):
         stemmed = set()
         for term, _ in parsed_terms:
-            sanitized = term.strip('"\'')
+            sanitized = term.strip('\"\'')
             stemmed.add(stem_phrase(sanitized) if ' ' in sanitized else stem_word(sanitized))
         return stemmed
 
-    def identify_exact_match_tags(include_tags, stemmed_terms):
-        exact = set()
-        for tag in include_tags:
-            sanitized = tag.strip('"\'')
-            st_tag = stem_phrase(sanitized) if ' ' in sanitized else stem_word(sanitized)
-            if st_tag in stemmed_terms:
-                exact.add(tag)
-                continue
-            for word in sanitized.split():
-                if stem_word(word) in stemmed_terms:
-                    exact.add(tag)
-                    break
-        return exact
+    def identify_exact_match_tags(include_tags, parsed_terms):
+        raw_terms = {(term or '').strip('\"\'').strip().lower() for term, _ in parsed_terms}
+        return {
+            tag for tag in include_tags
+            if (tag or '').strip('\"\'').strip().lower() in raw_terms
+        }
 
     def annotate_and_order_beatmaps(qs, include_tags, exact_tags, sort, predicted_mode):
         # Filter by include_tags using through model, and honor predicted toggle
@@ -161,9 +154,9 @@ def search_results(request):
                 .annotate(cnt=Count('id'))
                 .values('cnt')[:1]
             )
-            matched_app_subq = (
+            matched_exact_app_subq = (
                 base_ta_sq
-                .filter(tag__name__in=include_tags)
+                .filter(tag__name__in=exact_tags)
                 .values('beatmap_id')
                 .annotate(cnt=Count('id'))
                 .values('cnt')[:1]
@@ -175,9 +168,9 @@ def search_results(request):
                 .annotate(cnt=Count('tag_id', distinct=True))
                 .values('cnt')[:1]
             )
-            matched_distinct_subq = (
+            matched_exact_distinct_subq = (
                 base_ta_sq
-                .filter(tag__name__in=include_tags)
+                .filter(tag__name__in=exact_tags)
                 .values('beatmap_id')
                 .annotate(cnt=Count('tag_id', distinct=True))
                 .values('cnt')[:1]
@@ -187,10 +180,10 @@ def search_results(request):
                 qs.annotate(
                     # Per-beatmap total and matched tag application counts (non-distinct)
                     total_app_count=Coalesce(Subquery(total_app_subq), Value(0)),
-                    matched_app_count=Coalesce(Subquery(matched_app_subq), Value(0)),
+                    matched_exact_app_count=Coalesce(Subquery(matched_exact_app_subq), Value(0)),
                     # Per-beatmap distinct tag name counts
                     total_distinct_count=Coalesce(Subquery(distinct_tag_total_subq), Value(0)),
-                    matched_distinct_count=Coalesce(Subquery(matched_distinct_subq), Value(0)),
+                    matched_exact_distinct_count=Coalesce(Subquery(matched_exact_distinct_subq), Value(0)),
                     # User vs predicted counts
                     u_tag_match_count=Count(
                         'tagapplication__tag',
@@ -200,6 +193,17 @@ def search_results(request):
                     p_tag_match_count=Count(
                         'tagapplication__tag',
                         filter=(Q(tagapplication__tag__name__in=include_tags) & Q(tagapplication__user__isnull=True)),
+                        distinct=True,
+                    ),
+                    # Non-exact distinct matches (for numerator-only spending)
+                    u_nonexact_match_count=Count(
+                        'tagapplication__tag',
+                        filter=(Q(tagapplication__tag__name__in=include_tags) & ~Q(tagapplication__tag__name__in=exact_tags) & Q(tagapplication__user__isnull=False)),
+                        distinct=True,
+                    ),
+                    p_nonexact_match_count=Count(
+                        'tagapplication__tag',
+                        filter=(Q(tagapplication__tag__name__in=include_tags) & ~Q(tagapplication__tag__name__in=exact_tags) & Q(tagapplication__user__isnull=True)),
                         distinct=True,
                     ),
                     u_exact_total_count=Count(
@@ -223,30 +227,31 @@ def search_results(request):
                     total_tag_count=total_tag_count_expr,
                 )
                 .annotate(
-                    # Unweighted total matched distinct tags (for denominator)
+                    # Unweighted total matched distinct tags (for denominator diagnostics)
                     matched_distinct_total=(
                         (F('u_tag_match_count') + F('p_tag_match_count')) if predicted_mode in ['include', 'only'] else F('u_tag_match_count')
                     ),
                     # Weighted components: predicted scaled down by p_w
                     weighted_exact_distinct=F('u_exact_distinct_count') + F('p_exact_distinct_count') * p_w,
                     weighted_exact_total=F('u_exact_total_count') + F('p_exact_total_count') * p_w,
-                    weighted_tag_match=F('u_tag_match_count') + F('p_tag_match_count') * p_w,
+                    # Spend exact distinct first; only count extra applications beyond first towards exact_total
+                    weighted_exact_total_surplus=(F('u_exact_total_count') - F('u_exact_distinct_count')) + (F('p_exact_total_count') - F('p_exact_distinct_count')) * p_w,
+                    # Only non-exact matched distinct tags contribute here to avoid overlap with exacts
+                    weighted_tag_match=F('u_nonexact_match_count') + F('p_nonexact_match_count') * p_w,
                 )
                 .annotate(
-                    # 1) Missing distinct search tags not present on map
-                    tag_miss_match_count=Value(len(include_tags), output_field=IntegerField()) - F('matched_distinct_count'),
-                    # 2) Distinct extra tag names on map that are not in the search
-                    tag_surplus_count_distinct=F('total_distinct_count') - F('matched_distinct_count'),
-                    # 3) Extra duplicate applications beyond the first of tags not in the search
-                    tag_surplus_count=(F('total_app_count') - F('matched_app_count')) - F('tag_surplus_count_distinct'),
+                    tag_miss_match_count=Value(len(exact_tags), output_field=IntegerField()) - F('matched_exact_distinct_count'),
+                    tag_surplus_count_distinct=F('total_distinct_count') - F('matched_exact_distinct_count'),
+                    tag_surplus_count=(F('total_app_count') - F('matched_exact_app_count')) - F('tag_surplus_count_distinct'),
                     tag_weight=(
-                        (F('weighted_exact_distinct') * Value(5.0) +
-                         F('weighted_exact_total') * Value(1.0) +
-                         F('weighted_tag_match') * Value(0.1)) /
+                        (F('weighted_exact_distinct') * Value(1.5) + # distinct exact tag names (first copy only)
+                         F('weighted_exact_total_surplus') * Value(0.5) + # extra apps beyond first per exact tag
+                         F('weighted_tag_match') * Value(0.1)) / # distinct non-exact tag matches
                         (
-                            (F('tag_miss_match_count') * Value(3)) +
-                            (F('tag_surplus_count_distinct') * Value(5)) +
-                            (F('tag_surplus_count') * Value(10))
+                            (F('tag_miss_match_count') * Value(1.75)) + # distinct search tags not present on map
+                            (F('tag_surplus_count_distinct') * Value(0.5)) + # distinct extra tag names on map not in the search
+                            (F('tag_surplus_count') * Value(1.12)) + # extra duplicate applications beyond first of tags not in the search
+                            Value(1.0) # base to avoid division by zero when perfect matches and no surplus
                         )
                     ),
                 )
@@ -384,7 +389,7 @@ def search_results(request):
     beatmaps, include_tags = build_query_conditions(beatmaps, [t[0] for t in parsed_terms], predicted_mode)
 
     stemmed_terms = process_search_terms(parsed_terms)
-    exact_tags = identify_exact_match_tags(include_tags, stemmed_terms)
+    exact_tags = identify_exact_match_tags(include_tags, parsed_terms)
 
     if sort not in ['tag_weight', 'popularity']:
         # Default depends on query presence: tag_weight when query present, else popularity
@@ -531,7 +536,7 @@ def annotate_search_results_with_tags(beatmaps, user, include_predicted_toggle=F
 
 
 def parse_search_terms(query: str):
-    '''Split query by whitespace, respecting quoted substrings.''' 
+    '''Split query by whitespace, respecting quoted substrings.'''
     return re.findall(r'[-.]?"[^"]+"|[-.]?[^"\s]+', query)
 
 

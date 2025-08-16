@@ -21,14 +21,14 @@
         </div>
         <!-- Navigation links and search form -->
         <div class="nav-links" id="navLinks">
+            <a href="{% url 'home' %}" class="nav-logo" aria-label="Home">
+                <img src="{% static 'images/orange_128x128.ico' %}" alt="Echo logo"><i>‎ echosu</i>
+            </a>
             <a href="{% url 'home' %}" class="generic-nav-btn">Search</a>
             <a href="{% url 'about' %}" class="generic-nav-btn">About</a>
             <a href="{% url 'tag_library' %}" class="generic-nav-btn">Tag Library</a>
             <a href="{% url 'statistics' %}" class="generic-nav-btn">Statistics</a>
-            <!-- <form method="get" action="{% url 'search_results' %}" class="quick-search-form">
-                <input type="text" name="query" placeholder="Quick Search...">
-                <button type="submit" class="generic-nav-btn">Search</button>
-            </form> -->
+
         </div>
         
         <div class="user-section">

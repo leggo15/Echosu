@@ -23,6 +23,8 @@ body {
 nav { background-color: #cc1177; padding: 10px 0; display: flex; justify-content: center; align-items: center; position: fixed; top: 0; left: 0; right: 0; z-index: 1000; }
 .nav-content { width: 80%; max-width: 1240px; display: flex; justify-content: space-between; align-items: center; }
 .nav-links { display: flex; align-items: center; background-color: #a00e5f; border-radius: 4px; padding: 5px 10px; }
+.nav-logo { display: inline-flex; align-items: center; margin-right: 8px; padding-right: 6px; border-right: 1px solid rgba(255,255,255,0.25); text-decoration: none; color: #fff;}
+.nav-logo img { width: 20px; height: 20px; display: block; }
 .generic-nav-btn { display: inline-block; padding: 5px 10px; font-size: 1em; background-color: #a00e5f; color: #fff; border: none; border-radius: 4px; cursor: pointer; transition: background-color 0.3s, color 0.3s, text-shadow 0.3s; text-decoration: none; }
 .generic-nav-btn:hover { background-color: #880d51; color: #f6c578; text-shadow: 1px #f6c578; }
 .quick-search-form { display: flex; align-items: center; }
@@ -51,6 +53,8 @@ nav { background-color: #cc1177; padding: 10px 0; display: flex; justify-content
   .nav-links { display: none; flex-direction: column; width: 55%; position: absolute; top: 75px; left: 20%; padding: 20; margin: 0; font-size: 32px; z-index: 2000; }
   .nav-links.active { display: flex; }
   .nav-links a { padding: 12px; text-align: center; }
+  /* Hide inline logo inside collapsed stack to preserve current layout */
+  .nav-links .nav-logo { display: none; }
   .user-section { order: -1; }
   .quick-search-form input[type="text"] { display: none; }
   .quick-search-form button { width: 100%; padding: 12px; }

@@ -29,6 +29,15 @@ class TagApplicationSerializer(serializers.ModelSerializer):
         model = TagApplication
         fields = ['id', 'user', 'tag', 'beatmap', 'created_at']
 
+
+class TagApplicationLiteSerializer(serializers.ModelSerializer):
+    user = UserSerializer(read_only=True)
+    tag = TagSerializer(read_only=True)
+
+    class Meta:
+        model = TagApplication
+        fields = ['id', 'user', 'tag', 'created_at']
+
 class UserProfileSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True) 
 

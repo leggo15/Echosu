@@ -166,3 +166,10 @@
   .tag-card .pp-main-stack { flex-direction: row; }
   .tag-card .pp-mini-row { margin-left: 6px; }
 }
+
+/* api test output */
+.api-test-output {
+  margin-top: 16px; 
+  padding: 12px; 
+  white-space: pre-wrap;
+}

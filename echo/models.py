@@ -271,6 +271,7 @@ class APIRequestLog(models.Model):
     timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
     method = models.CharField(max_length=10, db_index=True)
     path = models.CharField(max_length=255, db_index=True)
+    status_code = models.IntegerField(null=True, blank=True, db_index=True)
 
     class Meta:
         indexes = [

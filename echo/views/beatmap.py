@@ -39,6 +39,7 @@ from .shared import (
 )
 from ..helpers.rosu_utils import get_or_compute_timeseries, get_or_compute_pp, get_or_compute_modded_pps
 from ..helpers.timestamps import consensus_intervals, normalize_intervals
+from rest_framework.authtoken.models import Token
 
 # ---------------------------------------------------------------------------
 # Beatmap views
@@ -110,9 +111,18 @@ def beatmap_detail(request, beatmap_id):
         'similar_extra_params': extra_params,
     }
 
+    # Provide API token for admin users to allow authenticated API test calls
+    try:
+        if request.user.is_authenticated and getattr(request.user, 'is_staff', False):
+            token, _ = Token.objects.get_or_create(user=request.user)
+            context['api_auth_token'] = token.key
+    except Exception:
+        pass
+
     return render(request, 'beatmap_detail.html', context)
 
 
+@login_required
 @require_GET
 def beatmap_timeseries(request, beatmap_id: int):
     """Return cached or computed rosu difficulty time-series for a beatmap.
@@ -158,84 +168,7 @@ def beatmap_timeseries(request, beatmap_id: int):
     return JsonResponse(ts, safe=False)
 
 
-@require_GET
-def tag_timestamps(request, beatmap_id: int):
-    """Return aggregated tag timestamps for a beatmap, and optionally the current user's.
-
-    Query params:
-      - tag_id: optional, limit to one tag
-      - threshold: float in [0,1], default 0.5 for consensus
-      - user: if 'me', include current user's intervals for editable tags
-    """
-    beatmap = get_object_or_404(Beatmap, beatmap_id=str(beatmap_id))
-    try:
-        threshold = float(request.GET.get('threshold', '0.5'))
-    except Exception:
-        threshold = 0.5
-    tag_id = request.GET.get('tag_id')
-    only_user = request.GET.get('user') == 'me'
-
-    qs = (
-        TagApplication.objects
-        .filter(beatmap=beatmap)
-        .select_related('tag', 'user')
-    )
-    if tag_id:
-        qs = qs.filter(tag_id=tag_id)
-
-    # Aggregate consensus per tag, grouping intervals by user (exclude predictions/null users)
-    aggregated = []
-    tags = {}
-    for ta in qs:
-        tag_id_int = ta.tag_id
-        if tag_id_int not in tags:
-            tags[tag_id_int] = {
-                'tag_id': tag_id_int,
-                'tag_name': ta.tag.name,
-                'users': set(),
-                'user_to_intervals': {},  # user_id -> List[Tuple[float,float]]
-            }
-        # Count only real users (exclude predictions and null users) towards user_count
-        if ta.user_id is not None and not getattr(ta, 'is_prediction', False):
-            tags[tag_id_int]['users'].add(ta.user_id)
-            # Collect intervals per user
-            if isinstance(ta.timestamp, dict):
-                raw = (ta.timestamp or {}).get('intervals') or []
-                if raw:
-                    pairs = [(float(s), float(e)) for s, e in raw]
-                    lst = tags[tag_id_int]['user_to_intervals'].setdefault(ta.user_id, [])
-                    lst.extend(pairs)
-
-    for tag_data in tags.values():
-        # Merge intervals per user first, then compute consensus over users
-        per_user_lists = []
-        for _uid, ivs in tag_data['user_to_intervals'].items():
-            merged = normalize_intervals(ivs, beatmap.total_length)
-            if merged:
-                per_user_lists.append(merged)
-        intervals = consensus_intervals(per_user_lists, threshold_ratio=threshold, total_length_s=beatmap.total_length)
-        aggregated.append({
-            'tag_id': tag_data['tag_id'],
-            'tag_name': tag_data['tag_name'],
-            'user_count': len(tag_data['users']),
-            'consensus_intervals': intervals,
-        })
-
-    resp = {'tags': aggregated}
-
-    if only_user and request.user.is_authenticated:
-        user_qs = TagApplication.objects.filter(beatmap=beatmap, user=request.user).select_related('tag')
-        user_entries = []
-        for ta in user_qs:
-            intervals = (ta.timestamp or {}).get('intervals') if isinstance(ta.timestamp, dict) else []
-            user_entries.append({
-                'tag_id': ta.tag_id,
-                'tag_name': ta.tag.name,
-                'intervals': normalize_intervals([(float(s), float(e)) for s, e in (intervals or [])], beatmap.total_length),
-            })
-        resp['user'] = user_entries
-
-    return JsonResponse(resp)
+## Removed: tag_timestamps endpoint in favor of consolidated /api/tag-applications include
 
 
 @require_POST

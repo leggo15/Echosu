@@ -8,7 +8,7 @@ from echo.views.home      import about, load_more_recommendations, tag_library
 from echo.views.auth      import osu_callback, api_token
 from echo.views.beatmap   import (
     beatmap_detail, update_beatmap_info, beatmap_timeseries,
-    tag_timestamps, save_tag_timestamps, quick_add_beatmap,
+    save_tag_timestamps, quick_add_beatmap,
 )
 from echo.views.search    import search_results
 from echo.views.tags      import (
@@ -23,7 +23,7 @@ from echo.views.statistics import statistics, statistics_player_data
 
 # DRF viewsets
 from echo.views.api import (
-    BeatmapViewSet, TagViewSet, TagApplicationViewSet, UserProfileViewSet, tags_for_beatmaps,
+    BeatmapViewSet, TagViewSet, TagApplicationViewSet, UserProfileViewSet,
     admin_upload_predictions, admin_upload_tag_applications, admin_refresh_beatmaps, admin_upload_users,
 )
 
@@ -68,12 +68,9 @@ urlpatterns = [
     path('api-token/', api_token, name='api_token'),
     path('beatmap_detail/<int:beatmap_id>/', beatmap_detail, name='beatmap_detail'),
     path('beatmap_detail/<int:beatmap_id>/timeseries/', beatmap_timeseries, name='beatmap_timeseries'),
-    path('beatmap_detail/<int:beatmap_id>/tag_timestamps/', tag_timestamps, name='beatmap_tag_timestamps'),
     path('beatmap_detail/<int:beatmap_id>/tag_timestamps/save/', save_tag_timestamps, name='beatmap_save_tag_timestamps'),
 
-    # endpoint for beatmap tags
-    path('api/beatmaps/tags/', tags_for_beatmaps),
-    path('api/beatmaps/<str:beatmap_id>/tags/', tags_for_beatmaps),  # Handles single beatmap requests
+    # removed redundant tag endpoints now served by tag-applications include
 
     # REST API endpoints using routers
     path('api/', include(router.urls)),

@@ -27,6 +27,7 @@ from rest_framework.decorators import (
     permission_classes,
 )
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.authentication import SessionAuthentication
 from rest_framework.response import Response
 
 # ---------------------------------------------------------------------------
@@ -43,6 +44,7 @@ from ..models import (
 from ..serializers import (
     BeatmapSerializer,
     TagApplicationSerializer,
+    TagApplicationLiteSerializer,
     TagApplicationToggleSerializer,
     TagSerializer,
     UserProfileSerializer,
@@ -50,6 +52,7 @@ from ..serializers import (
 from .auth import api                         # shared Ossapi instance
 from .beatmap import join_diff_creators       # helper
 from .shared import GAME_MODE_MAPPING         # mode mapping helper
+from ..helpers.timestamps import consensus_intervals, normalize_intervals
 # --------------------------------------------------------------------- #
 
 
@@ -59,42 +62,8 @@ from .shared import GAME_MODE_MAPPING         # mode mapping helper
 @authentication_classes([CustomTokenAuthentication])
 @permission_classes([IsAuthenticated])
 def tags_for_beatmaps(request, beatmap_id=None):
-    if beatmap_id:
-        beatmaps = Beatmap.objects.filter(beatmap_id=beatmap_id)
-        if not beatmaps.exists():
-            return Response({'detail': 'Beatmap not found.'}, status=404)
-    else:
-        batch_size = int(request.GET.get('batch_size', 500))
-        offset = int(request.GET.get('offset', 0))
-        beatmaps = (
-            Beatmap.objects.annotate(tag_count=Count('tagapplication'))
-            .filter(tag_count__gt=0)
-            .order_by('id')[offset : offset + batch_size]
-        )
-        if not beatmaps.exists():
-            return Response({'detail': 'No beatmaps found.'}, status=404)
-
-    result = []
-    for beatmap in beatmaps:
-        # Exclude predicted and non-user applications from export
-        tag_counts = (
-            TagApplication.objects
-            .filter(beatmap=beatmap, is_prediction=False)
-            .exclude(user__isnull=True)
-            .values('tag__name')
-            .annotate(tag_count=Count('tag'))
-            .order_by('-tag_count')
-        )
-        tags_data = [{'tag': t['tag__name'], 'count': t['tag_count']} for t in tag_counts]
-        result.append(
-            {
-                'beatmap_id': beatmap.beatmap_id,
-                'title': beatmap.title,
-                'artist': beatmap.artist,
-                'tags': tags_data,
-            }
-        )
-    return Response(result)
+    # Deprecated in favor of /api/tag-applications/?beatmap_id=...&include=tag_counts
+    return Response({'detail': 'Deprecated. Use /api/tag-applications/?beatmap_id={id}&include=tag_counts'}, status=410)
 
 
 # ----------------------------- Token helper ----------------------------- #
@@ -114,8 +83,12 @@ def generate_token(request):
 class BeatmapViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Beatmap.objects.all()
     serializer_class = BeatmapSerializer
-    authentication_classes = [CustomTokenAuthentication]
+    authentication_classes = [CustomTokenAuthentication, SessionAuthentication]
     permission_classes = [IsAuthenticated]
+
+    # Allow lookup by beatmap_id string instead of internal pk for clarity
+    lookup_field = 'beatmap_id'
+    lookup_value_regex = '[0-9]+'
 
     @action(detail=False, methods=['get'], url_path='filtered')
     def filtered(self, request):
@@ -133,26 +106,33 @@ class BeatmapViewSet(viewsets.ReadOnlyModelViewSet):
         ).distinct()
         return Response(self.get_serializer(beatmaps, many=True).data)
 
+    # retrieve remains the default: only beatmap fields
+    # All tag data is provided via /api/tag-applications/?beatmap_id=... with include=...
+
 
 class TagViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Tag.objects.all()
     serializer_class = TagSerializer
-    authentication_classes = [CustomTokenAuthentication]
+    authentication_classes = [CustomTokenAuthentication, SessionAuthentication]
     permission_classes = [IsAuthenticated]
 
 
 class TagApplicationViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = TagApplication.objects.all()
     serializer_class = TagApplicationSerializer
-    authentication_classes = [CustomTokenAuthentication]
+    authentication_classes = [CustomTokenAuthentication, SessionAuthentication]
     permission_classes = [IsAuthenticated]
     
     def get_queryset(self):
         qs = super().get_queryset()
         params = self.request.query_params
-        include_predicted = str(params.get('include_predicted', '0')).lower() in ['1', 'true', 'yes', 'on', 'include']
-        if not include_predicted:
-            qs = qs.filter(is_prediction=False).exclude(user__isnull=True)
+        include_tokens = [s.strip() for s in (params.get('include') or '').split(',') if s.strip()]
+        include_predicted_flag = ('predicted_tags' in include_tokens) or (str(params.get('include_predicted', '0')).lower() in ['1', 'true', 'yes', 'on', 'include'])
+        # Always drop null-user non-predicted records
+        qs = qs.exclude(user__isnull=True, is_prediction=False)
+        # By default, exclude predictions unless explicitly requested
+        if not include_predicted_flag:
+            qs = qs.filter(is_prediction=False)
         beatmap_id = params.get('beatmap_id')
         if beatmap_id:
             qs = qs.filter(beatmap__beatmap_id=str(beatmap_id))
@@ -245,6 +225,109 @@ class TagApplicationViewSet(viewsets.ReadOnlyModelViewSet):
 
         # other validation errors
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def list(self, request, *args, **kwargs):
+        """Slim payload when filtered by beatmap_id to avoid embedding full beatmap."""
+        queryset = self.filter_queryset(self.get_queryset())
+        is_filtered_by_bm = 'beatmap_id' in request.query_params
+        if is_filtered_by_bm:
+            beatmap_id = str(request.query_params.get('beatmap_id'))
+            include_tokens = [s.strip() for s in (request.query_params.get('include') or '').split(',') if s.strip()]
+            # Base lite serialization
+            page = self.paginate_queryset(queryset)
+            items = page or queryset
+            data = TagApplicationLiteSerializer(items, many=True).data
+
+            # Compute extras once per beatmap if requested
+            need_counts = 'tag_counts' in include_tokens
+            need_ts = 'tag_timestamps' in include_tokens
+            counts_map = {}
+            consensus_map = {}
+            if need_counts or need_ts:
+                base_qs = TagApplication.objects.filter(beatmap__beatmap_id=beatmap_id)
+                # Always drop null-user non-predicted records
+                base_qs = base_qs.exclude(user__isnull=True, is_prediction=False)
+                # By default, exclude predictions unless explicitly requested
+                include_predicted_flag = ('predicted_tags' in include_tokens) or (str(request.query_params.get('include_predicted', '0')).lower() in ['1', 'true', 'yes', 'on', 'include'])
+                if not include_predicted_flag:
+                    base_qs = base_qs.filter(is_prediction=False)
+
+                if need_counts:
+                    counts = (
+                        base_qs.values('tag_id')
+                        .annotate(tag_count=Count('tag_id'))
+                    )
+                    counts_map = {row['tag_id']: row['tag_count'] for row in counts}
+
+                if need_ts:
+                    # Build per-tag user intervals and compute consensus intervals
+                    try:
+                        bm = Beatmap.objects.filter(beatmap_id=beatmap_id).first()
+                        total_len = getattr(bm, 'total_length', 0) or 0
+                    except Exception:
+                        bm = None
+                        total_len = 0
+                    tmp = {}
+                    for ta in base_qs.select_related('tag', 'user'):
+                        tid = ta.tag_id
+                        node = tmp.get(tid)
+                        if node is None:
+                            node = {'tag_id': tid, 'tag_name': getattr(ta.tag, 'name', ''), 'users': set(), 'user_to_intervals': {}}
+                            tmp[tid] = node
+                        if ta.user_id is not None and not getattr(ta, 'is_prediction', False):
+                            node['users'].add(ta.user_id)
+                            if isinstance(ta.timestamp, dict):
+                                raw = (ta.timestamp or {}).get('intervals') or []
+                                if raw:
+                                    pairs = [(float(s), float(e)) for s, e in raw]
+                                    lst = node['user_to_intervals'].setdefault(ta.user_id, [])
+                                    lst.extend(pairs)
+                    for tid, node in tmp.items():
+                        per_user_lists = []
+                        for _uid, ivs in node['user_to_intervals'].items():
+                            merged = normalize_intervals(ivs, total_len)
+                            if merged:
+                                per_user_lists.append(merged)
+                        intervals = consensus_intervals(per_user_lists, threshold_ratio=0.5, total_length_s=total_len)
+                        consensus_map[tid] = intervals
+
+            # Attach extras into each item's tag
+            if need_counts or need_ts:
+                for entry in data:
+                    tag = entry.get('tag') or {}
+                    tid = tag.get('id')
+                    if need_counts:
+                        tag['count'] = counts_map.get(tid, 0)
+                    if need_ts:
+                        tag['consensus_intervals'] = consensus_map.get(tid, [])
+                    entry['tag'] = tag
+
+            # Attach per-user intervals when requested via user=me
+            if request.user.is_authenticated and str(request.query_params.get('user')).strip().lower() == 'me':
+                try:
+                    bm = Beatmap.objects.filter(beatmap_id=beatmap_id).first()
+                    total_len = getattr(bm, 'total_length', 0) or 0
+                except Exception:
+                    total_len = 0
+                user_qs = TagApplication.objects.filter(beatmap__beatmap_id=beatmap_id, user=request.user).select_related('tag')
+                user_map = {}
+                for ta in user_qs:
+                    intervals = []
+                    if isinstance(ta.timestamp, dict):
+                        raw = (ta.timestamp or {}).get('intervals') or []
+                        intervals = normalize_intervals([(float(s), float(e)) for s, e in (raw or [])], total_len)
+                    user_map[ta.tag_id] = intervals
+                for entry in data:
+                    tag = entry.get('tag') or {}
+                    tid = tag.get('id')
+                    if tid in user_map:
+                        tag['user_intervals'] = user_map.get(tid) or []
+                        entry['tag'] = tag
+
+            if page is not None:
+                return self.get_paginated_response(data)
+            return Response(data)
+        return super().list(request, *args, **kwargs)
 
 
 class UserProfileViewSet(viewsets.ReadOnlyModelViewSet):

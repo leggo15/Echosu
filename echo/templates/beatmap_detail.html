@@ -34,10 +34,124 @@
   {% if error %}
     <p class="error">{{ error }}</p>
   {% endif %}
+
+  {% if user.is_staff %}
+  <div id="api-test-output" class="api-test-output" style="margin-top: 16px; padding: 12px; white-space: pre-wrap;"></div>
+  {% endif %}
 {% endblock %}
 
 {% block foot_js %}
   <script src="{% static 'js/tagging.js' %}"></script>
   <script src="{% static 'js/rosu_graph.js' %}"></script>
   <script src="{% static 'js/rosu_graph_tags.js' %}"></script>
+  {% if user.is_staff %}
+  <script>
+    (function(){
+      const btn = document.querySelector('.api-test-btn');
+      if (!btn) return;
+      const output = document.getElementById('api-test-output');
+      const beatmapId = btn.getAttribute('data-beatmap-id');
+      const token = "{{ api_auth_token|default:'' }}";
+      const currentUserId = {{ user.id|default:'null' }};
+      const base = window.location.origin;
+
+      function h(title){
+        const el = document.createElement('h4');
+        el.textContent = title;
+        return el;
+      }
+      function pre(text){
+        const el = document.createElement('pre');
+        el.textContent = text;
+        return el;
+      }
+      function getCookie(name){
+        const m = document.cookie.match(new RegExp('(?:^|; )' + name.replace(/([.$?*|{}()\[\]\\\/\+^])/g,'\\$1') + '=([^;]*)'));
+        return m ? decodeURIComponent(m[1]) : '';
+      }
+
+      async function fetchJson(url, options={}){
+        const headers = Object.assign({'Accept': 'application/json'}, options.headers||{});
+        if (token) headers['Authorization'] = 'Token ' + token;
+        const resp = await fetch(url, Object.assign({}, options, {headers}));
+        const text = await resp.text();
+        let parsed;
+        try { parsed = JSON.parse(text); } catch { parsed = text; }
+        return {status: resp.status, data: parsed};
+      }
+      async function postJson(url, body){
+        const headers = {'Accept':'application/json','Content-Type':'application/json'};
+        const csrf = getCookie('csrftoken') || getCookie('CSRF-TOKEN') || '';
+        if (csrf) headers['X-CSRFToken'] = csrf;
+        if (token) headers['Authorization'] = 'Token ' + token;
+        const resp = await fetch(url, {method:'POST', credentials:'same-origin', headers, body: JSON.stringify(body)});
+        const text = await resp.text();
+        let parsed; try { parsed = JSON.parse(text); } catch { parsed = text; }
+        return {status: resp.status, data: parsed};
+      }
+      function hasMyTag(apps, tagName){
+        const lower = String(tagName||'').trim().toLowerCase();
+        return (apps||[]).some(a => a && a.user && a.user.id === currentUserId && a.tag && String(a.tag.name||'').toLowerCase() === lower);
+      }
+      async function getApps(){
+        const url = base + `/api/tag-applications/?beatmap_id=${beatmapId}`;
+        const res = await fetchJson(url);
+        return Array.isArray(res.data) ? res.data : [];
+      }
+
+      async function run(){
+        output.innerHTML = '';
+        const endpoints = [
+          // Consolidated retrieve with includes
+          `/api/beatmaps/${beatmapId}/`,
+          // Slim tag applications list (for comparison)
+          `/api/tag-applications/?beatmap_id=${beatmapId}&include=tag_counts,tag_timestamps,predicted_tags`
+        ];
+        for (const path of endpoints){
+          const url = path.startsWith('http') ? path : base + path;
+          output.appendChild(h(url));
+          try {
+            const res = await fetchJson(url);
+            output.appendChild(pre(typeof res.data === 'string' ? res.data : JSON.stringify(res.data, null, 2)));
+          } catch (e) {
+            output.appendChild(pre(String(e)));
+          }
+        }
+
+        // --- Write API test: add and remove a tag for this admin user ---
+        const toggleUrl = base + '/api/tag-applications/toggle/';
+        const testTag = 'api_test';
+        // Ensure clean state: if tag exists for me, remove it first
+        try {
+          let apps = await getApps();
+          if (hasMyTag(apps, testTag)) {
+            output.appendChild(h(toggleUrl + ' (POST pre-clean remove)'));
+            const resClean = await postJson(toggleUrl, { beatmap_id: String(beatmapId), tags: [testTag] });
+            output.appendChild(pre(typeof resClean.data === 'string' ? resClean.data : JSON.stringify(resClean.data, null, 2)));
+            apps = await getApps();
+          }
+          // Add
+          output.appendChild(h(toggleUrl + ' (POST add "' + testTag + '")'));
+          const resAdd = await postJson(toggleUrl, { beatmap_id: String(beatmapId), tags: [testTag] });
+          output.appendChild(pre(typeof resAdd.data === 'string' ? resAdd.data : JSON.stringify(resAdd.data, null, 2)));
+          let afterAdd = await getApps();
+          output.appendChild(h('Verify tag present for current user'));
+          output.appendChild(pre(String(hasMyTag(afterAdd, testTag))));
+          // Remove
+          output.appendChild(h(toggleUrl + ' (POST remove "' + testTag + '")'));
+          const resRemove = await postJson(toggleUrl, { beatmap_id: String(beatmapId), tags: [testTag] });
+          output.appendChild(pre(typeof resRemove.data === 'string' ? resRemove.data : JSON.stringify(resRemove.data, null, 2)));
+          let afterRemove = await getApps();
+          output.appendChild(h('Verify tag removed for current user'));
+          output.appendChild(pre(String(!hasMyTag(afterRemove, testTag))));
+        } catch (e) {
+          output.appendChild(h('Write API test error'));
+          output.appendChild(pre(String(e)));
+        }
+      }
+
+      btn.addEventListener('click', run);
+    })();
+  </script>
+  {% endif %}
 {% endblock %}

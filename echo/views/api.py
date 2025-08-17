@@ -711,7 +711,7 @@ def admin_refresh_beatmaps(request):
                 get_or_compute_pp(beatmap)
                 get_or_compute_modded_pps(beatmap)
                 # 1-second window to match existing UI usage
-                get_or_compute_timeseries(beatmap, window_seconds=1)
+                get_or_compute_timeseries(beatmap, window_seconds=1, mods=None)
             except Exception:
                 pass
 

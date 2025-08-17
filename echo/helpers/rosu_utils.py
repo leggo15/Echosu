@@ -93,7 +93,11 @@ def _first_last_hitobject_ms_from_osu(osu_bytes: bytes) -> tuple[float, float]:
     return float(first_ms or 0.0), float(last_ms or 0.0)
 
 
-def compute_timeseries_from_osu_bytes(osu_bytes: bytes, window_seconds: int = 5) -> Optional[Dict]:
+def compute_timeseries_from_osu_bytes(
+    osu_bytes: bytes,
+    window_seconds: int = 5,
+    mods: Optional[str] = None,
+) -> Optional[Dict]:
     """Compute 10-second mean strains (aim, speed, total) using rosu.
 
     Returns a JSON-serialisable dict or None on failure.
@@ -106,7 +110,19 @@ def compute_timeseries_from_osu_bytes(osu_bytes: bytes, window_seconds: int = 5)
             tmp.flush()
 
             bm = rosu.Beatmap(path=tmp.name)
-            diff = rosu.Difficulty()
+
+            # Apply mods if provided (string acronyms like "DT", "HR", "EZ", "HT", "FL")
+            # This affects strain computation (AR/CS/OD/HP, speed mods, etc.).
+            try:
+                diff = rosu.Difficulty(mods=mods) if mods else rosu.Difficulty()
+            except Exception:
+                diff = rosu.Difficulty()
+            # Compute modded star rating for proper Y scaling on the frontend
+            try:
+                diff_attrs = diff.calculate(bm)
+                stars_val = float(getattr(diff_attrs, "stars", 0.0) or 0.0)
+            except Exception:
+                stars_val = 0.0
             strains = diff.strains(bm)
 
             section_ms: float = float(strains.section_length)
@@ -131,12 +147,24 @@ def compute_timeseries_from_osu_bytes(osu_bytes: bytes, window_seconds: int = 5)
 
             # Center time of each window (relative timeline from first object)
             effective_window_s = (bin_size * section_ms) / 1000.0
-            times_rel = [((i + 0.5) * effective_window_s) for i in range(n)]
+
+
+            mods_up = (mods or "").upper()
+            clock_rate = 1.0
+            times_rel = [((i + 0.5) * effective_window_s) / clock_rate for i in range(n)]
 
             # Determine first/last hitobject times to trim/stretch accurately
             t0_ms, t_last_ms = _first_last_hitobject_ms_from_osu(osu_bytes)
-            t0_s = t0_ms / 1000.0
-            t_end_s = t_last_ms / 1000.0
+            # Determine clock rate from speed mods for correct time scaling on the X axis
+            mods_up = (mods or "").upper()
+            clock_rate = 1.0
+            if "DT" in mods_up:
+                clock_rate = 1.5
+            elif "HT" in mods_up:
+                clock_rate = 0.75
+            # Convert hitobject times to seconds under the applied clock rate
+            t0_s = (t0_ms / 1000.0) / clock_rate if t0_ms else 0.0
+            t_end_s = (t_last_ms / 1000.0) / clock_rate if t_last_ms else 0.0
             tmax_rel_s = max(0.0, t_end_s - t0_s)
 
             # Clip bins to slightly beyond last object by half-window to avoid overshoot
@@ -161,20 +189,28 @@ def compute_timeseries_from_osu_bytes(osu_bytes: bytes, window_seconds: int = 5)
                 "speed": speed_binned,
                 "total": total_binned,
                 "effective_window_s": effective_window_s,
+                # Expose clock rate so the frontend can align tag overlays with the modded timeline
+                "clock_rate": clock_rate,
+                # Provide modded star rating so the frontend can scale Y correctly
+                "stars": stars_val,
             }
     except Exception:
         return None
 
 
-def get_or_compute_timeseries(beatmap, window_seconds: int = 5) -> Optional[Dict]:
+def get_or_compute_timeseries(
+    beatmap,
+    window_seconds: int = 5,
+    mods: Optional[str] = None,
+) -> Optional[Dict]:
     """Fetch or compute and persist the timeseries for a Beatmap instance."""
     # Only compute for osu! standard for now
     if getattr(beatmap, "mode", None) and str(beatmap.mode).lower() not in ("osu", "standard", "std", "0"):
         return None
 
-    if getattr(beatmap, "rosu_timeseries", None):
+    # Only use cached nomod timeseries when no mods requested
+    if mods in (None, "") and getattr(beatmap, "rosu_timeseries", None):
         ts = beatmap.rosu_timeseries or {}
-        # Validate shape quickly and ensure window matches desired resolution
         if (
             isinstance(ts, dict)
             and "times_s" in ts
@@ -196,16 +232,21 @@ def get_or_compute_timeseries(beatmap, window_seconds: int = 5) -> Optional[Dict
     except Exception:
         return None
 
-    ts = compute_timeseries_from_osu_bytes(osu_bytes, window_seconds=window_seconds)
+    ts = compute_timeseries_from_osu_bytes(
+        osu_bytes,
+        window_seconds=window_seconds,
+        mods=mods,
+    )
     if ts is None:
         return None
 
-    # Persist on model for caching
-    try:
-        beatmap.rosu_timeseries = ts
-        beatmap.save(update_fields=["rosu_timeseries"])
-    except Exception:
-        pass
+    # Persist only for nomod baseline to avoid ballooning model size
+    if mods in (None, ""):
+        try:
+            beatmap.rosu_timeseries = ts
+            beatmap.save(update_fields=["rosu_timeseries"])
+        except Exception:
+            pass
     return ts
 
 

@@ -115,14 +115,44 @@ def beatmap_detail(request, beatmap_id):
 
 @require_GET
 def beatmap_timeseries(request, beatmap_id: int):
-    """Return cached or computed rosu difficulty time-series for a beatmap."""
+    """Return cached or computed rosu difficulty time-series for a beatmap.
+
+    Query params:
+      - window_s: int seconds for binning (default 1)
+      - mods: comma-free acronyms, e.g., "DT", "HR", "EZ", "HT", "FL"; combinations allowed,
+              but mutually exclusive groups DT/HT and HR/EZ will be resolved by keeping the last.
+    """
     beatmap = get_object_or_404(Beatmap, beatmap_id=str(beatmap_id))
-    # Support custom window via query param (?window_s=1) with default 1s
     try:
         window_s = int(request.GET.get("window_s", 1))
     except Exception:
         window_s = 1
-    ts = get_or_compute_timeseries(beatmap, window_seconds=window_s)
+    raw_mods = (request.GET.get("mods", "") or "").upper().strip()
+    # Normalise mods string: keep only supported DT/HT/HR/EZ/FL; drop incompatible duplicates
+    allowed = ["DT", "HT", "HR", "EZ", "FL"]
+    mods_out = []
+    seen = set()
+    for token in [raw_mods[i:i+2] for i in range(0, len(raw_mods), 2) if raw_mods]:
+        if token in allowed:
+            # enforce mutual exclusion: DT vs HT
+            if token == "DT" and "HT" in seen:
+                seen.remove("HT")
+                mods_out = [m for m in mods_out if m != "HT"]
+            if token == "HT" and "DT" in seen:
+                seen.remove("DT")
+                mods_out = [m for m in mods_out if m != "DT"]
+            # HR vs EZ
+            if token == "HR" and "EZ" in seen:
+                seen.remove("EZ")
+                mods_out = [m for m in mods_out if m != "EZ"]
+            if token == "EZ" and "HR" in seen:
+                seen.remove("HR")
+                mods_out = [m for m in mods_out if m != "HR"]
+            if token not in seen:
+                seen.add(token)
+                mods_out.append(token)
+    mods_str = "".join(mods_out) or None
+    ts = get_or_compute_timeseries(beatmap, window_seconds=window_s, mods=mods_str)
     if ts is None:
         return JsonResponse({"detail": "Timeseries unavailable"}, status=404)
     return JsonResponse(ts, safe=False)
@@ -495,7 +525,7 @@ def quick_add_beatmap(request):
         except Exception:
             pass
         try:
-            get_or_compute_timeseries(beatmap, window_seconds=1)
+            get_or_compute_timeseries(beatmap, window_seconds=1, mods=None)
         except Exception:
             pass
 

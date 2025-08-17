@@ -45,7 +45,7 @@
     z-index: 1;
 }
 
-.beatmap-card-wrapper { position: relative; padding-top: 36px; }
+.beatmap-card-wrapper { position: relative; padding-top: 36px; z-index: 2; }
 .beatmap-card-wrapper .chrome-actions { position: absolute; top: 27px; right: 8px; display: flex; gap: 8px; justify-content: flex-end; }
 .beatmap-card-wrapper .card-footer { display: grid; grid-template-columns: 1fr auto; align-items: start; padding: 8px 10px 0 10px; gap: 12px; }
 .beatmap-card-wrapper .card-footer .weight { align-self: end; }

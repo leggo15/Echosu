@@ -1,5 +1,7 @@
 .rosu-graph-card {
   margin-top: 12px;
+  position: relative;
+  z-index: -1; /* keep below tag suggestions */
 }
 
 .rosu-graph-header { align-items: baseline; }
@@ -11,11 +13,38 @@
 
 .rosu-graph-sub { margin: 0; color: #bbb; font-size: 12px; }
 
+.rosu-mods-rail {
+  position: absolute;
+  right: 14px;
+  top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  z-index: 2;
+}
+.rosu-graph-header { display: flex; position: relative; }
+.rosu-mods-rail .mod-toggle {
+  background: #1b1f24;
+  color: #eaeef2;
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 6px;
+  padding: 4px 8px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.rosu-mods-rail .mod-toggle.active {
+  background: #0d6efd;
+  border-color: #0d6efd;
+  color: #fff;
+}
+
 .rosu-graph-container {
+  position: relative;
   background: #101214;
   border: 1px solid rgba(255,255,255,0.08);
   border-radius: 8px;
   padding: 8px;
+
 }
 
 #rosuGraphCanvas {

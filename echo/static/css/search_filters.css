@@ -25,6 +25,9 @@
   .filters-grid .slider-container,
   .filters-grid .filter-status,
   .filters-grid .filter-mode { grid-column: 1 / -1; }
+  .filters-grid {
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+  }
 }
 
 .filters-card label { font-weight: 600; color: #374151; display: inline-block; margin-bottom: 6px; }

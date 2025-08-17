@@ -25,3 +25,19 @@
 .tag-card { background: var(--card-odd); border-radius: 10px; }
 .tag-card--alt { background: var(--card-even); }
 
+/* Ensure tag suggestions overlay other content like the graph */
+.beatmap-card-wrapper { position: relative; z-index: 3; }
+.tag-input-container { position: relative; }
+.tag-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 12;
+  max-height: 240px;
+  overflow-y: auto;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 16px var(--shadow-color);
+}

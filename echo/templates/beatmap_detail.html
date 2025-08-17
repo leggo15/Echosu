@@ -20,6 +20,13 @@
         <h3 class="rosu-graph-title">Difficulty over time</h3>
     </div>
     <div class="rosu-graph-container">
+      <div class="rosu-mods-rail" aria-label="Apply mods to difficulty graph">
+        <button class="mod-toggle" data-mod="DT" title="Double Time">DT</button>
+        <button class="mod-toggle" data-mod="HR" title="Hard Rock">HR</button>
+        <button class="mod-toggle" data-mod="FL" title="Flashlight">FL</button>
+        <button class="mod-toggle" data-mod="HT" title="Half Time">HT</button>
+        <button class="mod-toggle" data-mod="EZ" title="Easy">EZ</button>
+      </div>
       <canvas id="rosuGraphCanvas" height="140" data-ts-url="{% url 'beatmap_timeseries' beatmap_id=beatmap.beatmap_id %}" data-total-stars="{{ beatmap.difficulty_rating|default:0 }}" data-total-length="{{ beatmap.total_length|default:0 }}"></canvas>
     </div>
   </div>

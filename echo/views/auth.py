@@ -197,12 +197,4 @@ def save_user_data(access_token, request):
     token, _ = Token.objects.get_or_create(user=user)
 
 
-@login_required
-def api_token(request):
-    """Return or create a DRF token for the current user and render it."""
-    user = request.user
-    token, _ = Token.objects.get_or_create(user=user)
-    context = {
-        'token': token.key,
-    }
-    return render(request, 'api_token.html', context)
+# Removed: obsolete api_token view (no template; tokens handled in settings page)

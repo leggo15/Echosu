@@ -68,14 +68,7 @@ def tags_for_beatmaps(request, beatmap_id=None):
 
 # ----------------------------- Token helper ----------------------------- #
 
-@login_required
-def generate_token(request):
-    if request.method == 'POST':
-        CustomToken.objects.filter(user=request.user).delete()
-        token = CustomToken.objects.create(user=request.user)
-        return render(request, 'settings.html', {'token_key': token.key})
-
-    return redirect('settings')
+# Removed: superseded by echo.views.userSettings.settings
 
 
 # ----------------------------- API ViewSets ----------------------------- #

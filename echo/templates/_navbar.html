@@ -33,6 +33,7 @@
         
         <div class="user-section">
             {% if user.is_authenticated %}
+                <span> {{ userprofile.username }} </span>
                 <img src="{{ user_profile.profile_pic_url }}" alt="Profile Picture" id="profileMenuButton">
                 <div id="profileDropdown" class="dropdown-content">
                     <a href="{% url 'settings' %}">Settings</a>
@@ -50,6 +51,7 @@
                     </form>
                 </div>
                 {% else %}
+                <span class="profile-picture-placeholder">Log in with osu!</span>
                 <img src="{% static 'images/default.png' %}" alt="Profile Picture" id="profileMenuButton">
                 <div id="profileDropdown" class="dropdown-content">
                     <a href="{{ osu_oauth_url }}">Login</a>

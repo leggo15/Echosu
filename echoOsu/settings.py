@@ -180,8 +180,6 @@ AWS_S3_FILE_OVERWRITE = False
 AWS_DEFAULT_ACL = None
 AWS_QUERYSTRING_AUTH = False  # This setting is important for public access
 
-# Static files (CSS, JavaScript, Images)
-STATIC_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/static/'
 
 # Media files (User uploaded content)
 MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/media/'

@@ -4,8 +4,8 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 
 #  --------  new view imports  --------
-from echo.views.home      import about, load_more_recommendations, tag_library
-from echo.views.auth      import osu_callback, api_token
+from echo.views.home      import about, tag_library
+from echo.views.auth      import osu_callback
 from echo.views.beatmap   import (
     beatmap_detail, update_beatmap_info, beatmap_timeseries,
     save_tag_timestamps, quick_add_beatmap,
@@ -57,7 +57,6 @@ urlpatterns = [
     path('vote_description/', vote_description, name='vote_description'),
     path('confirm_data_deletion/', confirm_data_deletion, name='confirm_data_deletion'),
     path('delete_user_data/', delete_user_data, name='delete_user_data'),
-    path('load_more_recommendations/', load_more_recommendations, name='load_more_recommendations'),
     path('update_beatmap_info/', update_beatmap_info, name='update_beatmap_info'),
     path('add_beatmap/', quick_add_beatmap, name='quick_add_beatmap'),
     path('tag_library/', tag_library, name='tag_library'),
@@ -65,7 +64,6 @@ urlpatterns = [
 
 
 ######### API #########
-    path('api-token/', api_token, name='api_token'),
     path('beatmap_detail/<int:beatmap_id>/', beatmap_detail, name='beatmap_detail'),
     path('beatmap_detail/<int:beatmap_id>/timeseries/', beatmap_timeseries, name='beatmap_timeseries'),
     path('beatmap_detail/<int:beatmap_id>/tag_timestamps/save/', save_tag_timestamps, name='beatmap_save_tag_timestamps'),

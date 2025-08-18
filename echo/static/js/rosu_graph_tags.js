@@ -25,7 +25,7 @@
     var beatmapId = (document.querySelector('[data-beatmap-id]') || {}).getAttribute('data-beatmap-id')
                    || (window.location.pathname.match(/beatmap_detail\/(\d+)/) || [])[1];
     if (!beatmapId) return;
-    var tsUrl = '/beatmap_detail/' + beatmapId + '/tag_timestamps/';
+    var tsUrl = '/api/tag-applications/?beatmap_id=' + beatmapId + '&include=tag_timestamps&user=me';
     var saveUrl = '/beatmap_detail/' + beatmapId + '/tag_timestamps/save/';
 
     // UI: container under canvas
@@ -54,6 +54,7 @@
       plot: null, // set by rosu_graph.js via window.__ROSU_PLOT__
       consensus: [], // [{tag_id, tag_name, consensus_intervals}]
       user: [], // [{tag_id, tag_name, intervals}]
+      lastClockRate: 1,
     };
 
     function pxToTime(pxX) {
@@ -66,9 +67,11 @@
     }
 
     function redrawOverlay() {
-      // Expect rosu_graph.js to call this hook when it draws
+      // Defer to the next animation frame to avoid blocking UI mid-events
       var ov = window.__ROSU_OVERLAY__;
-      if (typeof ov === 'function') ov(state);
+      if (typeof ov !== 'function') return;
+      if (state._raf) cancelAnimationFrame(state._raf);
+      state._raf = requestAnimationFrame(function() { ov(state); });
     }
 
     var colorMap = {}; // tag_id -> { band, fade }
@@ -92,11 +95,41 @@
     var visibility = {}; // tag_id -> bool
 
     function loadData() {
-      fetch(tsUrl + '?user=me', { credentials: 'same-origin' })
+      // Abort previous fetch if any to avoid piling up when toggling quickly
+      if (state._abort && state._abort.abort) { try { state._abort.abort(); } catch (e) {} }
+      state._abort = new AbortController();
+      fetch(tsUrl, { credentials: 'same-origin', signal: state._abort.signal })
         .then(function (r) { return r.json(); })
-        .then(function (data) {
-          state.consensus = data.tags || [];
-          state.user = data.user || [];
+        .then(function (list) {
+          try {
+            // Build consensus list per unique tag from consolidated response
+            var tagMap = {};
+            (list || []).forEach(function (item) {
+              var t = (item && item.tag) || {};
+              var tid = t.id;
+              if (!tid) return;
+              if (!tagMap[tid]) tagMap[tid] = { tag_id: tid, tag_name: t.name || '', consensus_intervals: Array.isArray(t.consensus_intervals) ? t.consensus_intervals : [] };
+            });
+            state.consensus = Object.keys(tagMap).map(function (k) { return tagMap[k]; });
+
+            // Build current user's tag list from presence of tag.user_intervals (may be empty if not saved yet)
+            var seen = {};
+            var userEntries = [];
+            (list || []).forEach(function (item) {
+              var t = (item && item.tag) || {};
+              var tid = t.id;
+              var hasUser = t && Object.prototype.hasOwnProperty.call(t, 'user_intervals');
+              var ivs = Array.isArray(t.user_intervals) ? t.user_intervals : [];
+              if (tid && hasUser && !seen[tid]) {
+                seen[tid] = true;
+                userEntries.push({ tag_id: tid, tag_name: t.name || '', intervals: ivs });
+              }
+            });
+            state.user = userEntries;
+          } catch (e) {
+            state.consensus = [];
+            state.user = [];
+          }
           // populate tag picker with user's applied tags
           var options = ['<option value="">— Select tag to edit —</option>'];
           state.user.forEach(function (u) {
@@ -135,7 +168,9 @@
       state.editingTagId = this.value || '';
       saveBtn.disabled = !state.editingTagId;
       var found = state.user.find(function (u) { return String(u.tag_id) === String(state.editingTagId); });
-      state.intervals = found ? (found.intervals || []).slice() : [];
+      var cr = (state.plot && typeof state.plot.clockRate === 'number' && state.plot.clockRate > 0) ? state.plot.clockRate : 1;
+      var src = found ? (found.intervals || []).slice() : [];
+      state.intervals = src.map(function(iv){ return [iv[0] / cr, iv[1] / cr]; });
       redrawOverlay();
     });
 
@@ -225,6 +260,10 @@
 
     saveBtn.addEventListener('click', function () {
       if (!state.editingTagId) return;
+      // Disable button to prevent duplicate submissions
+      saveBtn.disabled = true;
+      var cr = (state.plot && typeof state.plot.clockRate === 'number' && state.plot.clockRate > 0) ? state.plot.clockRate : 1;
+      var intervalsReal = (state.intervals || []).map(function(iv){ return [iv[0] * cr, iv[1] * cr]; });
       fetch(saveUrl, {
         method: 'POST',
         credentials: 'same-origin',
@@ -233,12 +272,26 @@
           'X-Requested-With': 'XMLHttpRequest',
           'X-CSRFToken': getCookie('csrftoken') || getCookie('CSRF-TOKEN') || ''
         },
-        body: JSON.stringify({ tag_id: state.editingTagId, intervals: state.intervals, version: 1 }),
-      }).then(function (r) { return r.json(); }).then(function () { loadData(); });
+        body: JSON.stringify({ tag_id: state.editingTagId, intervals: intervalsReal, version: 1 }),
+      }).then(function (r) { return r.json(); })
+        .then(function () { loadData(); })
+        .catch(function () { /* ignore */ })
+        .finally(function () { saveBtn.disabled = false; });
     });
 
     // Expose a hook for rosu_graph to provide plotting metrics and to draw overlay
-    window.__SET_ROSU_PLOT__ = function (plot) { state.plot = plot; redrawOverlay(); };
+    window.__SET_ROSU_PLOT__ = function (plot) {
+      var prev = state.plot;
+      state.plot = plot;
+      var prevCr = (prev && typeof prev.clockRate === 'number' && prev.clockRate > 0) ? prev.clockRate : 1;
+      var newCr = (plot && typeof plot.clockRate === 'number' && plot.clockRate > 0) ? plot.clockRate : 1;
+      if (state.editingTagId && prevCr !== newCr && Array.isArray(state.intervals) && state.intervals.length) {
+        var scale = prevCr / newCr;
+        state.intervals = state.intervals.map(function(iv){ return [iv[0] * scale, iv[1] * scale]; });
+      }
+      state.lastClockRate = newCr;
+      redrawOverlay();
+    };
     window.__ROSU_OVERLAY__ = function () {
       var ctx = canvas.getContext('2d');
       if (!state.plot) return;
@@ -248,20 +301,23 @@
       var bottom = canvas.height - state.plot.padding.bottom;
       var plotW = state.plot.plotW;
       var minX = state.plot.minX, maxX = state.plot.maxX;
+      var clockRate = (typeof state.plot.clockRate === 'number' && state.plot.clockRate > 0) ? state.plot.clockRate : 1;
       function xScale(t) { return left + ((t - minX) / (maxX - minX || 1)) * plotW; }
       // Draw consensus bands (all tags)
       (state.consensus || []).forEach(function (tdata, idx) {
         if (visibility[tdata.tag_id] === false) return;
         var colors = tagColor(tdata.tag_id);
+        // Create vertical fade gradient once per tag (reused for all its intervals)
+        var fadeGrad = ctx.createLinearGradient(0, bottom - 6 * dpr, 0, top);
+        fadeGrad.addColorStop(0, colors.fade);
+        fadeGrad.addColorStop(1, 'rgba(0,0,0,0)');
         (tdata.consensus_intervals || []).forEach(function (iv) {
-          var x1 = xScale(iv[0]) * dpr, x2 = xScale(iv[1]) * dpr;
+          var t1 = iv[0] / clockRate, t2 = iv[1] / clockRate;
+          var x1 = xScale(t1) * dpr, x2 = xScale(t2) * dpr;
           ctx.fillStyle = colors.band;
           ctx.fillRect(x1, bottom - 6 * dpr, Math.max(1, x2 - x1), 6 * dpr);
-          // gradient up
-          var g = ctx.createLinearGradient(0, bottom - 6 * dpr, 0, top);
-          g.addColorStop(0, colors.fade);
-          g.addColorStop(1, 'rgba(0,0,0,0)');
-          ctx.fillStyle = g;
+          // gradient up (reuse per-tag gradient)
+          ctx.fillStyle = fadeGrad;
           ctx.fillRect(x1, top, Math.max(1, x2 - x1), bottom - top - 6 * dpr);
         });
       });
@@ -272,7 +328,8 @@
         var selColor = 'rgba(255,255,255,0.85)';
         var bandHeight = 10 * dpr;
         (state.intervals || []).forEach(function (iv) {
-          var x1 = xScale(iv[0]) * dpr, x2 = xScale(iv[1]) * dpr;
+          var t1 = iv[0], t2 = iv[1];
+          var x1 = xScale(t1) * dpr, x2 = xScale(t2) * dpr;
           // base band connecting bars
           ctx.fillStyle = 'rgba(255,255,255,0.25)';
           ctx.fillRect(x1, bottom - bandHeight, Math.max(1, x2 - x1), bandHeight);

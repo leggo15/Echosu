@@ -26,7 +26,7 @@ from rest_framework.decorators import (
     authentication_classes,
     permission_classes,
 )
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.response import Response
 
@@ -122,6 +122,18 @@ class TagApplicationViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = TagApplicationSerializer
     authentication_classes = [CustomTokenAuthentication, SessionAuthentication]
     permission_classes = [IsAuthenticated]
+    
+    def get_permissions(self):
+        """Allow unauthenticated read-only access when filtered by beatmap.
+        This enables public viewing of consensus tag timestamps on beatmap pages,
+        while keeping all write operations and unfiltered access locked down.
+        """
+        try:
+            if self.action == 'list' and self.request.method == 'GET' and 'beatmap_id' in self.request.query_params:
+                return [AllowAny()]
+        except Exception:
+            pass
+        return [IsAuthenticated()]
     
     def get_queryset(self):
         qs = super().get_queryset()

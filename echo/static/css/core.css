@@ -79,6 +79,10 @@ audio, input, select, textarea, button { color-scheme: inherit; }
   border-radius: 10px;
 }
 
+@media (max-width: 420px) {
+  .container { width: 100%; }
+}
+
 /* Navbar */
 nav { background-color: var(--nav-bg); padding: 10px 0; display: flex; justify-content: center; align-items: center; position: fixed; top: 0; left: 0; right: 0; z-index: 1000; }
 .nav-content { width: 80%; max-width: 1240px; display: flex; justify-content: space-between; align-items: center; }
@@ -363,3 +367,10 @@ nav { background-color: var(--nav-bg); padding: 10px 0; display: flex; justify-c
 /* Tag library search field */
 [data-theme="dark"] .search-field { background-color: #0f1a30 !important; color: var(--text) !important; border-color: var(--border) !important; }
 
+/* Mobile: prevent off-screen overflow for menus and panels */
+@media (max-width: 420px) {
+  .container { width: 92%; padding: 12px; }
+  .dropdown-content { min-width: auto; width: max(200px, 70vw); left: auto; right: 0; }
+  .floating-add-beatmap { right: 10px; min-width: 0; width: 84vw; }
+  .bulk-download-panel { right: 10px; width: 84vw; }
+}

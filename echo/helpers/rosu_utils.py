@@ -59,17 +59,12 @@ def _bin_mean(values: List[float], bin_size: int) -> List[float]:
 
 
 def _first_last_hitobject_ms_from_osu(osu_bytes: bytes) -> tuple[float, float]:
-    """Parse raw .osu to get earliest and latest non-spinner HitObject times in ms.
+    """Parse raw .osu to get earliest and latest HitObject times in ms.
 
-    Falls back to including spinners if no non-spinner objects are present.
     Returns (0.0, 0.0) on failure.
     """
-    # Track earliest/latest for non-spinner objects specifically
-    first_non_spinner_ms: Optional[float] = None
-    last_non_spinner_ms: Optional[float] = None
-    # Fallback: earliest/latest of any hitobject (including spinners)
-    first_any_ms: Optional[float] = None
-    last_any_ms: Optional[float] = None
+    first_ms: Optional[float] = None
+    last_ms: Optional[float] = None
     try:
         text = osu_bytes.decode('utf-8', errors='ignore')
         lines = text.splitlines()
@@ -84,32 +79,18 @@ def _first_last_hitobject_ms_from_osu(osu_bytes: bytes) -> tuple[float, float]:
             if not in_hit:
                 continue
             parts = s.split(',')
-            # Expected: x, y, time, type, hitsound, ...
-            if len(parts) >= 4:
+            if len(parts) >= 3:
                 try:
                     t = float(parts[2])
-                    # Update fallback any-object bounds
-                    if first_any_ms is None or t < first_any_ms:
-                        first_any_ms = t
-                    if last_any_ms is None or t > last_any_ms:
-                        last_any_ms = t
-                    # Determine if this object is a spinner (type bit 8)
-                    obj_type = int(parts[3])
-                    is_spinner = (obj_type & 8) != 0
-                    if not is_spinner:
-                        if first_non_spinner_ms is None or t < first_non_spinner_ms:
-                            first_non_spinner_ms = t
-                        if last_non_spinner_ms is None or t > last_non_spinner_ms:
-                            last_non_spinner_ms = t
+                    if first_ms is None or t < first_ms:
+                        first_ms = t
+                    if last_ms is None or t > last_ms:
+                        last_ms = t
                 except Exception:
-                    # Ignore malformed lines
                     pass
     except Exception:
         return 0.0, 0.0
-    # Prefer non-spinner bounds; otherwise fall back to any-object bounds
-    first_out = first_non_spinner_ms if first_non_spinner_ms is not None else first_any_ms
-    last_out = last_non_spinner_ms if last_non_spinner_ms is not None else last_any_ms
-    return float(first_out or 0.0), float(last_out or 0.0)
+    return float(first_ms or 0.0), float(last_ms or 0.0)
 
 
 def compute_timeseries_from_osu_bytes(
@@ -198,7 +179,7 @@ def compute_timeseries_from_osu_bytes(
                 total_binned = total_binned_all
 
             return {
-                "version": 4,
+                "version": 3,
                 "window_s": window_seconds,
                 "section_ms": section_ms,
                 "t0_s": t0_s,
@@ -235,7 +216,7 @@ def get_or_compute_timeseries(
             and "times_s" in ts
             and "total" in ts
             and int(ts.get("window_s") or 0) == int(window_seconds)
-            and int(ts.get("version") or 0) >= 4
+            and int(ts.get("version") or 0) >= 3
             and ts.get("t0_s") is not None
             and ts.get("t_end_s") is not None
         ):

@@ -173,3 +173,15 @@
   padding: 12px; 
   white-space: pre-wrap;
 }
+
+/* Extra-small phones: further compress pills and typography to avoid overflow */
+@media (max-width: 400px) {
+  .tag-card .pp-pill { min-width: 72px; }
+  .tag-card .pp-pill.pp-nm { min-width: 128px; max-width: 128px; }
+  .tag-card .pp-pill.pp-mini { min-width: 32px; max-width: 32px; }
+  .tag-card .pp-pill .pp-mod { font-size: 10px; }
+  .tag-card .pp-pill .pp-val { font-size: 12px; }
+  .tag-card .title { font-size: 20px; }
+  .tag-card .artist,
+  .tag-card .mapper { font-size: 14px; }
+}

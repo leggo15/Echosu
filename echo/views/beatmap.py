@@ -122,7 +122,6 @@ def beatmap_detail(request, beatmap_id):
     return render(request, 'beatmap_detail.html', context)
 
 
-@login_required
 @require_GET
 def beatmap_timeseries(request, beatmap_id: int):
     """Return cached or computed rosu difficulty time-series for a beatmap.

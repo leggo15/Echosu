@@ -121,3 +121,9 @@
 .search-row .search-btn:hover { background: #1f6fb2; }
 
 
+/* Narrow phones: stack search inputs to avoid horizontal overflow */
+@media (max-width: 420px) {
+  .search-row { flex-direction: column; gap: 8px; }
+  .search-row .search-btn { width: 100%; }
+}
+

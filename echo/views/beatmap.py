@@ -16,6 +16,7 @@ import re
 # Django imports
 # ---------------------------------------------------------------------------
 from django.db.models import Count
+from django.db import transaction
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, render, redirect
 from django.views.decorators.http import require_POST, require_GET
@@ -341,7 +342,9 @@ def update_beatmap_info(request):
         except Exception:
             pass
 
-        beatmap.save()
+        # Commit all field updates in a single transaction to minimise write lock time
+        with transaction.atomic():
+            beatmap.save()
         logger.info(f'Saved Beatmap with ID: {beatmap_id}')
 
         genres = fetch_genres(beatmap.artist, beatmap.title)
@@ -450,14 +453,14 @@ def quick_add_beatmap(request):
 
         beatmap.save()
 
-        # Warm caches for PP and timeseries so the detail page has data immediately
+        # Defer heavy PP/timeseries caching to background; avoid DB writes during request
         try:
-            get_or_compute_pp(beatmap)
-            get_or_compute_modded_pps(beatmap)
+            get_or_compute_pp(beatmap, persist=False)
+            get_or_compute_modded_pps(beatmap, persist=False)
         except Exception:
             pass
         try:
-            get_or_compute_timeseries(beatmap, window_seconds=1, mods=None)
+            get_or_compute_timeseries(beatmap, window_seconds=1, mods=None, persist=False)
         except Exception:
             pass
 

@@ -38,12 +38,14 @@ class APILoggingMiddleware(MiddlewareMixin):
         try:
             if getattr(request, 'path', '').startswith('/api/'):
                 user = getattr(request, '_api_user_for_logging', AnonymousUser())
-                APIRequestLog.objects.create(
-                    user=user if getattr(user, 'is_authenticated', False) else None,
-                    method=getattr(request, 'method', 'GET'),
-                    path=getattr(request, 'path', ''),
-                    status_code=getattr(response, 'status_code', None),
-                )
+                # Only log when a real authenticated user is attached
+                if getattr(user, 'is_authenticated', False):
+                    APIRequestLog.objects.create(
+                        user=user,
+                        method=getattr(request, 'method', 'GET'),
+                        path=getattr(request, 'path', ''),
+                        status_code=getattr(response, 'status_code', None),
+                    )
         except Exception:
             pass
         return response

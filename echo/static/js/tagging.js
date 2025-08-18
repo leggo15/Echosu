@@ -15,6 +15,7 @@
     var $applied = $card.find('.applied-tags');
     var csrf = $wrapper.find('input[name=csrfmiddlewaretoken]').val() || $('input[name=csrfmiddlewaretoken]').val();
     var isAuthenticated = Boolean(csrf);
+    var refreshDebounceTimer = null;
 
     function searchTags(query) {
       if (!query) { $list.empty(); return; }
@@ -201,9 +202,13 @@
       $.ajax({
         type: 'POST', url: '/modify_tag/',
         data: { action: action, tag: tagName, beatmap_id: beatmapId, csrfmiddlewaretoken: csrf }
-      }).done(function() { 
-        // Refresh tags after modification
-        refreshTags(); 
+      }).done(function() {
+        // Debounce UI refresh to coalesce rapid toggles, and update only this card.
+        if (refreshDebounceTimer) { clearTimeout(refreshDebounceTimer); }
+        refreshDebounceTimer = setTimeout(function(){
+          refreshTagsIndividual(beatmapId);
+          refreshDebounceTimer = null;
+        }, 120);
       });
     }
 

@@ -246,9 +246,9 @@ def search_results(request):
                     tag_weight=(
                         (F('weighted_exact_distinct') * Value(1.5) + # distinct exact tag names (first copy only)
                          F('weighted_exact_total_surplus') * Value(0.5) + # extra apps beyond first per exact tag
-                         F('weighted_tag_match') * Value(0.1)) / # distinct non-exact tag matches
+                         F('weighted_tag_match') * Value(0.2)) / # distinct non-exact tag matches
                         (
-                            (F('tag_miss_match_count') * Value(1.75)) + # distinct search tags not present on map
+                            (F('tag_miss_match_count') * Value(1.5)) + # distinct search tags not present on map
                             (F('tag_surplus_count_distinct') * Value(0.5)) + # distinct extra tag names on map not in the search
                             (F('tag_surplus_count') * Value(1.12)) + # extra duplicate applications beyond first of tags not in the search
                             Value(1.0) # base to avoid division by zero when perfect matches and no surplus

@@ -55,23 +55,38 @@ def get_tags(request):
     include_predicted = False if (_ip is not None and str(_ip).lower() in ['0', 'false', 'off']) else True
 
     # Fetch all tag applications for this beatmap with optimized queries
-    applications = (
+    applications = list(
         TagApplication.objects
         .filter(beatmap=beatmap)
         .select_related('tag', 'tag__description_author')
         .only('user_id', 'tag__id', 'tag__name', 'tag__description', 'tag__description_author__username')
     )
 
-    # Build structures: user-applied counts (exclude predictions), prediction presence per tag
+    # Build structures in a single pass: user-applied counts, predictions, and description data
     user_counts = {}
     has_prediction = {}
     user_tag_names = set()
-    
+    # Prefer user-authored description when available; else fall back to any description
+    desc_by_name_user = {}
+    desc_by_name_pred = {}
+
+    current_user_id = getattr(user, 'id', None)
     for app in applications:
         tag_name = app.tag.name
+        # Cache descriptions to avoid O(N^2) lookups later
+        if app.tag.description:
+            author_name = getattr(app.tag.description_author, 'username', '') if app.tag.description_author else ''
+            if app.user_id:
+                # Prefer description data from any user-applied instance
+                if tag_name not in desc_by_name_user:
+                    desc_by_name_user[tag_name] = (app.tag.description, author_name)
+            else:
+                if tag_name not in desc_by_name_pred:
+                    desc_by_name_pred[tag_name] = (app.tag.description, author_name)
+
         if app.user_id:
             user_counts[tag_name] = user_counts.get(tag_name, 0) + 1
-            if app.user_id == user.id:
+            if current_user_id and app.user_id == current_user_id:
                 user_tag_names.add(tag_name)
         else:
             # user is null → predicted
@@ -80,28 +95,30 @@ def get_tags(request):
     # Construct response: include predicted-only tags as orange unless any user has applied
     tags = []
     
-    # Add user-applied tags
+    # Add user-applied tags (prefer description from user-applied entries when available)
     for tag_name, count in user_counts.items():
+        desc, author = desc_by_name_user.get(tag_name) or desc_by_name_pred.get(tag_name) or ('', '')
         tags.append({
             'name': tag_name,
             'is_applied_by_user': tag_name in user_tag_names,
             'is_predicted': False,
             'apply_count': count,
-            'description': next((app.tag.description for app in applications if app.tag.name == tag_name and app.user_id), ''),
-            'description_author': next((getattr(app.tag.description_author, 'username', '') for app in applications if app.tag.name == tag_name and app.user_id), '')
+            'description': desc,
+            'description_author': author,
         })
     
     # Add predicted tags if enabled
     if include_predicted:
         for tag_name in has_prediction:
             if tag_name not in user_counts:  # Only add if no user has applied
+                desc, author = desc_by_name_pred.get(tag_name) or ('', '')
                 tags.append({
                     'name': tag_name,
                     'is_applied_by_user': False,
                     'is_predicted': True,
                     'apply_count': 0,
-                    'description': next((app.tag.description for app in applications if app.tag.name == tag_name and not app.user_id), ''),
-                    'description_author': next((getattr(app.tag.description_author, 'username', '') for app in applications if app.tag.name == tag_name and not app.user_id), '')
+                    'description': desc,
+                    'description_author': author,
                 })
     
     # Sort by apply count (descending), then by name
@@ -136,7 +153,7 @@ def get_tags_bulk(request):
     include_predicted = False if (_ip is not None and str(_ip).lower() in ['0', 'false', 'off']) else True
     
     # Single query for all tag applications with related data
-    tag_apps = (
+    tag_apps = list(
         TagApplication.objects
         .filter(beatmap__beatmap_id__in=beatmap_ids)
         .select_related('beatmap', 'tag', 'tag__description_author')
@@ -155,42 +172,36 @@ def get_tags_bulk(request):
     # Build response structure efficiently
     result = {bm_id: [] for bm_id in beatmap_ids}
     
-    # Process tag applications and build tag data
-    tag_data = defaultdict(lambda: defaultdict(list))
+    # Process tag applications and build tag data using counters instead of lists
+    tag_data = defaultdict(lambda: defaultdict(lambda: {
+        'name': '', 'is_applied_by_user': False, 'is_predicted': False,
+        'apply_count': 0, 'description': '', 'description_author': ''
+    }))
     for app in tag_apps:
         bm_id = app.beatmap.beatmap_id
         tag_name = app.tag.name
-        
+        entry = tag_data[bm_id][tag_name]
+        if not entry['name']:
+            entry['name'] = tag_name
+        # Cache description data once
+        if not entry['description'] and app.tag.description:
+            entry['description'] = app.tag.description
+            entry['description_author'] = getattr(app.tag.description_author, 'username', '') if app.tag.description_author else ''
         if app.user_id:
-            # User-applied tag
-            tag_data[bm_id][tag_name].append({
-                'name': tag_name,
-                'is_applied_by_user': (bm_id, tag_name) in user_tags,
-                'is_predicted': False,
-                'apply_count': 1,
-                'description': app.tag.description or '',
-                'description_author': getattr(app.tag.description_author, 'username', '') if app.tag.description_author else ''
-            })
+            entry['apply_count'] += 1
+            # Mark as applied by current user if applicable
+            if (bm_id, tag_name) in user_tags:
+                entry['is_applied_by_user'] = True
         elif include_predicted:
-            # Predicted tag
-            tag_data[bm_id][tag_name].append({
-                'name': tag_name,
-                'is_applied_by_user': False,
-                'is_predicted': True,
-                'apply_count': 1,
-                'description': app.tag.description or '',
-                'description_author': getattr(app.tag.description_author, 'username', '') if app.tag.description_author else ''
-            })
-    
-    # Aggregate apply counts and build final response
+            # Keep predicted flag; count predicted as 1 for display parity with previous behavior
+            entry['is_predicted'] = True
+            if entry['apply_count'] == 0:
+                entry['apply_count'] = 1
+
+    # Finalize per-beatmap lists
     for bm_id, tags_for_bm in tag_data.items():
-        final_tags = []
-        for tag_name, tag_instances in tags_for_bm.items():
-            if tag_instances:
-                base_tag = tag_instances[0].copy()
-                base_tag['apply_count'] = len(tag_instances)
-                final_tags.append(base_tag)
-        result[bm_id] = sorted(final_tags, key=lambda x: (-x['apply_count'], x['name']))
+        final_tags = sorted(tags_for_bm.values(), key=lambda x: (-x['apply_count'], x['name']))
+        result[bm_id] = final_tags
     
     return JsonResponse({'tags': result})
 # ----------------------------- Ownership editing ----------------------------- #

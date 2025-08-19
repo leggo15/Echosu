@@ -51,7 +51,28 @@ class BeatmapAdmin(admin.ModelAdmin):
         t.start()
         self.message_user(request, 'Background refresh started. You may close this tab.')
         return redirect('..')
-admin.site.register(UserProfile)
+
+@admin.register(UserProfile)
+class UserProfileAdmin(admin.ModelAdmin):
+    list_display = ('get_username', 'osu_id', 'banned', 'get_date_joined', 'get_last_login')
+    search_fields = ('user__username', 'osu_id')
+    list_filter = ('banned',)
+    list_select_related = ('user',)
+
+    def get_username(self, obj):
+        return obj.user.username
+    get_username.admin_order_field = 'user__username'
+    get_username.short_description = 'Username'
+
+    def get_date_joined(self, obj):
+        return obj.user.date_joined
+    get_date_joined.admin_order_field = 'user__date_joined'
+    get_date_joined.short_description = 'Date joined'
+
+    def get_last_login(self, obj):
+        return obj.user.last_login
+    get_last_login.admin_order_field = 'user__last_login'
+    get_last_login.short_description = 'Last login'
 admin.site.register(Tag)
 admin.site.register(TagDescriptionHistory)
 admin.site.register(TagApplication)

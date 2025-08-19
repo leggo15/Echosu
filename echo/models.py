@@ -33,7 +33,6 @@ class Beatmap(models.Model):
     playcount = models.IntegerField(null=True, blank=True, db_index=True)
     favourite_count = models.IntegerField(null=True, blank=True, db_index=True)
     last_updated = models.DateTimeField(null=True, blank=True, db_index=True)
-    rosu_timeseries = models.JSONField(default=dict, blank=True, null=True)
     pp_nomod = models.FloatField(null=True, blank=True, db_index=True)
     pp_hd = models.FloatField(null=True, blank=True, db_index=True)
     pp_hr = models.FloatField(null=True, blank=True, db_index=True)

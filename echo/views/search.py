@@ -422,7 +422,7 @@ def search_results(request):
     # Expose predicted_mode via context only
 
     # Lightweight queryset hints to avoid unnecessary payloads/N+1s
-    beatmaps = beatmaps.defer('rosu_timeseries').prefetch_related('genres')
+    beatmaps = beatmaps.prefetch_related('genres')
 
     # Server-side paginate to a modest page size to reduce template rendering cost
     paginator = Paginator(beatmaps, 10)

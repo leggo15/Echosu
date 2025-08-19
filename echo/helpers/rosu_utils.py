@@ -1,13 +1,14 @@
 """Utilities for computing and caching osu! difficulty time-series using rosu-pp.
 
 This module downloads .osu files to the configured default storage (S3 in prod),
-parses them with rosu_pp_py, computes binned mean strains for aim and speed over
-10-second windows, and stores the result on the `Beatmap.rosu_timeseries` field.
+parses them with rosu_pp_py, computes binned mean strains for aim and speed, and
+persists the resulting time-series as JSON files in S3 rather than the database.
 """
 
 from __future__ import annotations
 
 import math
+import json
 import tempfile
 from typing import Dict, List, Optional
 
@@ -23,10 +24,16 @@ except Exception:  # pragma: no cover - handled gracefully in callers
 
 OSU_DOWNLOAD_URL_TMPL = "https://osu.ppy.sh/osu/{beatmap_id}"
 STORAGE_OSU_DIR = "beatmaps/osu_files"
+STORAGE_TS_DIR = "beatmaps/timeseries"
 
 
 def _storage_key_for_osu(beatmap_id: str | int) -> str:
     return f"{STORAGE_OSU_DIR}/{beatmap_id}.osu"
+
+
+def _timeseries_storage_key(beatmap_id: str | int, window_seconds: int, mods: Optional[str]) -> str:
+    mods_token = (mods or "").strip().upper() or "NOMOD"
+    return f"{STORAGE_TS_DIR}/{beatmap_id}/w{int(window_seconds)}_{mods_token}.json"
 
 
 def ensure_osu_file_available(beatmap_id: str | int) -> Optional[str]:
@@ -203,24 +210,51 @@ def get_or_compute_timeseries(
     window_seconds: int = 5,
     mods: Optional[str] = None,
 ) -> Optional[Dict]:
-    """Fetch or compute and persist the timeseries for a Beatmap instance."""
+    """Fetch or compute the timeseries for a Beatmap instance.
+
+    Persistence strategy:
+      - Prefer reading from S3 (default_storage) at a deterministic path
+      - If missing, compute from the .osu file and write JSON to S3
+      - For legacy installs, if a DB-cached nomod timeseries exists, return it
+        and opportunistically upload it to S3 for future requests
+    """
     # Only compute for osu! standard for now
     if getattr(beatmap, "mode", None) and str(beatmap.mode).lower() not in ("osu", "standard", "std", "0"):
         return None
 
-    # Only use cached nomod timeseries when no mods requested
-    if mods in (None, "") and getattr(beatmap, "rosu_timeseries", None):
-        ts = beatmap.rosu_timeseries or {}
-        if (
-            isinstance(ts, dict)
-            and "times_s" in ts
-            and "total" in ts
-            and int(ts.get("window_s") or 0) == int(window_seconds)
-            and int(ts.get("version") or 0) >= 3
-            and ts.get("t0_s") is not None
-            and ts.get("t_end_s") is not None
-        ):
-            return ts
+    # Prefer S3-cached JSON
+    key = _timeseries_storage_key(beatmap.beatmap_id, window_seconds, mods)
+    try:
+        if default_storage.exists(key):
+            with default_storage.open(key, "rb") as fh:
+                data = fh.read()
+                try:
+                    return json.loads(data.decode("utf-8"))
+                except Exception:
+                    # Corrupt JSON → fall through to recompute
+                    pass
+    except Exception:
+        # Storage access failure → fall through to legacy/compute paths
+        pass
+
+    # Legacy fallback: use DB field if present for nomod and seed S3
+    if mods in (None, ""):
+        legacy = getattr(beatmap, "rosu_timeseries", None)
+        if isinstance(legacy, dict):
+            try:
+                if (
+                    "times_s" in legacy
+                    and "total" in legacy
+                    and int(legacy.get("window_s") or 0) == int(window_seconds)
+                    and int(legacy.get("version") or 0) >= 3
+                ):
+                    try:
+                        default_storage.save(key, ContentFile(json.dumps(legacy).encode("utf-8")))
+                    except Exception:
+                        pass
+                    return legacy
+            except Exception:
+                pass
 
     storage_name = ensure_osu_file_available(beatmap.beatmap_id)
     if not storage_name:
@@ -240,13 +274,18 @@ def get_or_compute_timeseries(
     if ts is None:
         return None
 
-    # Persist only for nomod baseline to avoid ballooning model size
-    if mods in (None, ""):
+    # Persist JSON to S3 for all variants (nomod and modded)
+    try:
         try:
-            beatmap.rosu_timeseries = ts
-            beatmap.save(update_fields=["rosu_timeseries"])
+            # Ensure stable key without versioned suffixes when FILE_OVERWRITE=False
+            default_storage.delete(key)
         except Exception:
             pass
+        payload = json.dumps(ts, separators=(",", ":")).encode("utf-8")
+        default_storage.save(key, ContentFile(payload))
+    except Exception:
+        # Best-effort persistence; still return the computed value
+        pass
     return ts
 
 

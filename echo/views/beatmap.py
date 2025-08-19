@@ -453,14 +453,14 @@ def quick_add_beatmap(request):
 
         beatmap.save()
 
-        # Defer heavy PP/timeseries caching to background; avoid DB writes during request
+        # Warm heavy caches without additional DB writes (timeseries stored in S3)
         try:
-            get_or_compute_pp(beatmap, persist=False)
-            get_or_compute_modded_pps(beatmap, persist=False)
+            get_or_compute_pp(beatmap)
+            get_or_compute_modded_pps(beatmap)
         except Exception:
             pass
         try:
-            get_or_compute_timeseries(beatmap, window_seconds=1, mods=None, persist=False)
+            get_or_compute_timeseries(beatmap, window_seconds=1, mods=None)
         except Exception:
             pass
 

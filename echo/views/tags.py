@@ -249,7 +249,7 @@ def edit_ownership(request):
             # Fallback: keep input as name if not found
             return raw, None
 
-    # Set owner has full control; check this branch first
+    # Set owner has full control
     if is_set_owner:
         if not new_owner:
             return JsonResponse({'status': 'error', 'message': 'New owner required.'}, status=400)
@@ -259,7 +259,24 @@ def edit_ownership(request):
         bm.listed_owner = new_name
         bm.listed_owner_id = new_id
         bm.creator = new_name
-        bm.save(update_fields=['listed_owner', 'listed_owner_id', 'creator'])
+        # Mark owner-edited to lock out admin edits later and block refresh overwrite
+        bm.listed_owner_is_manual_override = True
+        bm.listed_owner_edited_by_owner = True
+        bm.save(update_fields=['listed_owner', 'listed_owner_id', 'creator', 'listed_owner_is_manual_override', 'listed_owner_edited_by_owner'])
+        return JsonResponse({'status': 'success', 'listed_owner': bm.listed_owner, 'listed_owner_id': bm.listed_owner_id})
+
+    # Admins may edit only if set owner hasn't edited yet
+    if request.user.is_staff and not bm.listed_owner_edited_by_owner:
+        if not new_owner:
+            return JsonResponse({'status': 'error', 'message': 'New owner required.'}, status=400)
+        new_name, new_id = resolve_user_by_input(new_owner)
+        if not new_name:
+            return JsonResponse({'status': 'error', 'message': 'Invalid owner input.'}, status=400)
+        bm.listed_owner = new_name
+        bm.listed_owner_id = new_id
+        bm.creator = new_name
+        bm.listed_owner_is_manual_override = True
+        bm.save(update_fields=['listed_owner', 'listed_owner_id', 'creator', 'listed_owner_is_manual_override'])
         return JsonResponse({'status': 'success', 'listed_owner': bm.listed_owner, 'listed_owner_id': bm.listed_owner_id})
 
     # Listed owner can only hand ownership back to set owner
@@ -273,7 +290,9 @@ def edit_ownership(request):
         bm.listed_owner = set_owner_name
         bm.listed_owner_id = set_owner_id
         bm.creator = set_owner_name
-        bm.save(update_fields=['listed_owner', 'listed_owner_id', 'creator'])
+        # Handing back is also a manual action by listed owner; do not flag owner-edited
+        bm.listed_owner_is_manual_override = True
+        bm.save(update_fields=['listed_owner', 'listed_owner_id', 'creator', 'listed_owner_is_manual_override'])
         return JsonResponse({'status': 'success', 'listed_owner': bm.listed_owner, 'listed_owner_id': bm.listed_owner_id})
 
     return JsonResponse({'status': 'forbidden', 'message': 'Insufficient permissions'}, status=403)

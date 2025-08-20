@@ -305,20 +305,24 @@ def update_beatmap_info(request):
                     if guest_only.endswith(suffix):
                         guest_only = guest_only[: -len(suffix)]
                 beatmap.creator = guest_only
-                beatmap.listed_owner = guest_only
-                beatmap.listed_owner_id = None  # unknown guest id list string at difficulty mix
+                if not getattr(beatmap, 'listed_owner_is_manual_override', False):
+                    beatmap.listed_owner = guest_only
+                    beatmap.listed_owner_id = None  # unknown guest id list string at difficulty mix
             else:
                 owner_name = set_owner_name or computed_creator
                 beatmap.creator = owner_name
-                beatmap.listed_owner = owner_name
-                # Capture listed owner id as set owner id by default (when assigning display owner as owner)
-                try:
-                    beatmap.listed_owner_id = str(set_owner_id or '')
-                except Exception:
-                    pass
+                # Only update listed owner if not manually overridden
+                if not getattr(beatmap, 'listed_owner_is_manual_override', False):
+                    beatmap.listed_owner = owner_name
+                    # Capture listed owner id as set owner id by default (when assigning display owner as owner)
+                    try:
+                        beatmap.listed_owner_id = str(set_owner_id or '')
+                    except Exception:
+                        pass
         except Exception:
             beatmap.creator = computed_creator
-            beatmap.listed_owner = computed_creator
+            if not getattr(beatmap, 'listed_owner_is_manual_override', False):
+                beatmap.listed_owner = computed_creator
         beatmap.cover_image_url = getattr(
             beatmap_data._beatmapset.covers, 'cover_2x', None
         )
@@ -409,15 +413,16 @@ def quick_add_beatmap(request):
         if not beatmap.original_creator:
             beatmap.original_creator = getattr(bm._beatmapset, 'creator', None)
         beatmap.creator = join_diff_creators(bm)
-        # Default listed_owner/id to set owner if not set
-        if not beatmap.listed_owner:
-            owner_name = getattr(bm._beatmapset, 'creator', None) or beatmap.creator
-            owner_id = getattr(bm._beatmapset, 'user_id', None)
-            beatmap.listed_owner = owner_name
-            try:
-                beatmap.listed_owner_id = str(owner_id or '')
-            except Exception:
-                pass
+        # Default listed_owner/id to set owner if not set and not overridden
+        if not getattr(beatmap, 'listed_owner_is_manual_override', False):
+            if not beatmap.listed_owner:
+                owner_name = getattr(bm._beatmapset, 'creator', None) or beatmap.creator
+                owner_id = getattr(bm._beatmapset, 'user_id', None)
+                beatmap.listed_owner = owner_name
+                try:
+                    beatmap.listed_owner_id = str(owner_id or '')
+                except Exception:
+                    pass
 
         beatmap.cover_image_url = getattr(getattr(bm._beatmapset, 'covers', None), 'cover_2x', None)
         beatmap.version = getattr(bm, 'version', beatmap.version)

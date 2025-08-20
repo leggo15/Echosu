@@ -748,14 +748,15 @@ def admin_refresh_beatmaps(request):
                     except Exception:
                         pass
 
-                # Ensure listed owner fields are populated every refresh
-                try:
-                    preferred_name = (beatmap.original_creator or '').strip() or (beatmap.creator or '').strip() or (set_owner_name or '')
-                    preferred_id = (beatmap.original_creator_id or '') or (str(set_owner_id) if set_owner_id else '')
-                    beatmap.listed_owner = preferred_name
-                    beatmap.listed_owner_id = preferred_id or None
-                except Exception:
-                    pass
+                # Ensure listed owner fields are populated every refresh, unless manually overridden
+                if not getattr(beatmap, 'listed_owner_is_manual_override', False):
+                    try:
+                        preferred_name = (beatmap.original_creator or '').strip() or (beatmap.creator or '').strip() or (set_owner_name or '')
+                        preferred_id = (beatmap.original_creator_id or '') or (str(set_owner_id) if set_owner_id else '')
+                        beatmap.listed_owner = preferred_name
+                        beatmap.listed_owner_id = preferred_id or None
+                    except Exception:
+                        pass
 
                 beatmap.version = getattr(beatmap_data, 'version', beatmap.version)
                 beatmap.total_length = getattr(beatmap_data, 'total_length', beatmap.total_length)

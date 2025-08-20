@@ -304,37 +304,36 @@
 
     // Ownership edit inline controls
     $wrapper.on('click', '.mapper-edit-btn', function(){
-      var $btn = $(this);
-      var $input = $card.find('.mapper-edit-input');
-      var $save = $card.find('.mapper-save-btn');
+      var $container = $(this).closest('.tag-card');
+      var $input = $container.find('.mapper-edit-input');
+      var $save = $container.find('.mapper-save-btn');
       $input.show();
       $save.show();
       $input.focus();
     });
 
     $wrapper.on('click', '.mapper-save-btn', function(){
-      var role = $card.find('.mapper-edit-btn').data('role');
-      var $input = $card.find('.mapper-edit-input');
+      var $container = $(this).closest('.tag-card');
+      var role = $container.find('.mapper-edit-btn').data('role');
+      var $input = $container.find('.mapper-edit-input');
       var newOwnerId = ($input.val() || '').trim();
       // If listed owner: the backend requires set owner (id or name) to hand back
       if (role === 'listed_owner') {
-        var setOwner = $card.find('.mapper-edit-btn').data('set-owner') || '';
-        // When handing back, allow prefill with set owner id if input empty
+        var setOwner = $container.find('.mapper-edit-btn').data('set-owner') || '';
         if (!newOwnerId) newOwnerId = setOwner;
       }
       if (!newOwnerId) return;
+      var targetBeatmapId = $container.data('beatmap-id') || ($container.attr('id') ? $container.attr('id').split('-').pop() : beatmapId);
       $.post('/edit_ownership/', {
-        beatmap_id: beatmapId,
+        beatmap_id: targetBeatmapId,
         new_owner: newOwnerId,
         csrfmiddlewaretoken: csrf
       }).done(function(resp){
-        // Update mapper text inline
         var name = resp.listed_owner || newOwnerId;
-        var $disp = $card.find('.mapper-display');
+        var $disp = $container.find('.mapper-display');
         $disp.text(name);
-        // Reset UI
         $input.hide();
-        $card.find('.mapper-save-btn').hide();
+        $container.find('.mapper-save-btn').hide();
       }).fail(function(err){
         alert((err.responseJSON && err.responseJSON.message) || 'Failed to update ownership');
       });

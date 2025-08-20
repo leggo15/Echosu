@@ -69,12 +69,12 @@
         </span>
         {% if user.is_authenticated %}
           {% with set_owner=beatmap.original_creator|default:'' listed_owner=beatmap.listed_owner|default:beatmap.creator current_user=user.username %}
-            {% if current_user == set_owner or current_user == listed_owner %}
+            {% if current_user == set_owner or current_user == listed_owner or user.is_staff and not beatmap.listed_owner_edited_by_owner %}
               <button class="mapper-edit-btn" type="button" title="Edit mapper" aria-label="Edit mapper"
                 data-beatmap-id="{{ beatmap.beatmap_id }}"
                 data-set-owner="{{ set_owner }}"
                 data-listed-owner="{{ listed_owner }}"
-                data-role="{% if current_user == set_owner and current_user != listed_owner %}set_owner{% else %}listed_owner{% endif %}">
+                data-role="{% if current_user == set_owner and current_user != listed_owner %}set_owner{% elif user.is_staff %}admin{% else %}listed_owner{% endif %}">
                 ✎
               </button>
               <input type="text" class="mapper-edit-input" value="{{ beatmap.listed_owner_id|default:'' }}" placeholder="User ID" style="display:none; width:110px; margin-left:6px;">

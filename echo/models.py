@@ -20,6 +20,10 @@ class Beatmap(models.Model):
     original_creator_id = models.CharField(max_length=50, null=True, blank=True, db_index=True)
     listed_owner = models.CharField(max_length=255, null=True, blank=True, db_index=True)
     listed_owner_id = models.CharField(max_length=50, null=True, blank=True, db_index=True)
+    # True if `listed_owner` was set manually (by set owner or admin). Prevents API refresh from overwriting.
+    listed_owner_is_manual_override = models.BooleanField(default=False, db_index=True)
+    # True if the set owner has explicitly edited `listed_owner`. Used to block admin edits afterwards.
+    listed_owner_edited_by_owner = models.BooleanField(default=False, db_index=True)
     cover_image_url = models.URLField(max_length=1000, null=True, blank=True)
     total_length = models.IntegerField(null=True, blank=True)
     bpm = models.FloatField(null=True, blank=True)

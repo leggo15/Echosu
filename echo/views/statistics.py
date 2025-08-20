@@ -4,6 +4,7 @@ from __future__ import annotations
 
 # Standard library
 from typing import Iterable, List, Tuple
+import re
 
 # Third-party
 from ossapi.enums import ScoreType, GameMode, UserBeatmapType, UserLookupKey
@@ -236,8 +237,9 @@ def statistics(request: HttpRequest):
 
     if username:
         # -------------------- Mapper Statistics --------------------
-        # Only consider maps where this user is the listed owner (by id)
-        user_maps = Beatmap.objects.filter(listed_owner_id=str(osu_id))
+        # Only consider maps where this user is the listed owner (by id).
+        # Support CSV ids when multiple owners are present.
+        user_maps = Beatmap.objects.filter(listed_owner_id__regex=r'(^|,)\s*%s(\s*,|$)' % re.escape(str(osu_id)))
 
         mapper_tag_rows = (
             TagApplication.objects
@@ -252,7 +254,7 @@ def statistics(request: HttpRequest):
         # Click-through queries: "{listed_owner}" .{tag}
         def _enc(n: str) -> str:
             return f'"{n}"' if ' ' in n else n
-        listed_owner_name = user_maps.values_list('listed_owner', flat=True).first() or username
+        listed_owner_name = (user_maps.values_list('listed_owner', flat=True).first() or username)
         mapper_click_queries = [f"{_enc(listed_owner_name)} .{_enc(t)}" for t in mapper_labels]
 
         # Most/least representative among this mapper's maps

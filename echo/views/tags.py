@@ -231,7 +231,12 @@ def edit_ownership(request):
     current_osu_id = str(request.session.get('osu_id') or '')
 
     is_set_owner = (current_username_l == set_owner_name.lower()) or (current_osu_id and current_osu_id == set_owner_id)
-    is_listed_owner = (current_username_l == listed_owner_name.lower()) or (current_osu_id and current_osu_id == listed_owner_id)
+    # Support multi-listed owners stored as comma-separated names/ids
+    def _split_csv(val: str):
+        return [x.strip() for x in (val or '').split(',') if x and x.strip()]
+    listed_names = [x.lower() for x in _split_csv(listed_owner_name)] if ',' in listed_owner_name else [listed_owner_name.lower()] if listed_owner_name else []
+    listed_ids = _split_csv(listed_owner_id)
+    is_listed_owner = (current_username_l in listed_names) or (current_osu_id and current_osu_id in listed_ids)
 
     def resolve_user_by_input(raw: str):
         raw = (raw or '').strip()
@@ -249,16 +254,48 @@ def edit_ownership(request):
             # Fallback: keep input as name if not found
             return raw, None
 
+    def parse_multi_owner_input(raw: str):
+        """Parse input that may be a brace/comma list like "{1, 2}" or "name1, name2".
+        Returns (names_list, ids_list) preserving order and removing duplicates.
+        """
+        text = (raw or '').strip()
+        if not text:
+            return [], []
+        # Strip enclosing braces if present
+        if text.startswith('{') and text.endswith('}'):
+            text = text[1:-1]
+        tokens = [t.strip() for t in text.split(',') if t.strip()] if (',' in text) else [text]
+        seen_ids = set()
+        seen_names = set()
+        names_out, ids_out = [], []
+        for tok in tokens:
+            name, oid = resolve_user_by_input(tok)
+            # Normalise
+            name_key = (name or '').lower().strip()
+            if oid:
+                if oid in seen_ids:
+                    continue
+                seen_ids.add(oid)
+            if name_key:
+                if name_key in seen_names and not oid:
+                    continue
+                seen_names.add(name_key)
+            if name:
+                names_out.append(name)
+            if oid:
+                ids_out.append(oid)
+        return names_out, ids_out
+
     # Set owner has full control
     if is_set_owner:
         if not new_owner:
             return JsonResponse({'status': 'error', 'message': 'New owner required.'}, status=400)
-        new_name, new_id = resolve_user_by_input(new_owner)
-        if not new_name:
+        names, ids = parse_multi_owner_input(new_owner)
+        if not names:
             return JsonResponse({'status': 'error', 'message': 'Invalid owner input.'}, status=400)
-        bm.listed_owner = new_name
-        bm.listed_owner_id = new_id
-        bm.creator = new_name
+        bm.listed_owner = ', '.join(names)
+        bm.listed_owner_id = ','.join(ids) if ids else ''
+        bm.creator = bm.listed_owner
         # Mark owner-edited to lock out admin edits later and block refresh overwrite
         bm.listed_owner_is_manual_override = True
         bm.listed_owner_edited_by_owner = True
@@ -269,12 +306,12 @@ def edit_ownership(request):
     if request.user.is_staff and not bm.listed_owner_edited_by_owner:
         if not new_owner:
             return JsonResponse({'status': 'error', 'message': 'New owner required.'}, status=400)
-        new_name, new_id = resolve_user_by_input(new_owner)
-        if not new_name:
+        names, ids = parse_multi_owner_input(new_owner)
+        if not names:
             return JsonResponse({'status': 'error', 'message': 'Invalid owner input.'}, status=400)
-        bm.listed_owner = new_name
-        bm.listed_owner_id = new_id
-        bm.creator = new_name
+        bm.listed_owner = ', '.join(names)
+        bm.listed_owner_id = ','.join(ids) if ids else ''
+        bm.creator = bm.listed_owner
         bm.listed_owner_is_manual_override = True
         bm.save(update_fields=['listed_owner', 'listed_owner_id', 'creator', 'listed_owner_is_manual_override'])
         return JsonResponse({'status': 'success', 'listed_owner': bm.listed_owner, 'listed_owner_id': bm.listed_owner_id})

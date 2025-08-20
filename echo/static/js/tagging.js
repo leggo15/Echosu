@@ -320,6 +320,7 @@
       // If listed owner: the backend requires set owner (id or name) to hand back
       if (role === 'listed_owner') {
         var setOwner = $container.find('.mapper-edit-btn').data('set-owner') || '';
+        // For multi-owner input we preserve braces/commas; only prefill when EMPTY
         if (!newOwnerId) newOwnerId = setOwner;
       }
       if (!newOwnerId) return;

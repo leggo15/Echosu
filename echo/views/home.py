@@ -44,13 +44,6 @@ from .shared import (
 from ..helpers.rosu_utils import get_or_compute_pp
 
 
-# ---------------------------------------------------------------------------
-# Simple page views
-# ---------------------------------------------------------------------------
-
-# Removed: legacy home view (no template)
-
-
 def about(request):
     '''Render the about page.'''
     return render(request, 'about.html')
@@ -59,9 +52,6 @@ def about(request):
 def admin(request):
     '''Redirect to the admin panel.'''
     return redirect('/admin/')
-
-
-# Removed: duplicate; keep single source in pages.py
 
 
 def tag_library(request):
@@ -119,36 +109,3 @@ def tag_library(request):
     }
 
     return render(request, 'tag_library.html', context)
-
-
-# Removed: duplicate; keep single source in pages.py
-
-# ---------------------------------------------------------------------------
-# Tag helpers
-# ---------------------------------------------------------------------------
-
-# Removed: tag helpers no longer used
-
-
-# ---------------------------------------------------------------------------
-# Recommendation helpers
-# ---------------------------------------------------------------------------
-
-# Removed: annotate helpers no longer used
-
-
-# Removed: recommendations helper no longer used
-
-
-# ---------------------------------------------------------------------------
-# AJAX / partial views
-# ---------------------------------------------------------------------------
-
-# Removed: unused AJAX endpoint
-
-
-# ---------------------------------------------------------------------------
-# Full home view (search / beatmap form handling)
-# ---------------------------------------------------------------------------
-
-# Removed: deprecated home route

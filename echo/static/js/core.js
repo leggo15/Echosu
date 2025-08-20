@@ -8,16 +8,19 @@
         e.stopPropagation();
         var dropdown = document.getElementById('profileDropdown');
         if (dropdown) {
-          dropdown.style.display = dropdown.style.display === 'block' ? 'none' : 'block';
+          var willOpen = dropdown.style.display !== 'block';
+          dropdown.style.display = willOpen ? 'block' : 'none';
+          try { profileMenuButton.setAttribute('aria-expanded', willOpen ? 'true' : 'false'); } catch (err) {}
         }
       });
       window.addEventListener('click', function(event) {
-        if (!event.target.matches('#profileMenuButton')) {
+        if (!event.target.closest || !event.target.closest('#profileMenuButton')) {
           var dropdowns = document.getElementsByClassName('dropdown-content');
           for (var i = 0; i < dropdowns.length; i++) {
             var openDropdown = dropdowns[i];
             if (openDropdown.style.display === 'block') {
               openDropdown.style.display = 'none';
+              try { profileMenuButton.setAttribute('aria-expanded', 'false'); } catch (err) {}
             }
           }
         }

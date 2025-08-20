@@ -33,8 +33,10 @@
         
         <div class="user-section">
             {% if user.is_authenticated %}
-                <span> {{ userprofile.username }} </span>
-                <img src="{{ user_profile.profile_pic_url }}" alt="Profile Picture" id="profileMenuButton">
+                <div class="profile-chip" id="profileMenuButton" aria-haspopup="true" aria-expanded="false">
+                    <img src="{{ user_profile.profile_pic_url }}" alt="Profile picture" class="profile-avatar">
+                    <span class="profile-label">{{ user.username }}</span>
+                </div>
                 <div id="profileDropdown" class="dropdown-content">
                     <a href="{% url 'settings' %}">Settings</a>
                     {% if user|has_tag_edit_permission %}
@@ -51,8 +53,10 @@
                     </form>
                 </div>
                 {% else %}
-                <span class="profile-picture-placeholder">Log in with osu!</span>
-                <img src="{% static 'images/default.png' %}" alt="Profile Picture" id="profileMenuButton">
+                <div class="profile-chip" id="profileMenuButton" aria-haspopup="true" aria-expanded="false">
+                    <img src="{% static 'images/default.png' %}" alt="Default profile picture" class="profile-avatar">
+                    <span class="profile-label">Log in with osu!</span>
+                </div>
                 <div id="profileDropdown" class="dropdown-content">
                     <a href="{{ osu_oauth_url }}">Login</a>
                 </div>

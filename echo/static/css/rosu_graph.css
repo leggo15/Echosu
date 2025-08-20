@@ -88,3 +88,57 @@
 
 
 
+/* Info icon + tooltip for graph usage */
+.rosu-graph-container .rosu-graph-info-wrap {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 3;
+}
+.rosu-graph-container .rosu-graph-info {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #1b1f24;
+  color: #eaeef2;
+  border: 1px solid rgba(255,255,255,0.3);
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  line-height: 1;
+  cursor: help;
+}
+.rosu-graph-container .rosu-graph-info:hover,
+.rosu-graph-container .rosu-graph-info:focus {
+  border-color: #0d6efd;
+  outline: none;
+}
+.rosu-graph-container .rosu-graph-tooltip {
+  position: absolute;
+  top: 26px;
+  left: 0;
+  background: rgba(0,0,0,0.85);
+  color: #fff;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 12px;
+  width: 280px;
+  max-width: calc(100vw - 24px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+  opacity: 0;
+  transform: translateY(-4px);
+  pointer-events: none;
+  transition: opacity .12s ease, transform .12s ease;
+  z-index: 4;
+}
+.rosu-graph-container .rosu-graph-info-wrap:hover .rosu-graph-tooltip,
+.rosu-graph-container .rosu-graph-info:focus + .rosu-graph-tooltip,
+.rosu-graph-container .rosu-graph-info:focus-visible + .rosu-graph-tooltip {
+  opacity: 1;
+  transform: translateY(0);
+}
+.rosu-graph-container .rosu-graph-tooltip div + div { color: #ddd; margin-top: 4px; }
+

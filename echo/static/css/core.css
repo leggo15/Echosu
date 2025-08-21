@@ -306,8 +306,8 @@ nav { background-color: var(--nav-bg); padding: 10px 0; display: flex; justify-c
 [data-theme="dark"] .status-toggles label span { background: #0f1a30 !important; color: var(--text) !important; border-color: var(--border) !important; }
 [data-theme="dark"] .status-toggles input[type="checkbox"]:checked + span { background: var(--accent) !important; border-color: var(--accent) !important; color: #fff !important; }
 [data-theme="dark"] .filter-mode select { background: #0f1a30 !important; color: var(--text) !important; border-color: var(--border) !important; }
-[data-theme="dark"] .search-row .search-input { background: #0f1a30 !important; color: var(--text) !important; border-color: var(--border) !important; }
-[data-theme="dark"] .search-row .search-btn { background: var(--accent) !important; }
+[data-theme="dark"] .search-row .search-input { background: #0f1a30 !important; color: var(--text) !important; border-color: var(--border) !important; }/*
+[data-theme="dark"] .search-row .search-btn { background: var(--accent) !important; } */
 
 [data-theme="dark"] .tags-table { background: var(--surface) !important; }
 [data-theme="dark"] .tags-table thead th { background: #0f1a30 !important; color: var(--text) !important; }

@@ -20,6 +20,7 @@ from collections import defaultdict
 # ---------------------------------------------------------------------------
 from nltk.stem import PorterStemmer
 from ossapi.enums import ScoreType, GameMode, UserBeatmapType
+from ossapi.mod import Mod
 
 # ---------------------------------------------------------------------------
 # Django imports
@@ -38,7 +39,9 @@ from django.db.models import (
     OuterRef,
 )
 from django.db.models.functions import Coalesce
-from django.shortcuts import render
+from django.shortcuts import render, redirect
+from django.urls import reverse
+from urllib.parse import urlencode
 
 # ---------------------------------------------------------------------------
 # Local application imports
@@ -325,7 +328,7 @@ def search_results(request):
         beatmaps = beatmaps.filter(difficulty_rating__lte=star_max)
 
     # Exclude user's Top plays or Favourites if requested
-    if exclude_player in ['top', 'fav']:
+    if exclude_player in ['top50', 'top100', 'fav']:
         try:
             osu_id = request.session.get('osu_id')
             if not osu_id and request.user.is_authenticated:
@@ -336,17 +339,18 @@ def search_results(request):
                     .first()
                 )
             if osu_id:
-                if exclude_player == 'top':
+                if exclude_player in ['top50', 'top100']:
                     try:
-                        # Cache by mode to avoid repeated fetches during pagination/sorting
-                        cache_key = f'exclude_top_ids_{selected_mode}'
+                        # Cache by mode and limit to avoid repeated fetches during pagination/sorting
+                        top_limit = 50 if exclude_player == 'top50' else 100
+                        cache_key = f'exclude_top_ids_{selected_mode}_{top_limit}'
                         cache_ts_key = f'{cache_key}_ts'
                         ids = request.session.get(cache_key) or []
                         ts = request.session.get(cache_ts_key) or 0
                         now = int(time.time())
                         if fetch_exclude_now == '1' and (not ids or (now - int(ts)) > 600):
                             gm = GAME_MODE_ENUM.get(selected_mode, GameMode.OSU)
-                            scores = api.user_scores(int(osu_id), ScoreType.BEST, mode=gm, limit=100)
+                            scores = api.user_scores(int(osu_id), ScoreType.BEST, mode=gm, limit=top_limit)
                             ids = [str(getattr(s.beatmap, 'id', '')) for s in scores if getattr(s, 'beatmap', None)]
                             ids = [i for i in ids if i]
                             request.session[cache_key] = ids
@@ -401,7 +405,7 @@ def search_results(request):
         # When no include tags are specified, still respect the predicted toggle:
         # - include: show all
         # - exclude: only maps with user-applied tags
-        # - only: only maps that have predicted tags (and optionally no user tags if that is desired later)
+        # - only: only maps that have predicted tags
         if predicted_mode == 'exclude':
             beatmaps = beatmaps.filter(tagapplication__user__isnull=False).distinct()
         elif predicted_mode == 'only':
@@ -455,8 +459,266 @@ def search_results(request):
         },
     )
 
+
+# -------------------------- Preset Search Views -------------------------- #
+
+def _resolve_osu_id_from_request(request):
+    try:
+        osu_id = request.session.get('osu_id')
+        if not osu_id and request.user.is_authenticated:
+            osu_id = (
+                UserProfile.objects
+                .filter(user=request.user)
+                .values_list('osu_id', flat=True)
+                .first()
+            )
+        return int(osu_id) if osu_id else None
+    except Exception:
+        return None
+
+
+def _compute_player_top_tags_and_star_window(osu_id: int, source: str, selected_mode: str):
+    MODE_MAPPING = {'osu': 'osu', 'taiko': 'taiko', 'catch': 'fruits', 'mania': 'mania'}
+    GAME_MODE_ENUM = {
+        'osu': GameMode.OSU,
+        'taiko': GameMode.TAIKO,
+        'catch': GameMode.CATCH,
+        'mania': GameMode.MANIA,
+    }
+    mapped_mode = MODE_MAPPING.get(selected_mode, 'osu')
+    gm = GAME_MODE_ENUM.get(selected_mode, GameMode.OSU)
+
+    beatmaps_for_player = Beatmap.objects.none()
+    try:
+        if source == 'top':
+            scores = api.user_scores(int(osu_id), ScoreType.BEST, mode=gm, limit=100)
+            ids = [str(getattr(s.beatmap, 'id', '')) for s in scores if getattr(s, 'beatmap', None)]
+            ids = [i for i in ids if i]
+            if ids:
+                beatmaps_for_player = Beatmap.objects.filter(beatmap_id__in=ids, mode__iexact=mapped_mode)
+        else:  # 'fav'
+            fav_sets = api.user_beatmaps(int(osu_id), UserBeatmapType.FAVOURITE, limit=100)
+            set_ids = [str(getattr(bs, 'id', '')) for bs in fav_sets]
+            set_ids = [i for i in set_ids if i]
+            if set_ids:
+                beatmaps_for_player = Beatmap.objects.filter(beatmapset_id__in=set_ids, mode__iexact=mapped_mode)
+    except Exception:
+        beatmaps_for_player = Beatmap.objects.none()
+
+    # Derive top tags (by tag application counts)
+    top_tags = []
+    if beatmaps_for_player.exists():
+        rows = (
+            TagApplication.objects
+            .filter(beatmap__in=beatmaps_for_player)
+            .values('tag__name')
+            .annotate(c=Count('id'))
+            .order_by('-c')[:15]
+        )
+        top_tags = [r['tag__name'] for r in rows if r['tag__name']][:10]
+
+    # Compute a reasonable star window around the median
+    star_min_val = None
+    star_max_val = None
+    try:
+        stars = list(beatmaps_for_player.values_list('difficulty_rating', flat=True))
+        stars = [float(s) for s in stars if s is not None]
+        if stars:
+            stars_sorted = sorted(stars)
+            n = len(stars_sorted)
+            median_star = stars_sorted[n//2] if n % 2 == 1 else (stars_sorted[n//2 - 1] + stars_sorted[n//2]) / 2.0
+            delta = max(0.5, float(median_star) * 0.10)
+            star_min_val = max(0.0, float(median_star) - delta)
+            star_max_val = min(15.0, float(median_star) + delta)
+    except Exception:
+        star_min_val, star_max_val = None, None
+
+    return top_tags, star_min_val, star_max_val
+
+
+def preset_search_farm(request):
+    selected_mode = (request.GET.get('mode') or 'osu').strip().lower()
+    osu_id = _resolve_osu_id_from_request(request)
+    if not osu_id:
+        return redirect('search_results')
+
+    top_tags, star_min_val, star_max_val = _compute_player_top_tags_and_star_window(osu_id, 'top', selected_mode)
+    tags_query_string = ' '.join([f'"{t}"' if ' ' in t else t for t in top_tags])
+
+    # Derive PP constraints based on user's top plays mod distribution
+    def _derive_farm_pp_tokens(osu_id_int: int, mode_key: str):
+        try:
+            MODE_MAPPING = {'osu': 'osu', 'taiko': 'taiko', 'catch': 'fruits', 'mania': 'mania'}
+            GAME_MODE_ENUM_LOCAL = {
+                'osu': GameMode.OSU,
+                'taiko': GameMode.TAIKO,
+                'catch': GameMode.CATCH,
+                'mania': GameMode.MANIA,
+            }
+            gm = GAME_MODE_ENUM_LOCAL.get(mode_key, GameMode.OSU)
+            scores = api.user_scores(int(osu_id_int), ScoreType.BEST, mode=gm, limit=100)
+        except Exception:
+            return []
+
+        if not scores:
+            return []
+
+        mod_families = ['HD', 'HR', 'DT', 'HT', 'EZ', 'FL']  # count only actual mods here
+        family_counts = {k: 0 for k in mod_families}
+        n = 0
+        with_mods_count = 0
+        top_pp_val = None
+        for s in scores:
+            try:
+                n += 1
+                # Track top pp
+                spp = getattr(s, 'pp', None)
+                if spp is not None:
+                    try:
+                        v = float(spp)
+                        if top_pp_val is None or v > top_pp_val:
+                            top_pp_val = v
+                    except Exception:
+                        pass
+
+                mods_val = getattr(s, 'mods', None)
+                families_for_score = set()
+                found_meaningful_mod = False
+                if mods_val:
+                    if Mod.HD in mods_val:
+                        families_for_score.add('HD'); found_meaningful_mod = True
+                    if Mod.HR in mods_val:
+                        families_for_score.add('HR'); found_meaningful_mod = True
+                    if (Mod.DT in mods_val) or (Mod.NC in mods_val):
+                        families_for_score.add('DT'); found_meaningful_mod = True
+                    if Mod.HT in mods_val:
+                        families_for_score.add('HT'); found_meaningful_mod = True
+                    if Mod.EZ in mods_val:
+                        families_for_score.add('EZ'); found_meaningful_mod = True
+                    if Mod.FL in mods_val:
+                        families_for_score.add('FL'); found_meaningful_mod = True
+                if found_meaningful_mod:
+                    with_mods_count += 1
+                for fam in families_for_score:
+                    if fam in family_counts:
+                        family_counts[fam] += 1
+            except Exception:
+                continue
+
+        if n == 0 or top_pp_val is None:
+            return []
+
+        # If less than 50% of scores have mods, use NM as the attribute
+        threshold = max(1, int(n * 0.5))
+        majority_family = None
+        use_nm_due_to_low_mod_coverage = with_mods_count < threshold
+        if not use_nm_due_to_low_mod_coverage:
+            # Determine majority mod family (>= 50% of scores)
+            max_fam = max(family_counts.items(), key=lambda kv: kv[1]) if family_counts else (None, 0)
+            if max_fam[0] and max_fam[1] >= threshold:
+                majority_family = max_fam[0]
+
+        lower = max(0.0, top_pp_val * 0.95)
+        upper = top_pp_val * 1.3
+
+        # Build tokens per rule:
+        # - If <50% scores have mods -> force NM
+        # - Else if some mod family has >=50% -> use that family
+        # - Else -> fall back to generic PP
+        if use_nm_due_to_low_mod_coverage:
+            attr = 'NM'
+        elif majority_family:
+            attr = majority_family
+        else:
+            # No majority -> fallback to generic PP
+            attr = 'PP'
+        tokens = [f"{attr}>={lower:.0f}", f"{attr}<={upper:.0f}"]
+        return tokens
+
+    pp_tokens = _derive_farm_pp_tokens(int(osu_id), selected_mode)
+
+    # Start with preserved selections and preselect exclude
+    params = {
+        'mode': selected_mode,
+        'sort': (request.GET.get('sort') or 'tag_weight'),
+        'exclude_player': 'top100',
+        'fetch_exclude_now': '1',
+    }
+    # Preserve include_predicted toggle if present
+    if request.GET.get('include_predicted'):
+        params['include_predicted'] = request.GET.get('include_predicted')
+    # Preserve statuses if user selected any; otherwise default to Ranked only
+    user_status_keys = [k for k in ['status_ranked', 'status_loved', 'status_unranked'] if request.GET.get(k)]
+    if user_status_keys:
+        for k in user_status_keys:
+            params[k] = request.GET.get(k)
+    else:
+        params['status_ranked'] = 'ranked'
+    # Preserve star range if provided; otherwise use computed window
+    if request.GET.get('star_min'):
+        params['star_min'] = request.GET.get('star_min')
+    elif star_min_val is not None:
+        params['star_min'] = f"{star_min_val:.2f}"
+    if request.GET.get('star_max'):
+        params['star_max'] = request.GET.get('star_max')
+    elif star_max_val is not None:
+        params['star_max'] = f"{star_max_val:.2f}"
+    # Replace current tag input with generated tags, plus PP constraints
+    query_parts = []
+    if pp_tokens:
+        query_parts.extend(pp_tokens)
+    if tags_query_string:
+        query_parts.append(tags_query_string)
+    params['query'] = ' '.join(query_parts)
+
+    url = reverse('search_results') + ('?' + urlencode(params))
+    return redirect(url)
+
+
+def preset_search_new_favorites(request):
+    selected_mode = (request.GET.get('mode') or 'osu').strip().lower()
+    osu_id = _resolve_osu_id_from_request(request)
+    if not osu_id:
+        return redirect('search_results')
+
+    top_tags, star_min_val, star_max_val = _compute_player_top_tags_and_star_window(osu_id, 'fav', selected_mode)
+    tags_query_string = ' '.join([f'"{t}"' if ' ' in t else t for t in top_tags])
+
+    # Start with preserved selections and preselect exclude
+    params = {
+        'mode': selected_mode,
+        'sort': (request.GET.get('sort') or 'tag_weight'),
+        'exclude_player': 'fav',
+        'fetch_exclude_now': '1',
+    }
+    # Preserve include_predicted toggle if present
+    if request.GET.get('include_predicted'):
+        params['include_predicted'] = request.GET.get('include_predicted')
+    # Preserve statuses if user selected any; otherwise default to Ranked + Loved
+    user_status_keys = [k for k in ['status_ranked', 'status_loved', 'status_unranked'] if request.GET.get(k)]
+    if user_status_keys:
+        for k in user_status_keys:
+            params[k] = request.GET.get(k)
+    else:
+        params['status_ranked'] = 'ranked'
+        params['status_loved'] = 'loved'
+    # Preserve star range if provided; otherwise use computed window
+    if request.GET.get('star_min'):
+        params['star_min'] = request.GET.get('star_min')
+    elif star_min_val is not None:
+        params['star_min'] = f"{star_min_val:.2f}"
+    if request.GET.get('star_max'):
+        params['star_max'] = request.GET.get('star_max')
+    elif star_max_val is not None:
+        params['star_max'] = f"{star_max_val:.2f}"
+    # Replace current tag input with generated tags (do not merge)
+    params['query'] = tags_query_string
+
+    url = reverse('search_results') + ('?' + urlencode(params))
+    return redirect(url)
+
 # ---------------------------------------------------------------------------
-# Helper utilities (mostly unchanged, but quote style unified)
+# Helper utilities
 # ---------------------------------------------------------------------------
 
 def annotate_search_results_with_tags(beatmaps, user, include_predicted_toggle=False):
@@ -557,7 +819,18 @@ def build_query_conditions(beatmaps, search_terms, predicted_mode='include'):
     if context.exclude_q:
         context.beatmaps = context.beatmaps.exclude(context.exclude_q)
     if context.required_tags:
-        context.beatmaps = context.beatmaps.filter(tags__name__in=context.required_tags)
+        # Require ALL '.'-prefixed tags to be present (AND semantics)
+        context.beatmaps = (
+            context.beatmaps
+            .annotate(
+                num_required_tags=Count(
+                    'tags',
+                    filter=Q(tags__name__in=context.required_tags),
+                    distinct=True,
+                )
+            )
+            .filter(num_required_tags=len(context.required_tags))
+        )
     if context.include_tag_names:
         if predicted_mode == 'include':
             context.beatmaps = context.beatmaps.filter(tagapplication__tag__name__in=context.include_tag_names).distinct()

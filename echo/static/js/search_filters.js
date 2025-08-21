@@ -1,5 +1,20 @@
 // Search page filters: jQuery UI range slider for star rating
 $(function() {
+  // Layered preset hover behavior with class toggles for cross-browser support
+  var slider = document.querySelector('.preset-slider');
+  if (slider) {
+    var farm = slider.querySelector('.preset-button--farm');
+    var fav = slider.querySelector('.preset-button--favorites');
+    if (farm && fav) {
+      var clear = function(){ slider.classList.remove('hover-farm', 'hover-favorites'); };
+      farm.addEventListener('mouseenter', function(){ slider.classList.add('hover-farm'); slider.classList.remove('hover-favorites'); });
+      fav.addEventListener('mouseenter', function(){ slider.classList.add('hover-favorites'); slider.classList.remove('hover-farm'); });
+      slider.addEventListener('mouseleave', clear);
+      // Touch support: tap toggles between the two states
+      farm.addEventListener('touchstart', function(){ slider.classList.add('hover-farm'); slider.classList.remove('hover-favorites'); }, {passive: true});
+      fav.addEventListener('touchstart', function(){ slider.classList.add('hover-favorites'); slider.classList.remove('hover-farm'); }, {passive: true});
+    }
+  }
   var $slider = $("#star-rating-slider");
   if (!$slider.length) return;
   $slider.slider({

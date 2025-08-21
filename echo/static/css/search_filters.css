@@ -120,10 +120,76 @@
 .search-row .search-btn { padding: 12px 16px; border: none; border-radius: 12px; background: #2b87d1; color: #fff; font-weight: 700; cursor: pointer; }
 .search-row .search-btn:hover { background: #1f6fb2; }
 
+/* Layered preset buttons container */
+.preset-slider {
+  position: relative;
+  width: 200px;
+  height: 44px;
+  border-radius: 12px;
+  overflow: hidden;
+  display: block; /* ensure absolute children stack */
+  background: transparent;
+}
+
+.preset-slider .preset-button {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 50%;
+  transition: all .18s ease-in-out;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin: 0; /* no gap between halves */
+}
+
+.search-row .preset-slider .preset-button--farm {
+  left: 0;
+  z-index: 2;
+  /* lighter blue, matches applied status toggle */
+  background: #649bd6;
+  /* round only the outer edges */
+  border-radius: 12px 0 0 12px;
+}
+
+.search-row .preset-slider .preset-button--favorites {
+  right: 0;
+  z-index: 1;
+  /* match the main Search button color */
+  background: #2b87d1;
+  /* round only the outer edges */
+  border-radius: 0 12px 12px 0;
+}
+
+/* Expand hovered button to 90%, shrink the other to 10% */
+.preset-slider:has(.preset-button--farm:hover) .preset-button--farm { width: 90%; z-index: 3; }
+.preset-slider:has(.preset-button--farm:hover) .preset-button--favorites { width: 10%; z-index: 2; }
+.preset-slider:has(.preset-button--favorites:hover) .preset-button--favorites { width: 90%; z-index: 3; }
+.preset-slider:has(.preset-button--favorites:hover) .preset-button--farm { width: 10%; z-index: 2; }
+
+/* JS fallback using classes for broader browser support */
+.preset-slider.hover-farm .preset-button--farm { width: 90%; z-index: 3; }
+.preset-slider.hover-farm .preset-button--favorites { width: 10%; z-index: 2; }
+.preset-slider.hover-favorites .preset-button--favorites { width: 90%; z-index: 3; }
+.preset-slider.hover-favorites .preset-button--farm { width: 10%; z-index: 2; }
+
+.preset-slider:not(:hover) .preset-button--farm,
+.preset-slider:not(:hover) .preset-button--favorites {
+  width: 50%;
+}
+
+/* Dark theme adjustments */
+/* Dark theme: use the same color as 'View Details' hover */
+[data-theme="dark"] .preset-button--farm { background: #789dc4; }
+[data-theme="dark"] .preset-button--favorites { background: #8ec0f5; }
+
 
 /* Narrow phones: stack search inputs to avoid horizontal overflow */
 @media (max-width: 420px) {
   .search-row { flex-direction: column; gap: 8px; }
   .search-row .search-btn { width: 100%; }
+  .preset-slider { width: 100%; height: 44px; }
+  /* keep absolute stacking on mobile too */
+  .preset-slider .preset-button { position: absolute; width: 50%; }
 }
 

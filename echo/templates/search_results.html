@@ -133,7 +133,8 @@
                     <label for="exclude_player">Exclude My:</label>
                     <select name="exclude_player" id="exclude_player">
                         <option value="none" {% if request.GET.exclude_player == 'none' or not request.GET.exclude_player %}selected{% endif %}>None</option>
-                        <option value="top" {% if request.GET.exclude_player == 'top' %}selected{% endif %}>Top plays</option>
+                        <option value="top50" {% if request.GET.exclude_player == 'top50' %}selected{% endif %}>Top 50 plays</option>
+                        <option value="top100" {% if request.GET.exclude_player == 'top100' %}selected{% endif %}>Top 100 plays</option>
                         <option value="fav" {% if request.GET.exclude_player == 'fav' %}selected{% endif %}>osu! Favorites</option>
                     </select>
                 </div>
@@ -154,6 +155,10 @@
             <div class="search-row">
                 <input type="text" class="search-input" name="query" id="tag-input" placeholder="Search by Tags, song genre, name, mapper, artist and more..." value="{{ request.GET.query }}">
                 <button type="submit" class="search-btn">Search</button>
+                <div class="preset-slider">
+                    <button type="submit" class="search-btn preset-button preset-button--farm" formaction="{% url 'search_preset_farm' %}">Find farm maps</button>
+                    <button type="submit" class="search-btn preset-button preset-button--favorites" formaction="{% url 'search_preset_new_favorites' %}">Find new favorites</button>
+                </div>
             </div>
         </form>
 

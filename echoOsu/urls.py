@@ -10,7 +10,7 @@ from echo.views.beatmap   import (
     beatmap_detail, update_beatmap_info, beatmap_timeseries,
     save_tag_timestamps, quick_add_beatmap,
 )
-from echo.views.search    import search_results
+from echo.views.search    import search_results, preset_search_farm, preset_search_new_favorites
 from echo.views.tags      import (
     modify_tag, get_tags, edit_tags,
     update_tag_description, vote_description, search_tags, edit_ownership, get_tags_bulk
@@ -50,6 +50,8 @@ urlpatterns = [
     path('logout/', LogoutView.as_view(next_page='home'), name='logout'),
     path('settings/', settings, name='settings'),
     path('search_results/', search_results, name='search_results'),
+    path('search/preset/farm/', preset_search_farm, name='search_preset_farm'),
+    path('search/preset/new-favorites/', preset_search_new_favorites, name='search_preset_new_favorites'),
     path('statistics/', statistics, name='statistics'),
     path('statistics/player-data/', statistics_player_data, name='statistics_player_data'),
     path('edit_tags/', edit_tags, name='edit_tags'),

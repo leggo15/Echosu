@@ -168,9 +168,6 @@ def beatmap_timeseries(request, beatmap_id: int):
     return JsonResponse(ts, safe=False)
 
 
-## Removed: tag_timestamps endpoint in favor of consolidated /api/tag-applications include
-
-
 @require_POST
 def save_tag_timestamps(request, beatmap_id: int):
     """Save current user's timestamp intervals for a given tag on a beatmap.

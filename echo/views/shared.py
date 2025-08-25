@@ -52,8 +52,8 @@ def compute_attribute_windows(beatmap):
         bpm_min = None
         bpm_max = None
     else:
-        bpm_min = max(0.0, current_bpm - 10.0)
-        bpm_max = max(0.0, current_bpm + 10.0)
+        bpm_min = max(0.0, current_bpm - 15.0)
+        bpm_max = max(0.0, current_bpm + 15.0)
 
     # AR window (bounded to 0..10)
     ar_value = getattr(beatmap, 'ar', None)

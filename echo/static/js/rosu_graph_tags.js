@@ -66,6 +66,16 @@
       return minX + ratio * (maxX - minX);
     }
 
+    // Snap utilities: clamp to plot range and snap to the nearest 0.1s
+    function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+    var SNAP_SECONDS = 0.1;
+    function snapTime(t) {
+      var minX = (state.plot && typeof state.plot.minX === 'number') ? state.plot.minX : -Infinity;
+      var maxX = (state.plot && typeof state.plot.maxX === 'number') ? state.plot.maxX : Infinity;
+      var snapped = Math.round(t / SNAP_SECONDS) * SNAP_SECONDS;
+      return clamp(snapped, minX, maxX);
+    }
+
     function redrawOverlay() {
       // Defer to the next animation frame to avoid blocking UI mid-events
       var ov = window.__ROSU_OVERLAY__;
@@ -199,7 +209,7 @@
       if (!state.editingTagId || e.button !== 0) return;
       var rect = canvas.getBoundingClientRect();
       var x = (e.clientX - rect.left) * (window.devicePixelRatio || 1);
-      var t = pxToTime(x);
+      var t = snapTime(pxToTime(x));
       if (state.pendingStart == null) {
         state.pendingStart = t;
         redrawOverlay();
@@ -209,7 +219,7 @@
       var t1 = state.pendingStart;
       var t2 = t;
       state.pendingStart = null;
-      if (Math.abs(t2 - t1) < 0.25) return; // ignore clicks too small
+      if (Math.abs(t2 - t1) < 0.09) return; // ignore clicks too small (allow tenth-second)
       var s = Math.min(t1, t2), e2 = Math.max(t1, t2);
       // merge if overlapping
       var merged = [];
@@ -241,7 +251,7 @@
       // Always track hover for non-editing highlights and editing previews
       var rect = canvas.getBoundingClientRect();
       var x = (e.clientX - rect.left) * (window.devicePixelRatio || 1);
-      state.hoverTime = pxToTime(x);
+      state.hoverTime = snapTime(pxToTime(x));
       if (state.editingTagId && state.pendingStart != null) redrawOverlay();
     });
 

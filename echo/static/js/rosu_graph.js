@@ -64,10 +64,17 @@
       var timesAbs = new Array(n);
       for (var ti = 0; ti < n; ti++) timesAbs[ti] = times[ti] + t0;
 
-      // Align left boundary with the actual map start (first object time)
-      var firstObj = t0;
-      var maxX = timesAbs[n - 1];
-      var minX = firstObj;
+      // Domain (full data extents) and initial view (zoomed window)
+      var domainMin = t0;                 // align with first object time
+      var domainMax = timesAbs[n - 1];
+      var minSpan = 0.1;                  // minimum zoom span in seconds
+      var spanFull = Math.max(minSpan, domainMax - domainMin || minSpan);
+      var viewMin = (typeof state.viewMinX === 'number') ? Math.max(domainMin, Math.min(domainMax, state.viewMinX)) : domainMin;
+      var viewMax = (typeof state.viewMaxX === 'number') ? Math.max(viewMin + minSpan, Math.min(domainMax, state.viewMaxX)) : domainMax;
+      // If the stored view exceeds new domain (e.g., after mod change), clamp to domain
+      if (viewMax - viewMin < minSpan) {
+        if (viewMin + minSpan <= domainMax) viewMax = viewMin + minSpan; else viewMin = Math.max(domainMin, domainMax - minSpan);
+      }
 
 
       // Scale strains to approximate stars. Prefer modded stars from backend if present.
@@ -101,7 +108,7 @@
       if (maxY <= 0) maxY = 1;
 
       function xScale(x) {
-        return padding.left + ((x - minX) / (maxX - minX || 1)) * plotW;
+        return padding.left + ((x - viewMin) / (viewMax - viewMin || 1)) * plotW;
       }
       function yScale(y) {
         return padding.top + plotH - (y / maxY) * plotH;
@@ -134,6 +141,20 @@
         octx.fillText(val.toFixed(2), padding.left - 6, y);
       }
 
+    // Determine visible index range for zoomed view
+      function lowerBound(arr, target) {
+        var lo = 0, hi = arr.length;
+        while (lo < hi) { var mid = (lo + hi) >> 1; if (arr[mid] < target) lo = mid + 1; else hi = mid; }
+        return lo;
+      }
+      function upperBound(arr, target) {
+        var lo = 0, hi = arr.length;
+        while (lo < hi) { var mid = (lo + hi) >> 1; if (arr[mid] <= target) lo = mid + 1; else hi = mid; }
+        return lo - 1;
+      }
+      var startIdx = Math.max(0, Math.min(n - 1, lowerBound(timesAbs, viewMin)));
+      var endIdx = Math.max(startIdx, Math.min(n - 1, upperBound(timesAbs, viewMax)));
+
     // x-axis ticks/labels (time)
       function formatTime(seconds) {
       seconds = Math.max(0, Math.round(seconds));
@@ -149,8 +170,9 @@
       octx.textAlign = 'center';
       octx.textBaseline = 'top';
       var approxXTicks = Math.max(4, Math.floor(plotW / (90 * dpr)));
-      var step = Math.max(1, Math.round(n / approxXTicks));
-      for (var xi = 0; xi < n; xi += step) {
+      var visibleCount = Math.max(1, endIdx - startIdx + 1);
+      var step = Math.max(1, Math.round(visibleCount / approxXTicks));
+      for (var xi = startIdx; xi <= endIdx; xi += step) {
         var x = xScale(timesAbs[xi]);
         octx.fillText(formatTime(timesAbs[xi]), x, height - padding.bottom + 6);
       }
@@ -171,7 +193,7 @@
     // fill under total
       octx.fillStyle = 'rgba(0, 153, 255, 0.15)';
       octx.beginPath();
-      for (var i = 0; i < n; i++) {
+      for (var i = startIdx; i <= endIdx; i++) {
         var x = xScale(timesAbs[i]);
         var y = yScale(totalS[i]);
         if (i === 0) octx.moveTo(x, y);
@@ -181,6 +203,29 @@
       octx.lineTo(xScale(timesAbs[0]), yScale(0));
       octx.closePath();
       octx.fill();
+
+      // Recompute maxY from visible window for better vertical scaling
+      maxY = 0;
+      for (var vi = startIdx; vi <= endIdx; vi++) {
+        if (aimS[vi] > maxY) maxY = aimS[vi];
+        if (speedS[vi] > maxY) maxY = speedS[vi];
+        if (totalS[vi] > maxY) maxY = totalS[vi];
+      }
+      if (maxY <= 0) maxY = 1;
+
+      // Redraw series over visible range using updated y-scale
+      function drawSeries(data, color, widthPx) {
+        octx.strokeStyle = color;
+        octx.lineWidth = widthPx * dpr;
+        octx.beginPath();
+        for (var i = startIdx; i <= endIdx; i++) {
+          var x = xScale(timesAbs[i]);
+          var y = yScale(data[i]);
+          if (i === startIdx) octx.moveTo(x, y);
+          else octx.lineTo(x, y);
+        }
+        octx.stroke();
+      }
 
       drawSeries(aimS, '#ff4d6a', 1.5);
       drawSeries(speedS, '#ffb000', 1.5);
@@ -193,8 +238,8 @@
           padding: padding,
           plotW: plotW,
           plotH: plotH,
-          minX: minX,
-          maxX: maxX,
+          minX: viewMin,
+          maxX: viewMax,
           clockRate: cr,
         });
       }
@@ -205,8 +250,10 @@
         padding: padding,
         plotW: plotW,
         plotH: plotH,
-        minX: minX,
-        maxX: maxX,
+        minX: viewMin,
+        maxX: viewMax,
+        domainMin: domainMin,
+        domainMax: domainMax,
         timesAbs: timesAbs,
         n: n,
         aimS: aimS,
@@ -263,34 +310,34 @@
       var aimS = state._cache.aimS, speedS = state._cache.speedS, totalS = state._cache.totalS;
       var n = state._cache.n;
       function xScale(x) { return padding.left + ((x - minX) / (maxX - minX || 1)) * plotW; }
-      function formatTime(seconds) {
-        seconds = Math.max(0, Math.round(seconds));
-        var hrs = Math.floor(seconds / 3600);
-        var mins = Math.floor((seconds % 3600) / 60);
-        var secs = seconds % 60;
-        function pad(n) { return n < 10 ? '0' + n : '' + n; }
-        var out = pad(mins) + ':' + pad(secs);
-        if (hrs > 0) { out = hrs + ':' + pad(mins) + ':' + pad(secs); }
-        return out;
+      function formatTimeTenths(seconds) {
+        seconds = Math.max(0, seconds || 0);
+        var tenthsTotal = Math.round(seconds * 10);
+        var secsTotal = Math.floor(tenthsTotal / 10);
+        var tenths = tenthsTotal % 10;
+        var hrs = Math.floor(secsTotal / 3600);
+        var mins = Math.floor((secsTotal % 3600) / 60);
+        var secs = secsTotal % 60;
+        function pad2(n) { return n < 10 ? '0' + n : '' + n; }
+        var base = pad2(mins) + ':' + pad2(secs) + '.' + tenths;
+        if (hrs > 0) base = hrs + ':' + pad2(mins) + ':' + pad2(secs) + '.' + tenths;
+        return base;
       }
       var hx = Math.max(padding.left, Math.min(width - padding.right, state.hoverX));
       var xVal = minX + ((hx - padding.left) / plotW) * (maxX - minX);
-      // Binary search for nearest index (timesAbs is sorted)
+      // Determine nearest index for values, but draw crosshair at exact xVal
       var lo = 0, hi = n - 1;
-      while (lo < hi) {
-        var mid = (lo + hi) >> 1;
-        if (timesAbs[mid] < xVal) lo = mid + 1; else hi = mid;
-      }
+      while (lo < hi) { var mid = (lo + hi) >> 1; if (timesAbs[mid] < xVal) lo = mid + 1; else hi = mid; }
       var nearest = lo;
       if (nearest > 0 && Math.abs(timesAbs[nearest - 1] - xVal) < Math.abs(timesAbs[nearest] - xVal)) nearest = nearest - 1;
-      var cx = xScale(timesAbs[nearest]);
+      var cx = xScale(xVal);
       ctx.strokeStyle = 'rgba(255,255,255,0.3)';
       ctx.beginPath();
       ctx.moveTo(cx, state._cache.padding.top);
       ctx.lineTo(cx, height - state._cache.padding.bottom);
       ctx.stroke();
       var tipPad = 6 * dpr;
-      var tipText = formatTime(timesAbs[nearest]) +
+      var tipText = formatTimeTenths(xVal) +
                     '\nAim=' + aimS[nearest].toFixed(2) + '★' +
                     '\nSpeed=' + speedS[nearest].toFixed(2) + '★' +
                     '\nTotal=' + totalS[nearest].toFixed(2) + '★';
@@ -372,7 +419,7 @@
           ctx.fillText('No difficulty timeline available', 12, 24);
           return;
         }
-        var state = { hoverX: null, needFullRedraw: true, staticCanvas: null, _cache: null };
+        var state = { hoverX: null, needFullRedraw: true, staticCanvas: null, _cache: null, viewMinX: null, viewMaxX: null };
         drawGraph(canvas, ts, state);
         window.__ROSUREFRESH__ = function () { drawGraph(canvas, ts, state); };
         var resizeRaf = null;
@@ -391,6 +438,87 @@
           state.hoverX = null;
           drawGraph(canvas, ts, state);
         });
+
+        // Zoom: wheel on canvas (zoom around cursor)
+        canvas.addEventListener('wheel', function (e) {
+          if (!state._cache) return;
+          e.preventDefault();
+          var rect = canvas.getBoundingClientRect();
+          var dpr = window.devicePixelRatio || 1;
+          var px = (e.clientX - rect.left) * dpr;
+          var left = state._cache.padding.left;
+          var plotW = state._cache.plotW;
+          var ratio = Math.max(0, Math.min(1, (px - left) / plotW));
+          var vMin = (typeof state.viewMinX === 'number') ? state.viewMinX : state._cache.minX;
+          var vMax = (typeof state.viewMaxX === 'number') ? state.viewMaxX : state._cache.maxX;
+          var anchor = vMin + ratio * (vMax - vMin);
+          var domainMin = state._cache.domainMin, domainMax = state._cache.domainMax;
+          var currentSpan = Math.max(0.1, vMax - vMin);
+          var zoomIn = e.deltaY < 0;
+          var factor = zoomIn ? 0.9 : 1.1;
+          var newSpan = Math.max(0.1, Math.min(domainMax - domainMin, currentSpan * factor));
+          var newMin = anchor - (anchor - vMin) * (newSpan / currentSpan);
+          var newMax = newMin + newSpan;
+          if (newMin < domainMin) { newMin = domainMin; newMax = domainMin + newSpan; }
+          if (newMax > domainMax) { newMax = domainMax; newMin = domainMax - newSpan; }
+          state.viewMinX = newMin; state.viewMaxX = newMax; state.needFullRedraw = true;
+          drawGraph(canvas, ts, state);
+        }, { passive: false });
+
+        // Pan: middle mouse drag
+        var isPanning = false;
+        var lastClientX = 0;
+        canvas.addEventListener('mousedown', function (e) {
+          if (e.button !== 1) return; // middle button only
+          if (!state._cache) return;
+          isPanning = true;
+          lastClientX = e.clientX;
+          canvas.style.cursor = 'grabbing';
+          e.preventDefault();
+        });
+        window.addEventListener('mouseup', function () {
+          if (!isPanning) return;
+          isPanning = false;
+          canvas.style.cursor = '';
+        });
+        window.addEventListener('mousemove', function (e) {
+          if (!isPanning || !state._cache) return;
+          var dpr = window.devicePixelRatio || 1;
+          var dx = (e.clientX - lastClientX) * dpr;
+          lastClientX = e.clientX;
+          var plotW = state._cache.plotW;
+          var vMin = (typeof state.viewMinX === 'number') ? state.viewMinX : state._cache.minX;
+          var vMax = (typeof state.viewMaxX === 'number') ? state.viewMaxX : state._cache.maxX;
+          var span = Math.max(0.1, vMax - vMin);
+          var domainMin = state._cache.domainMin, domainMax = state._cache.domainMax;
+          var dt = (dx / (plotW || 1)) * span;
+          var newMin = vMin + dt;
+          var newMax = vMax + dt;
+          if (newMin < domainMin) { var shift = domainMin - newMin; newMin += shift; newMax += shift; }
+          if (newMax > domainMax) { var shift2 = domainMax - newMax; newMin += shift2; newMax += shift2; }
+          state.viewMinX = newMin; state.viewMaxX = newMax; state.needFullRedraw = true;
+          drawGraph(canvas, ts, state);
+        });
+
+        // Ensure a Reset View button exists in the container and wire it
+        var graphContainer = canvas.closest('.rosu-graph-container');
+        if (graphContainer) {
+          var resetBtn = graphContainer.querySelector('.rosu-zoom-reset');
+          if (!resetBtn) {
+            resetBtn = document.createElement('button');
+            resetBtn.className = 'rosu-zoom-reset';
+            resetBtn.type = 'button';
+            resetBtn.textContent = 'Reset view';
+            graphContainer.appendChild(resetBtn);
+          }
+          resetBtn.onclick = function () {
+            if (!state._cache) return;
+            state.viewMinX = state._cache.domainMin;
+            state.viewMaxX = state._cache.domainMax;
+            state.needFullRedraw = true;
+            drawGraph(canvas, ts, state);
+          };
+        }
       })
       .catch(function () { /* silent */ });
     }

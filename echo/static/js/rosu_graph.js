@@ -114,6 +114,29 @@
         return padding.top + plotH - (y / maxY) * plotH;
       }
 
+      // Determine visible index range for zoomed view and compute Y scale from it
+      function lowerBound(arr, target) {
+        var lo = 0, hi = arr.length;
+        while (lo < hi) { var mid = (lo + hi) >> 1; if (arr[mid] < target) lo = mid + 1; else hi = mid; }
+        return lo;
+      }
+      function upperBound(arr, target) {
+        var lo = 0, hi = arr.length;
+        while (lo < hi) { var mid = (lo + hi) >> 1; if (arr[mid] <= target) lo = mid + 1; else hi = mid; }
+        return lo - 1;
+      }
+      var startIdx = Math.max(0, Math.min(n - 1, lowerBound(timesAbs, viewMin)));
+      var endIdx = Math.max(startIdx, Math.min(n - 1, upperBound(timesAbs, viewMax)));
+
+      // Recompute maxY from visible window so Y axis reflects zoomed view
+      maxY = 0;
+      for (var vi = startIdx; vi <= endIdx; vi++) {
+        if (aimS[vi] > maxY) maxY = aimS[vi];
+        if (speedS[vi] > maxY) maxY = speedS[vi];
+        if (totalS[vi] > maxY) maxY = totalS[vi];
+      }
+      if (maxY <= 0) maxY = 1;
+
       // background
       octx.fillStyle = '#111';
       octx.fillRect(0, 0, width, height);
@@ -141,20 +164,6 @@
         octx.fillText(val.toFixed(2), padding.left - 6, y);
       }
 
-    // Determine visible index range for zoomed view
-      function lowerBound(arr, target) {
-        var lo = 0, hi = arr.length;
-        while (lo < hi) { var mid = (lo + hi) >> 1; if (arr[mid] < target) lo = mid + 1; else hi = mid; }
-        return lo;
-      }
-      function upperBound(arr, target) {
-        var lo = 0, hi = arr.length;
-        while (lo < hi) { var mid = (lo + hi) >> 1; if (arr[mid] <= target) lo = mid + 1; else hi = mid; }
-        return lo - 1;
-      }
-      var startIdx = Math.max(0, Math.min(n - 1, lowerBound(timesAbs, viewMin)));
-      var endIdx = Math.max(startIdx, Math.min(n - 1, upperBound(timesAbs, viewMax)));
-
     // x-axis ticks/labels (time)
       function formatTime(seconds) {
       seconds = Math.max(0, Math.round(seconds));
@@ -177,19 +186,6 @@
         octx.fillText(formatTime(timesAbs[xi]), x, height - padding.bottom + 6);
       }
 
-      function drawSeries(data, color, widthPx) {
-        octx.strokeStyle = color;
-        octx.lineWidth = widthPx * dpr;
-        octx.beginPath();
-        for (var i = 0; i < n; i++) {
-          var x = xScale(timesAbs[i]);
-          var y = yScale(data[i]);
-          if (i === 0) octx.moveTo(x, y);
-          else octx.lineTo(x, y);
-        }
-        octx.stroke();
-      }
-
     // fill under total
       octx.fillStyle = 'rgba(0, 153, 255, 0.15)';
       octx.beginPath();
@@ -199,21 +195,11 @@
         if (i === 0) octx.moveTo(x, y);
         else octx.lineTo(x, y);
       }
-      octx.lineTo(xScale(timesAbs[n - 1]), yScale(0));
-      octx.lineTo(xScale(timesAbs[0]), yScale(0));
+      octx.lineTo(xScale(timesAbs[endIdx]), yScale(0));
+      octx.lineTo(xScale(timesAbs[startIdx]), yScale(0));
       octx.closePath();
       octx.fill();
 
-      // Recompute maxY from visible window for better vertical scaling
-      maxY = 0;
-      for (var vi = startIdx; vi <= endIdx; vi++) {
-        if (aimS[vi] > maxY) maxY = aimS[vi];
-        if (speedS[vi] > maxY) maxY = speedS[vi];
-        if (totalS[vi] > maxY) maxY = totalS[vi];
-      }
-      if (maxY <= 0) maxY = 1;
-
-      // Redraw series over visible range using updated y-scale
       function drawSeries(data, color, widthPx) {
         octx.strokeStyle = color;
         octx.lineWidth = widthPx * dpr;

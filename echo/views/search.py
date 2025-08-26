@@ -12,6 +12,7 @@ was altered.
 # ---------------------------------------------------------------------------
 import re
 import time
+import datetime
 import shlex
 from collections import defaultdict
 
@@ -37,8 +38,10 @@ from django.db.models import (
     IntegerField,
     Subquery,
     OuterRef,
+    FloatField,
+    ExpressionWrapper,
 )
-from django.db.models.functions import Coalesce
+from django.db.models.functions import Coalesce, Now, Greatest
 from django.shortcuts import render, redirect
 from django.urls import reverse
 from urllib.parse import urlencode
@@ -262,10 +265,22 @@ def search_results(request):
             )
             
         else:
-            # When sorting by popularity, compute a numeric popularity score so it can be displayed
-            qs = qs.annotate(
-                popularity=F('favourite_count') * Value(0.02) + F('playcount') * Value(0.0001)
-            ).order_by('-popularity')
+            from django.db.models import FloatField, ExpressionWrapper
+            import datetime
+            qs = (
+                qs.annotate(
+                    base_popularity=F('favourite_count') * Value(0.02) + F('playcount') * Value(0.0001),
+                    years_since_update_raw=ExpressionWrapper(
+                        (Now() - F('last_updated')) / Value(datetime.timedelta(days=365.25)),
+                        output_field=FloatField(),
+                    ),
+                )
+                .annotate(
+                    years_since_update=Greatest(Coalesce(F('years_since_update_raw'), Value(1.0)), Value(1.0)),
+                    popularity=F('base_popularity') / F('years_since_update'),
+                )
+                .order_by('-popularity')
+            )
         return qs
 
     # -------------------------------------------------------------
@@ -415,10 +430,20 @@ def search_results(request):
                 .distinct()
             )
 
-        beatmaps = beatmaps.annotate(
-            total_tag_apply_count=Count('tagapplication'),
-            tag_weight=F('total_tag_apply_count'),
-            popularity=F('favourite_count') * 0.02 + F('playcount') * 0.0001,
+        beatmaps = (
+            beatmaps.annotate(
+                total_tag_apply_count=Count('tagapplication'),
+                tag_weight=F('total_tag_apply_count'),
+                base_popularity=F('favourite_count') * Value(0.02) + F('playcount') * Value(0.0001),
+                years_since_update_raw=ExpressionWrapper(
+                    (Now() - F('last_updated')) / Value(datetime.timedelta(days=365.25)),
+                    output_field=FloatField(),
+                ),
+            )
+            .annotate(
+                years_since_update=Greatest(Coalesce(F('years_since_update_raw'), Value(1.0)), Value(1.0)),
+                popularity=F('base_popularity') / F('years_since_update'),
+            )
         )
         beatmaps = beatmaps.order_by('-' + sort) if sort in ['tag_weight', 'popularity'] else beatmaps.order_by('-favourite_count', '-playcount')
 
@@ -431,6 +456,8 @@ def search_results(request):
     # Server-side paginate to a modest page size to reduce template rendering cost
     paginator = Paginator(beatmaps, 10)
     page_obj = paginator.get_page(request.GET.get('page'))
+
+
 
     annotate_search_results_with_tags(page_obj.object_list, request.user, predicted_mode in ['include', 'only'])
 

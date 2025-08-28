@@ -4,9 +4,11 @@
 [data-theme="dark"] .tag-input { background: #0f1a30; color: #e5e7eb; border-color: #1f2937; }
 .apply-tag-btn { background-color: #28a745; color: white; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer; }
 .apply-tag-btn:hover { background-color: #218838; }
-.tag-list { list-style: none; padding: 0; margin-top: 10px; }
-.tag-list li { padding: 5px 10px; border: 1px solid #ccc; border-radius: 15px; margin-bottom: 5px; cursor: pointer; transition: background-color 0.3s; }
-.tag-list li:hover { background-color: #f0f0f0; }
+.tag-list { list-style: none; padding: 0; margin: 0; }
+.tag-list li { padding: 6px 10px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background-color 0.15s; border-radius: 0; }
+.tag-list li:last-child { border-bottom: none; }
+[data-theme="dark"] .tag-list li:hover { background-color: #0f1a30; }
+.tag-list li:hover { background-color: var(--hover); }
 
 .applied-tags { margin-top: 20px; }
 .applied-tags span.tag { display: inline-block; padding: 5px 10px; border-radius: 15px; margin: 5px; font-size: 14px; cursor: pointer; transition: background-color 0.15s, color 0.15s; color: white; background-color: lightgrey; }
@@ -28,6 +30,9 @@
 /* Ensure tag suggestions overlay other content like the graph */
 .beatmap-card-wrapper { position: relative; z-index: 3; }
 .tag-input-container { position: relative; }
+.tag-input-container.portal-open > .tag-list { display: none !important; }
+/* Keep embedded list hidden when input not focused to avoid duplicate underlay */
+.tag-input-container:not(:focus-within) > .tag-list { display: none; }
 .tag-list {
   position: absolute;
   top: calc(100% + 4px);
@@ -40,4 +45,26 @@
   border: 1px solid var(--border);
   border-radius: 8px;
   box-shadow: 0 8px 16px var(--shadow-color);
+  color: var(--text-on-surface);
 }
+
+/* When portaled to <body> for overlay safety */
+.tag-list.tag-portal {
+  position: fixed;
+  left: 0;
+  top: 0;
+  right: auto;
+  z-index: 5000;
+  max-height: 300px;
+  overflow-y: auto;
+  background: var(--surface-2);
+  color: var(--text-on-surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 16px var(--shadow-color);
+}
+
+/* Ensure dropdown isn’t hidden behind subsequent cards on search results */
+.page-search-results .beatmap-card-wrapper { z-index: 1; }
+.page-search-results .beatmap-card-wrapper:focus-within,
+.page-search-results .beatmap-card-wrapper:hover { z-index: 999; }

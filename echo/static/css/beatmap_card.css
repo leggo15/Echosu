@@ -51,26 +51,7 @@
 .beatmap-card-wrapper .card-footer .weight { align-self: end; }
 .beatmap-card-wrapper .card-footer .tags-area { flex: 1 1 auto; }
 .beatmap-card-wrapper .card-footer .tags-area .tag-input-container { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; position: relative; }
-.beatmap-card-wrapper .card-footer .tags-area .tag-list {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
-  z-index: 2000;
-  background: #fff;
-  border-radius: 8px;
-  margin-top: 4px; /* spacing below input row */
-  max-height: 220px;
-  overflow-y: auto;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
-}
-/* Make list items full-width and clickable */
-.beatmap-card-wrapper .card-footer .tags-area .tag-list li {
-  list-style: none;
-  margin: 0;
-  border-radius: 0;
-}
-.beatmap-card-wrapper .card-footer .tags-area .tag-list { margin: 6px 0 0 0; }
+/* Deprecated in-card tag-list styling removed in favor of portaled dropdown */
 .title { font-size: 26px; color: #333; margin: 0 0 6px 0; }
 .artist, .mapper { font-size: 18px; color: #555; }
 .beatmap-stats { margin: 10px 0 20px 0; }

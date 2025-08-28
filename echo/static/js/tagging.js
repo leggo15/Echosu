@@ -11,14 +11,50 @@
     // Scope interactive elements to the current card to avoid leaking across cards
     var $input = $card.find('.tag-input');
     var $list = $card.find('.tag-list');
+    var $inputContainer = $input.closest('.tag-input-container');
     var $apply = $card.find('.apply-tag-btn');
     var $applied = $card.find('.applied-tags');
     var csrf = $wrapper.find('input[name=csrfmiddlewaretoken]').val() || $('input[name=csrfmiddlewaretoken]').val();
     var isAuthenticated = Boolean(csrf);
     var refreshDebounceTimer = null;
 
+    // -----------------------------
+    // Dropdown portal helpers
+    // -----------------------------
+    function updatePortalPosition() {
+      if (!$list.length || $list.data('portaled') !== '1' || !$inputContainer.length) return;
+      var rect = $inputContainer[0].getBoundingClientRect();
+      var left = Math.max(0, rect.left);
+      var top = rect.bottom + 4; // match CSS spacing
+      var width = Math.min(rect.width, 300); // limit dropdown width to 300px
+      var viewportSpaceBelow = (window.innerHeight || document.documentElement.clientHeight) - rect.bottom - 12;
+      var maxH = Math.min(300, Math.max(120, viewportSpaceBelow));
+      $list.css({ left: left + 'px', top: top + 'px', width: width + 'px', maxHeight: maxH + 'px' });
+    }
+
+    function openPortal() {
+      if (!$list.length || !$inputContainer.length) return;
+      if ($list.data('portaled') === '1') { updatePortalPosition(); return; }
+      $list.addClass('tag-portal');
+      $('body').append($list);
+      $list.data('portaled', '1');
+      $inputContainer.addClass('portal-open');
+      updatePortalPosition();
+    }
+
+    function closePortal() {
+      if (!$list.length) return;
+      if ($list.data('portaled') !== '1') return;
+      // Restore to original container
+      $list.removeClass('tag-portal');
+      $list.css({ left: '', top: '', width: '', maxHeight: '' });
+      $inputContainer.append($list);
+      $list.data('portaled', '0');
+      $inputContainer.removeClass('portal-open');
+    }
+
     function searchTags(query) {
-      if (!query) { $list.empty(); return; }
+      if (!query) { $list.empty(); closePortal(); return; }
       $.ajax({ url: '/search_tags/', data: { q: query } })
         .done(function(data) {
           $list.empty();
@@ -27,6 +63,7 @@
               .attr('data-tag-name', tag.name)
               .appendTo($list);
           });
+          if (data && data.length) { openPortal(); } else { closePortal(); }
         });
     }
 
@@ -214,9 +251,11 @@
 
     // Events
     $input.on('input', function() { searchTags($(this).val()); });
+    $input.on('focus', function(){ if ($list.children().length) { openPortal(); } });
+    $input.on('blur', function(){ setTimeout(closePortal, 120); });
     $list.on('click', 'li', function() {
       var name = $(this).data('tag-name') || $(this).text().split(' (')[0];
-      $input.val(name); $list.empty();
+      $input.val(name); $list.empty(); closePortal();
     });
     $input.on('keydown', function(e) { if (e.key === 'Enter') { e.preventDefault(); $apply.click(); } });
     $apply.on('click', function() {
@@ -297,6 +336,17 @@
         var tm = t.data('tooltip-timeout'); if (tm) { clearTimeout(tm); t.removeData('tooltip-timeout'); }
         t.data('hovering', false);
       });
+      updatePortalPosition();
+    });
+
+    // Close on outside click for safety (per-card handler; cheap enough)
+    $(document).on('mousedown', function(evt) {
+      if (!$list.length) return;
+      if ($list.data('portaled') !== '1') return;
+      var $target = $(evt.target);
+      if ($target.closest($list).length) return;
+      if ($target.closest($inputContainer).length) return;
+      closePortal();
     });
 
     // Initial fetch

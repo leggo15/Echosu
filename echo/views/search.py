@@ -411,8 +411,12 @@ def search_results(request):
     exact_tags = identify_exact_match_tags(include_tags, parsed_terms)
 
     if sort not in ['tag_weight', 'popularity']:
-        # Default depends on query presence: tag_weight when query present, else popularity
-        sort = 'tag_weight' if include_tags else 'popularity'
+        if not request.user.is_authenticated:
+            # For unauthenticated users, prefer tag_weight by default
+            sort = 'tag_weight'
+        else:
+            # Default depends on query presence: tag_weight when query present, else popularity
+            sort = 'tag_weight' if include_tags else 'popularity'
 
     if include_tags:
         beatmaps = annotate_and_order_beatmaps(beatmaps, include_tags, exact_tags, sort, predicted_mode)

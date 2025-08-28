@@ -205,9 +205,14 @@ nav { background-color: var(--nav-bg); padding: 10px 0; display: flex; justify-c
 }
 .floating-add-beatmap button:hover { background-color: var(--nav-hover); }
 
+.side-panels-toggle{
+  display: none;
+}
+
 @media (max-width: 1720px) {
   /* Side panels slide-out */
   .side-panels-toggle {
+    display: block;
     position: fixed;
     right: 10px;
     top: 66px;

@@ -8,6 +8,44 @@
 {% block content %}
     <div class="container">
 
+        <!-- Contributors Leaderboard -->
+        <section class="contributors-leaderboard" aria-labelledby="contributors-heading">
+            <h2 id="contributors-heading">Top Contributors</h2>
+            <div class="leaderboard">
+                <table class="leaderboard-table">
+                    <thead>
+                        <tr>
+                            <th>User</th>
+                            <th>Tag Applications</th>
+                            <th>Unique Maps Tagged</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if current_user_stats %}
+                            <tr class="current-user-row">
+                                <td>{{ current_user_stats.username|default:'You' }}</td>
+                                <td>{{ current_user_stats.tag_count }}</td>
+                                <td>{{ current_user_stats.unique_maps }}</td>
+                            </tr>
+                            <tr><td colspan="3"><hr></td></tr>
+                        {% endif %}
+                        {% for row in leaderboard %}
+                            <tr>
+                                <td>{{ row.user__username|default:'Anonymous' }}</td>
+                                
+                                <td>{{ row.tag_count }}</td>
+                                <td>{{ row.unique_maps }}</td>
+                            </tr>
+                        {% empty %}
+                            <tr>
+                                <td colspan="3">No contributions yet.</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
         <!-- Top Tags Section -->
         <section class="tags-usage">
             <h2>Top 50 Tags</h2>
@@ -55,44 +93,6 @@
                 <li class="no-tags-message">No tags available.</li>
             {% endfor %}
         </ul>
-
-        <!-- Contributors Leaderboard -->
-        <section class="contributors-leaderboard" aria-labelledby="contributors-heading">
-            <h2 id="contributors-heading">Top Contributors</h2>
-            <div class="leaderboard">
-                <table class="leaderboard-table">
-                    <thead>
-                        <tr>
-                            <th>User</th>
-                            <th>Tag Applications</th>
-                            <th>Unique Maps Tagged</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% if current_user_stats %}
-                            <tr class="current-user-row">
-                                <td>{{ current_user_stats.username|default:'You' }}</td>
-                                <td>{{ current_user_stats.tag_count }}</td>
-                                <td>{{ current_user_stats.unique_maps }}</td>
-                            </tr>
-                            <tr><td colspan="3"><hr></td></tr>
-                        {% endif %}
-                        {% for row in leaderboard %}
-                            <tr>
-                                <td>{{ row.user__username|default:'Anonymous' }}</td>
-                                
-                                <td>{{ row.tag_count }}</td>
-                                <td>{{ row.unique_maps }}</td>
-                            </tr>
-                        {% empty %}
-                            <tr>
-                                <td colspan="3">No contributions yet.</td>
-                            </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </section>
     </div>
 {% endblock %}
 

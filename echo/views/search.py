@@ -851,31 +851,31 @@ def build_query_conditions(beatmaps, search_terms, predicted_mode='include'):
     if context.exclude_q:
         context.beatmaps = context.beatmaps.exclude(context.exclude_q)
     if context.required_tags:
-        # Require ALL '.'-prefixed tags to be present (AND semantics)
+        # Require ALL '.'-prefixed tags to be present (AND semantics), excluding true negatives
+        req_filter = Q(tagapplication__tag__name__in=context.required_tags) & Q(tagapplication__true_negative=False)
+        if predicted_mode == 'exclude':
+            req_filter &= Q(tagapplication__user__isnull=False)
+        elif predicted_mode == 'only':
+            req_filter &= Q(tagapplication__user__isnull=True)
         context.beatmaps = (
             context.beatmaps
             .annotate(
-                num_required_tags=Count(
-                    'tags',
-                    filter=Q(tags__name__in=context.required_tags),
-                    distinct=True,
-                )
+                num_required_tags=Count('tagapplication__tag', filter=req_filter, distinct=True)
             )
             .filter(num_required_tags=len(context.required_tags))
         )
     if context.include_tag_names:
+        base = Q(tagapplication__tag__name__in=context.include_tag_names) & Q(tagapplication__true_negative=False)
         if predicted_mode == 'include':
-            context.beatmaps = context.beatmaps.filter(tagapplication__tag__name__in=context.include_tag_names).distinct()
+            context.beatmaps = context.beatmaps.filter(base).distinct()
         elif predicted_mode == 'exclude':
-            context.beatmaps = context.beatmaps.filter(
-                tagapplication__tag__name__in=context.include_tag_names,
-                tagapplication__user__isnull=False,
-            ).distinct()
+            context.beatmaps = context.beatmaps.filter(base & Q(tagapplication__user__isnull=False)).distinct()
         elif predicted_mode == 'only':
-            context.beatmaps = context.beatmaps.filter(
-                tagapplication__tag__name__in=context.include_tag_names,
-                tagapplication__user__isnull=True,
-            ).distinct()
+            context.beatmaps = context.beatmaps.filter(base & Q(tagapplication__user__isnull=True)).distinct()
     if context.exclude_tags:
-        context.beatmaps = context.beatmaps.exclude(tags__name__in=context.exclude_tags)
+        # Exclude only when a positive (non-negative) tag application exists
+        context.beatmaps = context.beatmaps.exclude(
+            tagapplication__tag__name__in=context.exclude_tags,
+            tagapplication__true_negative=False,
+        )
     return context.beatmaps, context.include_tag_names

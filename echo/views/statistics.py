@@ -177,7 +177,7 @@ def _compute_player_stats(osu_id: int | None, source: str):
 
     rows = (
         TagApplication.objects
-        .filter(beatmap__in=beatmaps_for_player)
+        .filter(beatmap__in=beatmaps_for_player, true_negative=False)
         .values('tag__name')
         .annotate(c=Count('id'))
         .order_by('-c')[:15]
@@ -243,7 +243,7 @@ def statistics(request: HttpRequest):
 
         mapper_tag_rows = (
             TagApplication.objects
-            .filter(beatmap__in=user_maps)
+            .filter(beatmap__in=user_maps, true_negative=False)
             .values('tag__name')
             .annotate(c=Count('beatmap', distinct=True))  # count each tag once per map
             .order_by('-c')[:15]

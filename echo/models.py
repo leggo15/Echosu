@@ -193,6 +193,7 @@ class TagApplication(models.Model):
     beatmap = models.ForeignKey(Beatmap, on_delete=models.CASCADE)
     timestamp = models.JSONField(default=dict, blank=True, null=True)
     is_prediction = models.BooleanField(default=False, help_text="Indicates if tag is predicted for this beatmap", db_index=True)
+    true_negative = models.BooleanField(default=False, help_text="Indicates this tag is an explicit true negative for this beatmap", db_index=True)
     prediction_confidence = models.FloatField(default=0.0, blank=True, null=True, help_text="Confidence level of the prediction", db_index=True)
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -211,17 +212,21 @@ class TagApplication(models.Model):
         ).exists()
 
     class Meta:
-        unique_together = ('tag', 'beatmap', 'user')
+        unique_together = ('tag', 'beatmap', 'user', 'true_negative', 'is_prediction')
         indexes = [
             # Existing indexes
             models.Index(fields=['beatmap', 'tag']),
             models.Index(fields=['user', 'beatmap']),
             models.Index(fields=['tag', 'user']),
             models.Index(fields=['is_prediction']),
+            models.Index(fields=['true_negative']),
             # Additional performance indexes
             models.Index(fields=['created_at', 'is_prediction']),
+            models.Index(fields=['created_at', 'true_negative']),
             models.Index(fields=['beatmap', 'is_prediction']),
+            models.Index(fields=['beatmap', 'true_negative']),
             models.Index(fields=['tag', 'is_prediction']),
+            models.Index(fields=['tag', 'true_negative']),
             models.Index(fields=['prediction_confidence', 'is_prediction']),
             models.Index(fields=['user', 'created_at']),
             models.Index(fields=['beatmap', 'created_at']),

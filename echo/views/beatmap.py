@@ -50,7 +50,7 @@ def beatmap_detail(request, beatmap_id):
     beatmap = get_object_or_404(Beatmap, beatmap_id=beatmap_id)
 
     # Get TagApplications for this beatmap
-    tag_apps = TagApplication.objects.filter(beatmap=beatmap).select_related('tag')
+    tag_apps = TagApplication.objects.filter(beatmap=beatmap, true_negative=False).select_related('tag')
 
     # Annotate tags with apply counts
     tags_with_counts = tag_apps.values(
@@ -61,7 +61,7 @@ def beatmap_detail(request, beatmap_id):
     user_applied_tags = []
     if request.user.is_authenticated:
         user_applied_tags = TagApplication.objects.filter(
-            beatmap=beatmap, user=request.user
+            beatmap=beatmap, user=request.user, true_negative=False
         ).values_list('tag__id', flat=True)
 
     # Prepare tags_with_counts with is_applied_by_user flag

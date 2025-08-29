@@ -57,7 +57,7 @@ def get_tags(request):
     # Fetch all tag applications for this beatmap with optimized queries
     applications = list(
         TagApplication.objects
-        .filter(beatmap=beatmap)
+        .filter(beatmap=beatmap, true_negative=False)
         .select_related('tag', 'tag__description_author')
         .only('user_id', 'tag__id', 'tag__name', 'tag__description', 'tag__description_author__username')
     )
@@ -121,6 +121,30 @@ def get_tags(request):
                     'description_author': author,
                 })
     
+    # Optionally include true negatives for admin views when requested
+    include_neg = str(request.GET.get('include_true_negatives', '0')).lower() in ['1', 'true', 'yes', 'on']
+    if include_neg and getattr(user, 'is_staff', False):
+        neg_apps = (
+            TagApplication.objects
+            .filter(beatmap=beatmap, true_negative=True)
+            .select_related('tag')
+            .only('tag__name')
+        )
+        neg_names = set()
+        for app in neg_apps:
+            tname = getattr(app.tag, 'name', '')
+            if tname and tname not in neg_names:
+                neg_names.add(tname)
+                tags.append({
+                    'name': tname,
+                    'is_applied_by_user': False,
+                    'is_predicted': False,
+                    'apply_count': 0,
+                    'description': '',
+                    'description_author': '',
+                    'true_negative': True,
+                })
+
     # Sort by apply count (descending), then by name
     tags.sort(key=lambda x: (-x['apply_count'], x['name']))
     
@@ -155,7 +179,7 @@ def get_tags_bulk(request):
     # Single query for all tag applications with related data
     tag_apps = list(
         TagApplication.objects
-        .filter(beatmap__beatmap_id__in=beatmap_ids)
+        .filter(beatmap__beatmap_id__in=beatmap_ids, true_negative=False)
         .select_related('beatmap', 'tag', 'tag__description_author')
         .only('beatmap__beatmap_id', 'user_id', 'tag__id', 'tag__name', 'tag__description', 'tag__description_author__username')
     )
@@ -197,6 +221,24 @@ def get_tags_bulk(request):
             entry['is_predicted'] = True
             if entry['apply_count'] == 0:
                 entry['apply_count'] = 1
+
+    # Optionally include negatives (admin view helper)
+    include_neg = str(request.GET.get('include_true_negatives', '0')).lower() in ['1', 'true', 'yes', 'on']
+    if include_neg and getattr(user, 'is_staff', False):
+        neg_qs = (
+            TagApplication.objects
+            .filter(beatmap__beatmap_id__in=beatmap_ids, true_negative=True)
+            .select_related('beatmap', 'tag')
+            .only('beatmap__beatmap_id', 'tag__name')
+        )
+        for app in neg_qs:
+            bm_id = getattr(app.beatmap, 'beatmap_id', None)
+            tag_name = getattr(app.tag, 'name', '')
+            if bm_id and tag_name:
+                entry = tag_data[bm_id][tag_name]
+                # Mark as negative; do not inflate counts
+                entry['name'] = entry['name'] or tag_name
+                entry['true_negative'] = True
 
     # Finalize per-beatmap lists
     for bm_id, tags_for_bm in tag_data.items():
@@ -379,6 +421,11 @@ def modify_tag(request):
     tag_name = request.POST.get('tag', '')
     beatmap_id = request.POST.get('beatmap_id')
     user = request.user
+    # Optional: admin-only negative toggle
+    negative_flag_raw = request.POST.get('true_negative')
+    want_true_negative = str(negative_flag_raw).lower() in ['1', 'true', 'yes', 'on']
+    if want_true_negative and not getattr(user, 'is_staff', False):
+        return JsonResponse({'status': 'forbidden', 'message': 'Admin only action.'}, status=403)
 
     processed_tag = sanitize_tag(tag_name.lower())
 
@@ -401,15 +448,16 @@ def modify_tag(request):
                 tag=tag,
                 beatmap=beatmap,
                 user=user,
+                true_negative=True if want_true_negative else False,
             )
 
             if not created:
                 tag_application.delete()
                 if not TagApplication.objects.filter(tag=tag).exists():
                     tag.delete()
-                return JsonResponse({'status': 'success', 'action': 'removed'})
+                return JsonResponse({'status': 'success', 'action': 'removed', 'true_negative': want_true_negative})
 
-            return JsonResponse({'status': 'success', 'action': 'applied'})
+            return JsonResponse({'status': 'success', 'action': 'applied', 'true_negative': want_true_negative})
 
     except Exception:
         return JsonResponse({'status': 'error', 'message': 'Internal server error.'}, status=500)

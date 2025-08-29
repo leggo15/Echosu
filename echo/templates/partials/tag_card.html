@@ -50,7 +50,26 @@
           {% endif %}
           {# Always show dynamic Find Similar Maps button; JS builds fresh query on click #}
           <a href="#" class="beatmap-link find-similar-btn" data-beatmap-id="{{ beatmap.beatmap_id }}" role="button">Find Similar Maps</a>
+
+          {% if request.path == '/beatmap_detail/'|add:beatmap.beatmap_id|add:'/' and user.is_staff %}
+          <div class="admin-actions" style="margin-top: 8px;">
+            <button type="button" class="api-test-btn" data-beatmap-id="{{ beatmap.beatmap_id }}">Run API tests</button>
+          </div>
+          {% endif %}
+
         </div>
+
+        {% if request.path == '/beatmap_detail/'|add:beatmap.beatmap_id|add:'/' and user.is_staff %}
+        <div class="tags-area neg-tags-area" style="margin-top: 8px;">
+          <div class="neg-tag-input-container">
+            <input type="text" class="neg-tag-input" autocomplete="off" placeholder="Add a negative tag...">
+            <button type="button" class="apply-neg-tag-btn">Apply Negative</button>
+            <ul class="neg-tag-list" aria-live="polite"></ul>
+          </div>
+          <div class="negative-tags" role="list" aria-label="True negative tags">Negative tags:</div>
+        </div>
+        {% endif %}
+        
       </div>
 
     <div class="beatmap-details-container">
@@ -157,11 +176,6 @@
           </div>
           <div class="applied-tags" role="list" aria-label="Applied tags">Tags:</div>
         </div>
-        {% if request.path == '/beatmap_detail/'|add:beatmap.beatmap_id|add:'/' and user.is_staff %}
-          <div class="admin-actions" style="margin-top: 8px;">
-            <button type="button" class="api-test-btn" data-beatmap-id="{{ beatmap.beatmap_id }}">Run API tests</button>
-          </div>
-        {% endif %}
         {% if request.path == '/' or request.path == '/search_results/' %}
           {% if sort == 'tag_weight' %}
             <i class="weight">[{{ beatmap.tag_weight|default_if_none:0|floatformat:"2" }}]</i>

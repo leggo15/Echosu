@@ -115,7 +115,7 @@
           // Consolidated retrieve with includes
           `/api/beatmaps/${beatmapId}/`,
           // Slim tag applications list (for comparison)
-          `/api/tag-applications/?beatmap_id=${beatmapId}&include=tag_counts,tag_timestamps,predicted_tags`
+          `/api/tag-applications/?beatmap_id=${beatmapId}&include=tag_counts,tag_timestamps,predicted_tags,true_negatives`
         ];
         for (const path of endpoints){
           const url = path.startsWith('http') ? path : base + path;

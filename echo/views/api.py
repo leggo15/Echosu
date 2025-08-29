@@ -133,11 +133,15 @@ class TagApplicationViewSet(viewsets.ReadOnlyModelViewSet):
         params = self.request.query_params
         include_tokens = [s.strip() for s in (params.get('include') or '').split(',') if s.strip()]
         include_predicted_flag = ('predicted_tags' in include_tokens) or (str(params.get('include_predicted', '0')).lower() in ['1', 'true', 'yes', 'on', 'include'])
+        include_true_negatives_flag = ('true_negatives' in include_tokens) or ('negative_tags' in include_tokens)
         # Always drop null-user non-predicted records
         qs = qs.exclude(user__isnull=True, is_prediction=False)
         # By default, exclude predictions unless explicitly requested
         if not include_predicted_flag:
             qs = qs.filter(is_prediction=False)
+        # By default, exclude true negatives unless explicitly requested via include
+        if not include_true_negatives_flag:
+            qs = qs.filter(true_negative=False)
         beatmap_id = params.get('beatmap_id')
         if beatmap_id:
             qs = qs.filter(beatmap__beatmap_id=str(beatmap_id))
@@ -238,6 +242,7 @@ class TagApplicationViewSet(viewsets.ReadOnlyModelViewSet):
         if is_filtered_by_bm:
             beatmap_id = str(request.query_params.get('beatmap_id'))
             include_tokens = [s.strip() for s in (request.query_params.get('include') or '').split(',') if s.strip()]
+            include_true_negatives_flag = ('true_negatives' in include_tokens) or ('negative_tags' in include_tokens)
             # Base lite serialization
             page = self.paginate_queryset(queryset)
             items = page or queryset
@@ -256,6 +261,9 @@ class TagApplicationViewSet(viewsets.ReadOnlyModelViewSet):
                 include_predicted_flag = ('predicted_tags' in include_tokens) or (str(request.query_params.get('include_predicted', '0')).lower() in ['1', 'true', 'yes', 'on', 'include'])
                 if not include_predicted_flag:
                     base_qs = base_qs.filter(is_prediction=False)
+                # By default, exclude true negatives unless explicitly requested
+                if not include_true_negatives_flag:
+                    base_qs = base_qs.filter(true_negative=False)
 
                 if need_counts:
                     counts = (
@@ -315,6 +323,8 @@ class TagApplicationViewSet(viewsets.ReadOnlyModelViewSet):
                 except Exception:
                     total_len = 0
                 user_qs = TagApplication.objects.filter(beatmap__beatmap_id=beatmap_id, user=request.user).select_related('tag')
+                if not include_true_negatives_flag:
+                    user_qs = user_qs.filter(true_negative=False)
                 user_map = {}
                 for ta in user_qs:
                     intervals = []

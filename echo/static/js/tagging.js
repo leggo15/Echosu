@@ -16,6 +16,11 @@
     var $inputContainer = $input.closest('.tag-input-container');
     var $apply = $card.find('.apply-tag-btn');
     var $applied = $card.find('.applied-tags');
+    // Admin-only negative tag controls (present only on beatmap_detail for staff)
+    var $negInput = $card.find('.neg-tag-input');
+    var $negList = $card.find('.neg-tag-list');
+    var $negApply = $card.find('.apply-neg-tag-btn');
+    var $negApplied = $card.find('.negative-tags');
     var csrf = $wrapper.find('input[name=csrfmiddlewaretoken]').val() || $('input[name=csrfmiddlewaretoken]').val();
     var isAuthenticated = Boolean(csrf);
     var refreshDebounceTimer = null;
@@ -151,7 +156,7 @@
       $.ajax({ 
         type: 'GET', 
         url: '/get_tags/', 
-        data: { beatmap_id: beatmapId, include_predicted: includePredicted } 
+        data: { beatmap_id: beatmapId, include_predicted: includePredicted, include_true_negatives: 1 } 
       }).done(function(tags) {
         // Cache the result
         tagCache[beatmapId] = {
@@ -172,8 +177,14 @@
       
       $('.tooltip, .description-author').remove();
       $targetApplied.empty().append('Tags: ');
+      // Split positives and negatives if provided
+      var negatives = [];
+      var positives = [];
+      (Array.isArray(tags) ? tags : []).forEach(function(tag){
+        if (tag && tag.true_negative) { negatives.push(tag); } else { positives.push(tag); }
+      });
       
-      tags.forEach(function(tag) {
+      positives.forEach(function(tag) {
         var tagClass = tag.is_applied_by_user ? 'tag-applied' : 
                       (tag.is_predicted ? 'tag-predicted' : 'tag-unapplied');
         
@@ -182,12 +193,28 @@
           .attr('data-tag-name', tag.name)
           .attr('data-applied-by-user', tag.is_applied_by_user)
           .attr('data-is-predicted', tag.is_predicted ? 'true' : 'false')
+          .attr('data-true-negative', tag.true_negative ? 'true' : 'false')
           .attr('data-description', tag.description || '')
           .attr('data-description-author', tag.description_author || '')
           .attr('data-beatmap-id', beatmapId)
           .text(tag.name + (tag.apply_count ? ' (' + tag.apply_count + ')' : ''))
           .appendTo($targetApplied);
       });
+
+      // Render negatives if container present
+      var $negTarget = $targetCard.find('.negative-tags');
+      if ($negTarget.length) {
+        $negTarget.empty().append('Negative Tags: ');
+        negatives.forEach(function(tag) {
+          $('<span></span>')
+            .addClass('tag tag-negative')
+            .attr('data-tag-name', tag.name)
+            .attr('data-true-negative', 'true')
+            .attr('data-beatmap-id', beatmapId)
+            .text(tag.name)
+            .appendTo($negTarget);
+        });
+      }
     }
 
     // Main refresh function - tries bulk first, falls back to individual
@@ -232,7 +259,7 @@
     // Run cache cleanup every 5 minutes
     setInterval(clearExpiredCache, 5 * 60 * 1000);
 
-    function modifyTag($tagEl, tagName, action) {
+    function modifyTag($tagEl, tagName, action, isNegative) {
       if (!beatmapId) return;
       
       // Invalidate cache for this beatmap
@@ -241,7 +268,7 @@
       pendingTagWrites += 1;
       $.ajax({
         type: 'POST', url: '/modify_tag/',
-        data: { action: action, tag: tagName, beatmap_id: beatmapId, csrfmiddlewaretoken: csrf }
+        data: { action: action, tag: tagName, beatmap_id: beatmapId, csrfmiddlewaretoken: csrf, true_negative: isNegative ? '1' : '0' }
       }).done(function() {
         // Debounce UI refresh to coalesce rapid toggles, and update only this card.
         if (refreshDebounceTimer) { clearTimeout(refreshDebounceTimer); }
@@ -269,7 +296,7 @@
       if (!tagName) return;
       var existing = $applied.find('.tag[data-tag-name="' + tagName + '"]');
       var action = existing.length && String(existing.attr('data-applied-by-user')).toLowerCase() === 'true' ? 'remove' : 'apply';
-      modifyTag(existing, tagName, action);
+      modifyTag(existing, tagName, action, false);
     });
 
     $card.on('click', '.applied-tags .tag', function() {
@@ -277,7 +304,23 @@
       var $t = $(this);
       var tagName = $t.data('tag-name');
       var isAppliedByUser = String($t.attr('data-applied-by-user')).toLowerCase() === 'true';
-      modifyTag($t, tagName, isAppliedByUser ? 'remove' : 'apply');
+      modifyTag($t, tagName, isAppliedByUser ? 'remove' : 'apply', false);
+    });
+
+    // Negative tag events (admin-only UI)
+    $card.on('click', '.apply-neg-tag-btn', function() {
+      if (!isAuthenticated) return; // still require auth
+      var tagName = ($negInput.val() || '').trim();
+      if (!tagName) return;
+      var existing = $negApplied.find('.tag[data-tag-name="' + tagName + '"]');
+      var action = existing.length ? 'remove' : 'apply';
+      modifyTag(existing, tagName, action, true);
+    });
+    $card.on('click', '.negative-tags .tag', function() {
+      if (!isAuthenticated) return;
+      var $t = $(this);
+      var tagName = $t.data('tag-name');
+      modifyTag($t, tagName, 'remove', true);
     });
 
     // Tooltip (shared with master.css styles)

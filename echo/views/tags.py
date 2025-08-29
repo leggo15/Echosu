@@ -41,6 +41,10 @@ from collections import defaultdict
 from ..models import Beatmap, Tag, TagApplication, Vote
 from .auth import api
 from ..templatetags.custom_tags import has_tag_edit_permission
+from django.views.decorators.http import require_http_methods
+from django.contrib.auth.decorators import login_required
+from django.http import HttpResponseForbidden
+
 
 
 # ----------------------------- Tag Views ----------------------------- #
@@ -461,6 +465,50 @@ def modify_tag(request):
 
     except Exception:
         return JsonResponse({'status': 'error', 'message': 'Internal server error.'}, status=500)
+# ----------------------------- Admin: remove predicted tag ----------------------------- #
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def remove_predicted_tag(request):
+    """Admin-only confirmation + removal for predicted tag applications.
+
+    GET: Render confirmation form.
+    POST: Delete TagApplication rows where (beatmap, tag) match and is_prediction=True.
+    """
+    if not getattr(request.user, 'is_staff', False):
+        return HttpResponseForbidden('Admin privileges required.')
+
+    beatmap_id = (request.GET.get('beatmap_id') or request.POST.get('beatmap_id') or '').strip()
+    tag_name = (request.GET.get('tag') or request.POST.get('tag') or '').strip()
+    next_url = request.GET.get('next') or request.POST.get('next') or ''
+
+    if not beatmap_id or not tag_name:
+        return JsonResponse({'status': 'error', 'message': 'Missing parameters.'}, status=400)
+
+    bm = get_object_or_404(Beatmap, beatmap_id=str(beatmap_id))
+    tag = Tag.objects.filter(name__iexact=tag_name).first()
+
+    if request.method == 'GET':
+        return render(request, 'confirm_remove_predicted.html', {
+            'beatmap': bm,
+            'tag_name': tag_name,
+            'next': next_url,
+        })
+
+    # POST -> delete
+    qs = TagApplication.objects.filter(
+        beatmap=bm,
+        tag__name__iexact=tag_name,
+        is_prediction=True,
+    )
+    deleted_count, _ = qs.delete()
+
+    # Redirect back if provided; else to beatmap detail
+    from django.shortcuts import redirect
+    if next_url:
+        return redirect(next_url)
+    return redirect('beatmap_detail', beatmap_id=bm.beatmap_id)
+
 
 
 # ----------------------------- Description editing ----------------------------- #

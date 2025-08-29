@@ -299,9 +299,21 @@
       modifyTag(existing, tagName, action, false);
     });
 
-    $card.on('click', '.applied-tags .tag', function() {
+    $card.on('click', '.applied-tags .tag', function(e) {
       if (!isAuthenticated) return; // require auth to modify
       var $t = $(this);
+      // Admin predicted-tag removal via right-click -> open confirm form
+      if (e && (e.which === 3 || e.button === 2)) {
+        var isPred = String($t.attr('data-is-predicted')).toLowerCase() === 'true';
+        var tagName = $t.data('tag-name');
+        if (isPred && window.isStaff) {
+          var bmId = $t.data('beatmap-id') || beatmapId;
+          var nextUrl = window.location.href;
+          var url = '/remove_predicted_tag/?beatmap_id=' + encodeURIComponent(bmId) + '&tag=' + encodeURIComponent(tagName) + '&next=' + encodeURIComponent(nextUrl);
+          window.location.href = url;
+          return false;
+        }
+      }
       var tagName = $t.data('tag-name');
       var isAppliedByUser = String($t.attr('data-applied-by-user')).toLowerCase() === 'true';
       modifyTag($t, tagName, isAppliedByUser ? 'remove' : 'apply', false);

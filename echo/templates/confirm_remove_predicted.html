@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Confirm Removal{% endblock %}
+
+{% block head_css %}
+  <link rel="stylesheet" href="{% static 'css/confirm.css' %}">
+{% endblock %}
+
+{% block content %}
+  <div class="container confirmation-page">
+    <h1>Are you sure?</h1>
+    <p>Are you sure you want to remove "{{ tag_name }}" from "{{ beatmap.title }}"?</p>
+    <form method="post" action="{% url 'remove_predicted_tag' %}">
+      {% csrf_token %}
+      <input type="hidden" name="beatmap_id" value="{{ beatmap.beatmap_id }}">
+      <input type="hidden" name="tag" value="{{ tag_name }}">
+      {% if next %}<input type="hidden" name="next" value="{{ next|escape }}">{% endif %}
+      <button type="submit" class="confirm-delete-btn">Yes</button>
+      <a href="{% if next %}{{ next }}{% else %}{% url 'beatmap_detail' beatmap_id=beatmap.beatmap_id %}{% endif %}" class="cancel-btn">Cancel</a>
+    </form>
+  </div>
+{% endblock %}
+
+

@@ -35,6 +35,9 @@
       {% block content %}{% endblock %}
     </main>
 
+    <script>
+      window.isStaff = {% if user.is_staff %}true{% else %}false{% endif %};
+    </script>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://code.jquery.com/ui/1.13.3/jquery-ui.min.js"></script>
     <script src="{% static 'js/core.js' %}"></script>

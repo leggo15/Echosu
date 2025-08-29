@@ -76,7 +76,7 @@ audio, input, select, textarea, button { color-scheme: inherit; }
   max-width: 1200px;
   margin: 20px auto;
   padding: 20px;
-  margin-top: 60px;
+  margin-top: 90px;
   background-color: var(--surface);
   color: var(--text-on-surface);
   box-shadow: 0 4px 8px var(--shadow-color);

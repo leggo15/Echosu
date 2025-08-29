@@ -3,6 +3,8 @@
   // Global cache for bulk tag loading
   var tagCache = {};
   var pendingBulkRequests = {};
+  // Track in-flight tag writes so we can wait before navigating
+  var pendingTagWrites = 0;
   
   function attachTagging($card) {
     var beatmapId = $card.data('beatmap-id') || $card.attr('id')?.split('-').pop();
@@ -236,6 +238,7 @@
       // Invalidate cache for this beatmap
       invalidateTagCache(beatmapId);
       
+      pendingTagWrites += 1;
       $.ajax({
         type: 'POST', url: '/modify_tag/',
         data: { action: action, tag: tagName, beatmap_id: beatmapId, csrfmiddlewaretoken: csrf }
@@ -246,6 +249,8 @@
           refreshTagsIndividual(beatmapId);
           refreshDebounceTimer = null;
         }, 120);
+      }).always(function(){
+        pendingTagWrites = Math.max(0, pendingTagWrites - 1);
       });
     }
 
@@ -555,6 +560,80 @@
         navTo(url);
         return;
       }
+    });
+
+    // Always-visible Find Similar Maps button
+    $wrapper.on('click', '.find-similar-btn', function(e) {
+      e.preventDefault();
+      function waitForWrites(cb) {
+        if (pendingTagWrites === 0) { cb(); return; }
+        var t = setInterval(function(){
+          if (pendingTagWrites === 0) { clearInterval(t); cb(); }
+        }, 50);
+      }
+      waitForWrites(function(){
+        // Respect include_predicted toggle from current URL
+        var params = new URLSearchParams(window.location.search);
+        var includePredicted = params.get('include_predicted');
+        // Resolve context strictly from the clicked element to avoid cross-card mixups
+        var $btn = $(e.currentTarget);
+        var $localWrapper = $btn.closest('.beatmap-card-wrapper');
+        var $localCard = $btn.closest('.tag-card');
+        var localBeatmapId = $localWrapper.data('beatmap-id') || ($localCard.attr('id') ? $localCard.attr('id').split('-').pop() : beatmapId);
+        $.ajax({
+          type: 'GET',
+          url: '/get_tags/',
+          data: { beatmap_id: localBeatmapId, include_predicted: includePredicted }
+        }).done(function(tags){
+          try {
+            var arr = Array.isArray(tags) ? tags : [];
+            var top = arr.slice(0, 10);
+            var tokens = top.map(function(t){
+              var name = (t && t.name) ? String(t.name) : '';
+              if (!name) return null;
+              return /\s/.test(name) ? '"' + name.replace(/\"/g, '') + '"' : name;
+            }).filter(Boolean);
+            var url = buildSearchUrl();
+            if (tokens.length) { url.searchParams.set('query', tokens.join(' ')); }
+            else { url.searchParams.delete('query'); }
+            // Derive a star window from displayed star rating (±15%)
+            var starText = $localCard.find('.beatmap-stats .focus-stat').first().text();
+            var rating = parseFloatSafe(starText);
+            if (isFinite(rating)) {
+              var smin = Math.max(0, rating * 0.85);
+              var smax = rating * 1.15;
+              url.searchParams.set('star_min', fmt(smin, 2));
+              url.searchParams.set('star_max', fmt(smax, 2));
+            }
+            url.searchParams.set('sort', 'tag_weight');
+            navTo(url);
+          } catch (err) {
+            var fallback = buildSearchUrl();
+            var txt = $localCard.find('.beatmap-stats .focus-stat').first().text();
+            var r = parseFloatSafe(txt);
+            if (isFinite(r)) {
+              var mn = Math.max(0, r * 0.85);
+              var mx = r * 1.15;
+              fallback.searchParams.set('star_min', fmt(mn, 2));
+              fallback.searchParams.set('star_max', fmt(mx, 2));
+            }
+            fallback.searchParams.set('sort', 'tag_weight');
+            navTo(fallback);
+          }
+        }).fail(function(){
+          var url = buildSearchUrl();
+          var starText = $localCard.find('.beatmap-stats .focus-stat').first().text();
+          var rating = parseFloatSafe(starText);
+          if (isFinite(rating)) {
+            var smin = Math.max(0, rating * 0.85);
+            var smax = rating * 1.15;
+            url.searchParams.set('star_min', fmt(smin, 2));
+            url.searchParams.set('star_max', fmt(smax, 2));
+          }
+          url.searchParams.set('sort', 'tag_weight');
+          navTo(url);
+        });
+      });
     });
 
     // Mapper click -> ."listed_owner"

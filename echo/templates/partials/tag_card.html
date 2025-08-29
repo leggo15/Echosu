@@ -48,12 +48,8 @@
           {% if not request.path == '/beatmap_detail/'|add:beatmap.beatmap_id|add:'/' %}
             <a href="{% url 'beatmap_detail' beatmap_id=beatmap.beatmap_id %}" class="beatmap-link">View Details</a>
           {% endif %}
-          {# Backend-driven Find Similar Maps: show if similar_query present #}
-          {% if beatmap.similar_query %}
-            <a href="{% url 'search_results' %}?query={{ beatmap.similar_query|urlencode }}&star_min={{ beatmap.similar_extra_params.star_min }}&star_max={{ beatmap.similar_extra_params.star_max }}&sort=tag_weight" class="beatmap-link">Find Similar Maps</a>
-          {% elif similar_query %}
-            <a href="{% url 'search_results' %}?query={{ similar_query|urlencode }}&star_min={{ similar_extra_params.star_min }}&star_max={{ similar_extra_params.star_max }}&sort=tag_weight" class="beatmap-link">Find Similar Maps</a>
-          {% endif %}
+          {# Always show dynamic Find Similar Maps button; JS builds fresh query on click #}
+          <a href="#" class="beatmap-link find-similar-btn" data-beatmap-id="{{ beatmap.beatmap_id }}" role="button">Find Similar Maps</a>
         </div>
       </div>
 

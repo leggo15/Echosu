@@ -6,94 +6,91 @@
   <link rel="stylesheet" href="{% static 'css/tag_library.css' %}">
 {% endblock %}
 {% block content %}
-    <div class="container">
-
-        <!-- Contributors Leaderboard -->
-        <section class="contributors-leaderboard" aria-labelledby="contributors-heading">
-            <h2 id="contributors-heading">Top Contributors</h2>
-            <div class="leaderboard">
-                <table class="leaderboard-table">
-                    <thead>
-                        <tr>
-                            <th>User</th>
-                            <th>Tag Applications</th>
-                            <th>Unique Maps Tagged</th>
+    <!-- Contributors Leaderboard -->
+    <section class="contributors-leaderboard" aria-labelledby="contributors-heading">
+        <h2 id="contributors-heading">Top Contributors</h2>
+        <div class="leaderboard">
+            <table class="leaderboard-table">
+                <thead>
+                    <tr>
+                        <th>User</th>
+                        <th>Tag Applications</th>
+                        <th>Unique Maps Tagged</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if current_user_stats %}
+                        <tr class="current-user-row">
+                            <td>{{ current_user_stats.username|default:'You' }}</td>
+                            <td>{{ current_user_stats.tag_count }}</td>
+                            <td>{{ current_user_stats.unique_maps }}</td>
                         </tr>
-                    </thead>
-                    <tbody>
-                        {% if current_user_stats %}
-                            <tr class="current-user-row">
-                                <td>{{ current_user_stats.username|default:'You' }}</td>
-                                <td>{{ current_user_stats.tag_count }}</td>
-                                <td>{{ current_user_stats.unique_maps }}</td>
-                            </tr>
-                            <tr><td colspan="3"><hr></td></tr>
-                        {% endif %}
-                        {% for row in leaderboard %}
-                            <tr>
-                                <td>{{ row.user__username|default:'Anonymous' }}</td>
-                                
-                                <td>{{ row.tag_count }}</td>
-                                <td>{{ row.unique_maps }}</td>
-                            </tr>
-                        {% empty %}
-                            <tr>
-                                <td colspan="3">No contributions yet.</td>
-                            </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </section>
+                        <tr><td colspan="3"><hr></td></tr>
+                    {% endif %}
+                    {% for row in leaderboard %}
+                        <tr>
+                            <td>{{ row.user__username|default:'Anonymous' }}</td>
+                            
+                            <td>{{ row.tag_count }}</td>
+                            <td>{{ row.unique_maps }}</td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="3">No contributions yet.</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
 
-        <!-- Top Tags Section -->
-        <section class="tags-usage">
-            <h2>Top 50 Tags</h2>
-            <div class="top-tags">
-                {% for tag in top_tags %}
-                    <a 
-                        href="{% url 'search_results' %}?query={{ '"'|add:tag.name|add:'"'|urlencode }}"
-                        class="tag-pill"
-                        data-name="{{ tag.name|lower }}"
-                        aria-label="Search results for tag {{ tag.name }}"
-                    >
-                        <span class="pill-name">{{ tag.name }} </span>
-                        <span class="pill-count">({{ tag.map_count }})</span>
-                    </a>
-                {% empty %}
-                    <p>No tags available.</p>
-                {% endfor %}
-            </div>
-        </section>  
-
-
-        <h1>Tag Library</h1>
-        <input type="text" id="tag-search" class="search-field" placeholder="Search tags..." aria-label="Search Tags" />
-        <ul class="tag-list" id="tag-list">
-            {% for tag in tags %}
-                <li class="tag-item" data-name="{{ tag.name|lower }}">
-                    <a href="{% url 'search_results' %}?query={{ '"'|add:tag.name|add:'"'|urlencode }}" 
-                       class="tag-link" 
-                       aria-label="Search results for tag {{ tag.name }}">
-                        <span class="tag-name" 
-                              data-description="{{ tag.description|escapejs }}" 
-                              data-description-author="{{ tag.description_author_username|default_if_none:'N/A'|escapejs }}">
-                            {{ tag.name }}
-                        </span>
-                        <span class="tag-count">
-                            {% if tag.beatmap_count > 0 %}
-                                {{ tag.beatmap_count }} {{ tag.beatmap_count|pluralize:"beatmap,beatmaps" }}
-                            {% else %}
-                                No beatmaps
-                            {% endif %}
-                        </span>
-                    </a>
-                </li>
+    <!-- Top Tags Section -->
+    <section class="tags-usage">
+        <h2>Top 50 Tags</h2>
+        <div class="top-tags">
+            {% for tag in top_tags %}
+                <a 
+                    href="{% url 'search_results' %}?query={{ '"'|add:tag.name|add:'"'|urlencode }}"
+                    class="tag-pill"
+                    data-name="{{ tag.name|lower }}"
+                    aria-label="Search results for tag {{ tag.name }}"
+                >
+                    <span class="pill-name">{{ tag.name }} </span>
+                    <span class="pill-count">({{ tag.map_count }})</span>
+                </a>
             {% empty %}
-                <li class="no-tags-message">No tags available.</li>
+                <p>No tags available.</p>
             {% endfor %}
-        </ul>
-    </div>
+        </div>
+    </section>  
+
+
+    <h1>Tag Library</h1>
+    <input type="text" id="tag-search" class="search-field" placeholder="Search tags..." aria-label="Search Tags" />
+    <ul class="tag-list" id="tag-list">
+        {% for tag in tags %}
+            <li class="tag-item" data-name="{{ tag.name|lower }}">
+                <a href="{% url 'search_results' %}?query={{ '"'|add:tag.name|add:'"'|urlencode }}" 
+                    class="tag-link" 
+                    aria-label="Search results for tag {{ tag.name }}">
+                    <span class="tag-name" 
+                            data-description="{{ tag.description|escapejs }}" 
+                            data-description-author="{{ tag.description_author_username|default_if_none:'N/A'|escapejs }}">
+                        {{ tag.name }}
+                    </span>
+                    <span class="tag-count">
+                        {% if tag.beatmap_count > 0 %}
+                            {{ tag.beatmap_count }} {{ tag.beatmap_count|pluralize:"beatmap,beatmaps" }}
+                        {% else %}
+                            No beatmaps
+                        {% endif %}
+                    </span>
+                </a>
+            </li>
+        {% empty %}
+            <li class="no-tags-message">No tags available.</li>
+        {% endfor %}
+    </ul>
 {% endblock %}
 
 {% block foot_js %}

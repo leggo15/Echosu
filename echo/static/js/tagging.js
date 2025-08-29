@@ -24,6 +24,68 @@
     var csrf = $wrapper.find('input[name=csrfmiddlewaretoken]').val() || $('input[name=csrfmiddlewaretoken]').val();
     var isAuthenticated = Boolean(csrf);
     var refreshDebounceTimer = null;
+    // -----------------------------
+    // Admin: Predicted tag management
+    // -----------------------------
+    function openPredictedPanel() {
+      var $panel = $card.find('.predicted-tags-panel');
+      if (!$panel.length) return;
+      $panel.show();
+      loadPredictedTags();
+    }
+
+    function closePredictedPanel() {
+      var $panel = $card.find('.predicted-tags-panel');
+      if (!$panel.length) return;
+      $panel.hide();
+    }
+
+    function loadPredictedTags() {
+      var $list = $card.find('.predicted-tags-panel .predicted-list');
+      if (!$list.length || !beatmapId) return;
+      $list.html('<div style="opacity:0.7">Loading...</div>');
+      $.get('/admin/predicted_tags/', { beatmap_id: beatmapId })
+        .done(function(resp){
+          try {
+            var arr = (resp && resp.tags) ? resp.tags : [];
+            if (!arr.length) { $list.html('<div>No predicted tags.</div>'); return; }
+            var html = arr.map(function(t){
+              var name = (t && t.name) ? String(t.name) : '';
+              var count = (t && t.count) ? String(t.count) : '1';
+              var id = 'pred-' + name.replace(/[^a-z0-9_-]/gi, '_');
+              return '<label style="display:block; margin:2px 0;">\
+                <input type="checkbox" class="predicted-item" id="' + id + '" data-name="' + name + '">\
+                <span style="margin-left:6px;">' + name + ' (' + count + ')</span>\
+              </label>';
+            }).join('');
+            $list.html(html);
+          } catch(e) {
+            $list.html('<div>Error loading.</div>');
+          }
+        })
+        .fail(function(){ $list.html('<div>Error loading.</div>'); });
+    }
+
+    function deleteSelectedPredicted() {
+      var $list = $card.find('.predicted-tags-panel .predicted-list');
+      var names = [];
+      $list.find('.predicted-item:checked').each(function(){
+        var nm = $(this).data('name');
+        if (nm) names.push(String(nm));
+      });
+      if (!names.length) return;
+      $.ajax({
+        type: 'POST', url: '/admin/predicted_tags/remove/',
+        data: { beatmap_id: beatmapId, 'tags[]': names, csrfmiddlewaretoken: csrf }
+      }).done(function(){
+        loadPredictedTags();
+        // Refresh the visible tags for this card
+        refreshTagsIndividual(beatmapId);
+      }).fail(function(err){
+        alert((err.responseJSON && err.responseJSON.message) || 'Failed to delete');
+      });
+    }
+
 
     // -----------------------------
     // Dropdown portal helpers
@@ -299,21 +361,9 @@
       modifyTag(existing, tagName, action, false);
     });
 
-    $card.on('click', '.applied-tags .tag', function(e) {
+    $card.on('click', '.applied-tags .tag', function() {
       if (!isAuthenticated) return; // require auth to modify
       var $t = $(this);
-      // Admin predicted-tag removal via right-click -> open confirm form
-      if (e && (e.which === 3 || e.button === 2)) {
-        var isPred = String($t.attr('data-is-predicted')).toLowerCase() === 'true';
-        var tagName = $t.data('tag-name');
-        if (isPred && window.isStaff) {
-          var bmId = $t.data('beatmap-id') || beatmapId;
-          var nextUrl = window.location.href;
-          var url = '/remove_predicted_tag/?beatmap_id=' + encodeURIComponent(bmId) + '&tag=' + encodeURIComponent(tagName) + '&next=' + encodeURIComponent(nextUrl);
-          window.location.href = url;
-          return false;
-        }
-      }
       var tagName = $t.data('tag-name');
       var isAppliedByUser = String($t.attr('data-applied-by-user')).toLowerCase() === 'true';
       modifyTag($t, tagName, isAppliedByUser ? 'remove' : 'apply', false);
@@ -334,6 +384,11 @@
       var tagName = $t.data('tag-name');
       modifyTag($t, tagName, 'remove', true);
     });
+
+    // Predicted management events (admin-only UI)
+    $card.on('click', '.manage-predicted-btn', function(){ openPredictedPanel(); });
+    $card.on('click', '.close-predicted-panel-btn', function(){ closePredictedPanel(); });
+    $card.on('click', '.delete-selected-predicted-btn', function(){ deleteSelectedPredicted(); });
 
     // Tooltip (shared with master.css styles)
     $card.on('mouseenter', '.applied-tags .tag, .tags-usage .tag', function() {

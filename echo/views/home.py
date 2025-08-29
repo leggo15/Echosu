@@ -60,7 +60,7 @@ def tag_library(request):
         Tag.objects
         .select_related('description_author')
         .annotate(
-            beatmap_count=Count('beatmaps', distinct=True),
+            beatmap_count=Count('tagapplication__beatmap', filter=Q(tagapplication__true_negative=False), distinct=True),
             description_author_username=F('description_author__username'),
         )
         .order_by('name')
@@ -70,7 +70,7 @@ def tag_library(request):
         Tag.objects
         .select_related('description_author')
         .annotate(
-            map_count=Count('beatmaps', distinct=True),
+            map_count=Count('tagapplication__beatmap', filter=Q(tagapplication__true_negative=False), distinct=True),
             description_author_username=F('description_author__username'),
         )
         .filter(map_count__gt=0)

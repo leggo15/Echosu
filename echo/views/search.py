@@ -120,11 +120,12 @@ def search_results(request):
     def annotate_and_order_beatmaps(qs, include_tags, exact_tags, sort, predicted_mode):
         # Filter by include_tags using through model, and honor predicted toggle
         if predicted_mode == 'include':
-            qs = qs.filter(tagapplication__tag__name__in=include_tags).distinct()
+            qs = qs.filter(tagapplication__tag__name__in=include_tags, tagapplication__true_negative=False).distinct()
         elif predicted_mode == 'exclude':
             qs = qs.filter(
                 tagapplication__tag__name__in=include_tags,
                 tagapplication__user__isnull=False,
+                tagapplication__true_negative=False,
             ).distinct()
         elif predicted_mode == 'only':
             qs = (
@@ -140,15 +141,15 @@ def search_results(request):
 
         # Count total tags per map; when excluding predictions, count only user-applied
         if predicted_mode == 'include':
-            total_tag_count_expr = Count('tags', distinct=True)
+            total_tag_count_expr = Count('tagapplication__tag', filter=Q(tagapplication__true_negative=False), distinct=True)
         else:  # exclude and only: count only user-applied applications for denominator
-                        total_tag_count_expr = Count('tagapplication__tag', filter=Q(tagapplication__user__isnull=False), distinct=True)
+            total_tag_count_expr = Count('tagapplication__tag', filter=Q(tagapplication__user__isnull=False) & Q(tagapplication__true_negative=False), distinct=True)
         if sort == 'tag_weight':
             # Weight factor for predicted tags (0.5 when included/only, else 0)
             p_w = Value(0.5 if predicted_mode in ['include', 'only'] else 0.0)
 
             # Build subqueries that are independent of the include_tags filter join
-            base_ta_sq = TagApplication.objects.filter(beatmap_id=OuterRef('id'))
+            base_ta_sq = TagApplication.objects.filter(beatmap_id=OuterRef('id'), true_negative=False)
             if predicted_mode == 'exclude':
                 base_ta_sq = base_ta_sq.filter(user__isnull=False)
             elif predicted_mode == 'only':
@@ -193,41 +194,41 @@ def search_results(request):
                     # User vs predicted counts
                     u_tag_match_count=Count(
                         'tagapplication__tag',
-                        filter=(Q(tagapplication__tag__name__in=include_tags) & Q(tagapplication__user__isnull=False)),
+                        filter=(Q(tagapplication__tag__name__in=include_tags) & Q(tagapplication__user__isnull=False) & Q(tagapplication__true_negative=False)),
                         distinct=True,
                     ),
                     p_tag_match_count=Count(
                         'tagapplication__tag',
-                        filter=(Q(tagapplication__tag__name__in=include_tags) & Q(tagapplication__user__isnull=True)),
+                        filter=(Q(tagapplication__tag__name__in=include_tags) & Q(tagapplication__user__isnull=True) & Q(tagapplication__true_negative=False)),
                         distinct=True,
                     ),
                     # Non-exact distinct matches (for numerator-only spending)
                     u_nonexact_match_count=Count(
                         'tagapplication__tag',
-                        filter=(Q(tagapplication__tag__name__in=include_tags) & ~Q(tagapplication__tag__name__in=exact_tags) & Q(tagapplication__user__isnull=False)),
+                        filter=(Q(tagapplication__tag__name__in=include_tags) & ~Q(tagapplication__tag__name__in=exact_tags) & Q(tagapplication__user__isnull=False) & Q(tagapplication__true_negative=False)),
                         distinct=True,
                     ),
                     p_nonexact_match_count=Count(
                         'tagapplication__tag',
-                        filter=(Q(tagapplication__tag__name__in=include_tags) & ~Q(tagapplication__tag__name__in=exact_tags) & Q(tagapplication__user__isnull=True)),
+                        filter=(Q(tagapplication__tag__name__in=include_tags) & ~Q(tagapplication__tag__name__in=exact_tags) & Q(tagapplication__user__isnull=True) & Q(tagapplication__true_negative=False)),
                         distinct=True,
                     ),
                     u_exact_total_count=Count(
                         'tagapplication__tag',
-                        filter=(Q(tagapplication__tag__name__in=exact_tags) & Q(tagapplication__user__isnull=False)),
+                        filter=(Q(tagapplication__tag__name__in=exact_tags) & Q(tagapplication__user__isnull=False) & Q(tagapplication__true_negative=False)),
                     ),
                     p_exact_total_count=Count(
                         'tagapplication__tag',
-                        filter=(Q(tagapplication__tag__name__in=exact_tags) & Q(tagapplication__user__isnull=True)),
+                        filter=(Q(tagapplication__tag__name__in=exact_tags) & Q(tagapplication__user__isnull=True) & Q(tagapplication__true_negative=False)),
                     ),
                     u_exact_distinct_count=Count(
                         'tagapplication__tag',
-                        filter=(Q(tagapplication__tag__name__in=exact_tags) & Q(tagapplication__user__isnull=False)),
+                        filter=(Q(tagapplication__tag__name__in=exact_tags) & Q(tagapplication__user__isnull=False) & Q(tagapplication__true_negative=False)),
                         distinct=True,
                     ),
                     p_exact_distinct_count=Count(
                         'tagapplication__tag',
-                        filter=(Q(tagapplication__tag__name__in=exact_tags) & Q(tagapplication__user__isnull=True)),
+                        filter=(Q(tagapplication__tag__name__in=exact_tags) & Q(tagapplication__user__isnull=True) & Q(tagapplication__true_negative=False)),
                         distinct=True,
                     ),
                     total_tag_count=total_tag_count_expr,
@@ -426,17 +427,17 @@ def search_results(request):
         # - exclude: only maps with user-applied tags
         # - only: only maps that have predicted tags
         if predicted_mode == 'exclude':
-            beatmaps = beatmaps.filter(tagapplication__user__isnull=False).distinct()
+            beatmaps = beatmaps.filter(tagapplication__user__isnull=False, tagapplication__true_negative=False).distinct()
         elif predicted_mode == 'only':
             beatmaps = (
                 beatmaps.filter(tagapplication__user__isnull=True)
-                .exclude(id__in=TagApplication.objects.filter(user__isnull=False).values('beatmap_id'))
+                .exclude(id__in=TagApplication.objects.filter(user__isnull=False, true_negative=False).values('beatmap_id'))
                 .distinct()
             )
 
         beatmaps = (
             beatmaps.annotate(
-                total_tag_apply_count=Count('tagapplication'),
+                total_tag_apply_count=Count('tagapplication', filter=Q(tagapplication__true_negative=False)),
                 tag_weight=F('total_tag_apply_count'),
                 base_popularity=F('favourite_count') * Value(0.02) + F('playcount') * Value(0.0001),
                 years_since_update_raw=ExpressionWrapper(
@@ -760,7 +761,7 @@ def annotate_search_results_with_tags(beatmaps, user, include_predicted_toggle=F
     # Bulk-load TagApplications once for all beatmaps on the page
     tag_app_qs = (
         TagApplication.objects
-        .filter(beatmap_id__in=beatmap_ids)
+        .filter(beatmap_id__in=beatmap_ids, true_negative=False)
         .select_related('tag')
         .only('beatmap_id', 'user_id', 'tag__id', 'tag__name')
     )

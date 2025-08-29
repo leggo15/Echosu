@@ -13,8 +13,7 @@ from echo.views.beatmap   import (
 from echo.views.search    import search_results, preset_search_farm, preset_search_new_favorites
 from echo.views.tags      import (
     modify_tag, get_tags, edit_tags,
-    update_tag_description, vote_description, search_tags, edit_ownership, get_tags_bulk,
-    admin_predicted_tags, admin_remove_predicted_tags,
+    update_tag_description, vote_description, search_tags, edit_ownership, get_tags_bulk
 )
 from echo.views.userSettings  import (
     settings, confirm_data_deletion, delete_user_data,
@@ -47,8 +46,6 @@ urlpatterns = [
     path('modify_tag/', modify_tag, name='modify_tag'),
     path('get_tags/', get_tags, name='get_tags'),
     path('get_tags_bulk/', get_tags_bulk, name='get_tags_bulk'),
-    path('admin/predicted_tags/', admin_predicted_tags, name='admin_predicted_tags'),
-    path('admin/predicted_tags/remove/', admin_remove_predicted_tags, name='admin_remove_predicted_tags'),
     path('edit_ownership/', edit_ownership, name='edit_ownership'),
     path('logout/', LogoutView.as_view(next_page='home'), name='logout'),
     path('settings/', settings, name='settings'),

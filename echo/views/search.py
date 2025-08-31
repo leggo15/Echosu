@@ -534,7 +534,10 @@ def preset_search_farm(request):
         return redirect('search_results')
 
     top_tags, star_min_val, star_max_val = _compute_player_top_tags_and_star_window(osu_id, 'top', selected_mode)
-    tags_query_string = ' '.join([f'"{t}"' if ' ' in t else t for t in top_tags])
+    tags_query_string = ' '.join([
+        ('.' if (t or '').strip().lower() == 'farm' else '') + (f'"{t}"' if ' ' in (t or '') else (t or ''))
+        for t in top_tags
+    ])
 
     # Derive PP constraints based on user's top plays mod distribution
     def _derive_farm_pp_tokens(osu_id_int: int, mode_key: str):

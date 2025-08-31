@@ -40,6 +40,7 @@ from django.db.models import (
     OuterRef,
     FloatField,
     ExpressionWrapper,
+    FilteredRelation,
 )
 from django.db.models.functions import Coalesce, Now, Greatest
 from django.shortcuts import render, redirect
@@ -118,117 +119,79 @@ def search_results(request):
         }
 
     def annotate_and_order_beatmaps(qs, include_tags, exact_tags, sort, predicted_mode):
-        # Filter by include_tags using through model, and honor predicted toggle
+        # Use a single filtered relation for positive tag applications to reduce join cost
+        qs = qs.annotate(ta_pos=FilteredRelation('tagapplication', condition=Q(tagapplication__true_negative=False)))
+
+        # Filter by include_tags using filtered relation; honor predicted toggle
         if predicted_mode == 'include':
-            qs = qs.filter(tagapplication__tag__name__in=include_tags, tagapplication__true_negative=False).distinct()
+            qs = qs.filter(ta_pos__tag__name__in=include_tags).distinct()
         elif predicted_mode == 'exclude':
             qs = qs.filter(
-                tagapplication__tag__name__in=include_tags,
-                tagapplication__user__isnull=False,
-                tagapplication__true_negative=False,
+                ta_pos__tag__name__in=include_tags,
+                ta_pos__user__isnull=False,
             ).distinct()
         elif predicted_mode == 'only':
-            qs = (
-                qs.filter(
-                    tagapplication__tag__name__in=include_tags,
-                    tagapplication__user__isnull=True,
-                )
-                .exclude(
-                    id__in=TagApplication.objects.filter(user__isnull=False).values('beatmap_id')
-                )
-                .distinct()
-            )
+            qs = qs.filter(
+                ta_pos__tag__name__in=include_tags,
+                ta_pos__user__isnull=True,
+            ).distinct()
+            qs = qs.annotate(_has_user_pos=Count('ta_pos__id', filter=Q(ta_pos__user__isnull=False))).filter(_has_user_pos=0)
 
         # Count total tags per map; when excluding predictions, count only user-applied
         if predicted_mode == 'include':
-            total_tag_count_expr = Count('tagapplication__tag', filter=Q(tagapplication__true_negative=False), distinct=True)
+            total_tag_count_expr = Count('ta_pos__tag', distinct=True)
         else:  # exclude and only: count only user-applied applications for denominator
-            total_tag_count_expr = Count('tagapplication__tag', filter=Q(tagapplication__user__isnull=False) & Q(tagapplication__true_negative=False), distinct=True)
+            total_tag_count_expr = Count('ta_pos__tag', filter=Q(ta_pos__user__isnull=False), distinct=True)
         if sort == 'tag_weight':
             # Weight factor for predicted tags (0.5 when included/only, else 0)
             p_w = Value(0.5 if predicted_mode in ['include', 'only'] else 0.0)
 
-            # Build subqueries that are independent of the include_tags filter join
-            base_ta_sq = TagApplication.objects.filter(beatmap_id=OuterRef('id'), true_negative=False)
-            if predicted_mode == 'exclude':
-                base_ta_sq = base_ta_sq.filter(user__isnull=False)
-            elif predicted_mode == 'only':
-                base_ta_sq = base_ta_sq.filter(user__isnull=True)
-
-            total_app_subq = (
-                base_ta_sq
-                .values('beatmap_id')
-                .annotate(cnt=Count('id'))
-                .values('cnt')[:1]
-            )
-            matched_exact_app_subq = (
-                base_ta_sq
-                .filter(tag__name__in=exact_tags)
-                .values('beatmap_id')
-                .annotate(cnt=Count('id'))
-                .values('cnt')[:1]
-            )
-            # Distinct tag names present on map (and matched) irrespective of join filters
-            distinct_tag_total_subq = (
-                base_ta_sq
-                .values('beatmap_id')
-                .annotate(cnt=Count('tag_id', distinct=True))
-                .values('cnt')[:1]
-            )
-            matched_exact_distinct_subq = (
-                base_ta_sq
-                .filter(tag__name__in=exact_tags)
-                .values('beatmap_id')
-                .annotate(cnt=Count('tag_id', distinct=True))
-                .values('cnt')[:1]
-            )
-
             qs = (
                 qs.annotate(
                     # Per-beatmap total and matched tag application counts (non-distinct)
-                    total_app_count=Coalesce(Subquery(total_app_subq), Value(0)),
-                    matched_exact_app_count=Coalesce(Subquery(matched_exact_app_subq), Value(0)),
+                    total_app_count=Count('ta_pos__id'),
+                    matched_exact_app_count=Count('ta_pos__id', filter=Q(ta_pos__tag__name__in=exact_tags)),
                     # Per-beatmap distinct tag name counts
-                    total_distinct_count=Coalesce(Subquery(distinct_tag_total_subq), Value(0)),
-                    matched_exact_distinct_count=Coalesce(Subquery(matched_exact_distinct_subq), Value(0)),
+                    total_distinct_count=Count('ta_pos__tag', distinct=True),
+                    matched_exact_distinct_count=Count('ta_pos__tag', filter=Q(ta_pos__tag__name__in=exact_tags), distinct=True),
                     # User vs predicted counts
                     u_tag_match_count=Count(
-                        'tagapplication__tag',
-                        filter=(Q(tagapplication__tag__name__in=include_tags) & Q(tagapplication__user__isnull=False) & Q(tagapplication__true_negative=False)),
+                        'ta_pos__tag',
+                        filter=(Q(ta_pos__tag__name__in=include_tags) & Q(ta_pos__user__isnull=False)),
                         distinct=True,
                     ),
                     p_tag_match_count=Count(
-                        'tagapplication__tag',
-                        filter=(Q(tagapplication__tag__name__in=include_tags) & Q(tagapplication__user__isnull=True) & Q(tagapplication__true_negative=False)),
+                        'ta_pos__tag',
+                        filter=(Q(ta_pos__tag__name__in=include_tags) & Q(ta_pos__user__isnull=True)),
                         distinct=True,
                     ),
                     # Non-exact distinct matches (for numerator-only spending)
                     u_nonexact_match_count=Count(
-                        'tagapplication__tag',
-                        filter=(Q(tagapplication__tag__name__in=include_tags) & ~Q(tagapplication__tag__name__in=exact_tags) & Q(tagapplication__user__isnull=False) & Q(tagapplication__true_negative=False)),
+                        'ta_pos__tag',
+                        filter=(Q(ta_pos__tag__name__in=include_tags) & ~Q(ta_pos__tag__name__in=exact_tags) & Q(ta_pos__user__isnull=False)),
                         distinct=True,
                     ),
                     p_nonexact_match_count=Count(
-                        'tagapplication__tag',
-                        filter=(Q(tagapplication__tag__name__in=include_tags) & ~Q(tagapplication__tag__name__in=exact_tags) & Q(tagapplication__user__isnull=True) & Q(tagapplication__true_negative=False)),
+                        'ta_pos__tag',
+                        filter=(Q(ta_pos__tag__name__in=include_tags) & ~Q(ta_pos__tag__name__in=exact_tags) & Q(ta_pos__user__isnull=True)),
                         distinct=True,
                     ),
                     u_exact_total_count=Count(
-                        'tagapplication__tag',
-                        filter=(Q(tagapplication__tag__name__in=exact_tags) & Q(tagapplication__user__isnull=False) & Q(tagapplication__true_negative=False)),
+                        'ta_pos__tag',
+                        filter=(Q(ta_pos__tag__name__in=exact_tags) & Q(ta_pos__user__isnull=False)),
                     ),
                     p_exact_total_count=Count(
-                        'tagapplication__tag',
-                        filter=(Q(tagapplication__tag__name__in=exact_tags) & Q(tagapplication__user__isnull=True) & Q(tagapplication__true_negative=False)),
+                        'ta_pos__tag',
+                        filter=(Q(ta_pos__tag__name__in=exact_tags) & Q(ta_pos__user__isnull=True)),
                     ),
                     u_exact_distinct_count=Count(
-                        'tagapplication__tag',
-                        filter=(Q(tagapplication__tag__name__in=exact_tags) & Q(tagapplication__user__isnull=False) & Q(tagapplication__true_negative=False)),
+                        'ta_pos__tag',
+                        filter=(Q(ta_pos__tag__name__in=exact_tags) & Q(ta_pos__user__isnull=False)),
                         distinct=True,
                     ),
                     p_exact_distinct_count=Count(
-                        'tagapplication__tag',
-                        filter=(Q(tagapplication__tag__name__in=exact_tags) & Q(tagapplication__user__isnull=True) & Q(tagapplication__true_negative=False)),
+                        'ta_pos__tag',
+                        filter=(Q(ta_pos__tag__name__in=exact_tags) & Q(ta_pos__user__isnull=True)),
                         distinct=True,
                     ),
                     total_tag_count=total_tag_count_expr,
@@ -427,13 +390,9 @@ def search_results(request):
         # - exclude: only maps with user-applied tags
         # - only: only maps that have predicted tags
         if predicted_mode == 'exclude':
-            beatmaps = beatmaps.filter(tagapplication__user__isnull=False, tagapplication__true_negative=False).distinct()
+            beatmaps = beatmaps.annotate(_has_user_pos=Count('tagapplication', filter=Q(tagapplication__true_negative=False, tagapplication__user__isnull=False))).filter(_has_user_pos__gt=0).distinct()
         elif predicted_mode == 'only':
-            beatmaps = (
-                beatmaps.filter(tagapplication__user__isnull=True)
-                .exclude(id__in=TagApplication.objects.filter(user__isnull=False, true_negative=False).values('beatmap_id'))
-                .distinct()
-            )
+            beatmaps = beatmaps.annotate(_has_user_pos=Count('tagapplication', filter=Q(tagapplication__true_negative=False, tagapplication__user__isnull=False))).filter(_has_user_pos=0).distinct()
 
         beatmaps = (
             beatmaps.annotate(
@@ -852,30 +811,30 @@ def build_query_conditions(beatmaps, search_terms, predicted_mode='include'):
         context.beatmaps = context.beatmaps.exclude(context.exclude_q)
     if context.required_tags:
         # Require ALL '.'-prefixed tags to be present (AND semantics), excluding true negatives
-        req_filter = Q(tagapplication__tag__name__in=context.required_tags) & Q(tagapplication__true_negative=False)
+        context.beatmaps = context.beatmaps.annotate(ta_pos=FilteredRelation('tagapplication', condition=Q(tagapplication__true_negative=False)))
+        req_filter = Q(ta_pos__tag__name__in=context.required_tags)
         if predicted_mode == 'exclude':
-            req_filter &= Q(tagapplication__user__isnull=False)
+            req_filter &= Q(ta_pos__user__isnull=False)
         elif predicted_mode == 'only':
-            req_filter &= Q(tagapplication__user__isnull=True)
+            req_filter &= Q(ta_pos__user__isnull=True)
         context.beatmaps = (
             context.beatmaps
             .annotate(
-                num_required_tags=Count('tagapplication__tag', filter=req_filter, distinct=True)
+                num_required_tags=Count('ta_pos__tag', filter=req_filter, distinct=True)
             )
             .filter(num_required_tags=len(context.required_tags))
         )
     if context.include_tag_names:
-        base = Q(tagapplication__tag__name__in=context.include_tag_names) & Q(tagapplication__true_negative=False)
+        context.beatmaps = context.beatmaps.annotate(ta_pos=FilteredRelation('tagapplication', condition=Q(tagapplication__true_negative=False)))
+        base = Q(ta_pos__tag__name__in=context.include_tag_names)
         if predicted_mode == 'include':
             context.beatmaps = context.beatmaps.filter(base).distinct()
         elif predicted_mode == 'exclude':
-            context.beatmaps = context.beatmaps.filter(base & Q(tagapplication__user__isnull=False)).distinct()
+            context.beatmaps = context.beatmaps.filter(base & Q(ta_pos__user__isnull=False)).distinct()
         elif predicted_mode == 'only':
-            context.beatmaps = context.beatmaps.filter(base & Q(tagapplication__user__isnull=True)).distinct()
+            context.beatmaps = context.beatmaps.filter(base & Q(ta_pos__user__isnull=True)).distinct()
     if context.exclude_tags:
         # Exclude only when a positive (non-negative) tag application exists
-        context.beatmaps = context.beatmaps.exclude(
-            tagapplication__tag__name__in=context.exclude_tags,
-            tagapplication__true_negative=False,
-        )
+        context.beatmaps = context.beatmaps.annotate(ta_pos=FilteredRelation('tagapplication', condition=Q(tagapplication__true_negative=False)))
+        context.beatmaps = context.beatmaps.exclude(ta_pos__tag__name__in=context.exclude_tags)
     return context.beatmaps, context.include_tag_names

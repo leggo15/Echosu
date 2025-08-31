@@ -100,6 +100,39 @@ def _first_last_hitobject_ms_from_osu(osu_bytes: bytes) -> tuple[float, float]:
     return float(first_ms or 0.0), float(last_ms or 0.0)
 
 
+def _first_two_hitobject_times_ms(osu_bytes: bytes) -> list[float]:
+    """Return the first two hitobject start times in ms (sorted, unique).
+
+    Returns an empty list on failure or if fewer than two are present.
+    """
+    try:
+        text = osu_bytes.decode('utf-8', errors='ignore')
+        lines = text.splitlines()
+        in_hit = False
+        times: list[float] = []
+        for line in lines:
+            s = line.strip()
+            if not s:
+                continue
+            if s.startswith('[') and s.endswith(']'):
+                in_hit = (s.lower() == '[hitobjects]')
+                continue
+            if not in_hit:
+                continue
+            parts = s.split(',')
+            if len(parts) >= 3:
+                try:
+                    t = float(parts[2])
+                    times.append(t)
+                except Exception:
+                    pass
+        if not times:
+            return []
+        times_sorted = sorted(set(times))
+        return times_sorted[:2]
+    except Exception:
+        return []
+
 def compute_timeseries_from_osu_bytes(
     osu_bytes: bytes,
     window_seconds: int = 5,
@@ -161,7 +194,13 @@ def compute_timeseries_from_osu_bytes(
             times_rel = [((i + 0.5) * effective_window_s) / clock_rate for i in range(n)]
 
             # Determine first/last hitobject times to trim/stretch accurately
-            t0_ms, t_last_ms = _first_last_hitobject_ms_from_osu(osu_bytes)
+            first_ms, t_last_ms = _first_last_hitobject_ms_from_osu(osu_bytes)
+            # Always set origin to the second hitobject when present
+            first_two = _first_two_hitobject_times_ms(osu_bytes)
+            if len(first_two) >= 2:
+                t0_ms = float(first_two[1])
+            else:
+                t0_ms = float(first_ms or 0.0)
             # Determine clock rate from speed mods for correct time scaling on the X axis
             mods_up = (mods or "").upper()
             clock_rate = 1.0

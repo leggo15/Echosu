@@ -511,6 +511,88 @@
       return (d <= 0) ? String(Math.round(n)) : n.toFixed(d);
     }
 
+    // Derive attribute filters from tag names (client-side mirror of backend mapping)
+    function deriveFiltersFromTagsClient(tagNames) {
+      var mapping = {
+        'streams': ['bpm'],
+        'speed': ['bpm'],
+        'reading': ['ar'],
+        'precision': ['cs'],
+        'farm': ['accuracy', 'length', 'pp']
+      };
+      var suggested = {};
+      (tagNames || []).forEach(function(name){
+        var key = String(name || '').trim().toLowerCase();
+        var attrs = mapping[key] || [];
+        attrs.forEach(function(a){ suggested[a] = true; });
+      });
+      return Object.keys(suggested);
+    }
+
+    // Compute min/max windows for attributes based on values displayed on the card
+    function computeWindowsFromCard($localCard) {
+      // Star rating window (±15%)
+      var starText = $localCard.find('.beatmap-stats .focus-stat').first().text();
+      var rating = parseFloatSafe(starText);
+      var starMin = isFinite(rating) ? Math.max(0, rating * 0.85) : 0;
+      var starMax = isFinite(rating) ? rating * 1.15 : 10;
+      if (isFinite(rating) && starMin < 0.4) { starMin = 0.4; starMax = 0.4; }
+
+      // Extract numeric stats from text
+      function readStat(prefix) {
+        var m = $localCard.find('.beatmap-stats span').filter(function(){ return new RegExp('^' + prefix + ':', 'i').test(($(this).text() || '').trim()); }).first().text();
+        var v = parseFloatSafe(m);
+        return isFinite(v) ? v : null;
+      }
+      var cs = readStat('CS');
+      var hp = readStat('HP');
+      var od = readStat('OD');
+      var ar = readStat('AR');
+
+      // BPM
+      var bpmText = $localCard.find('.beatmap-stats .minor-stat').filter(function(){ return /^BPM:/i.test(($(this).text() || '').trim()); }).first().text();
+      var bpm = parseFloatSafe(bpmText);
+      bpm = isFinite(bpm) ? bpm : null;
+
+      // Length (prefer seconds inside parentheses)
+      var lenText = $localCard.find('.beatmap-stats .beatmap-length').first().text();
+      var lengthSecs = parseIntFromParens(lenText);
+      if (!isFinite(lengthSecs)) lengthSecs = parseFloatSafe(lenText);
+      lengthSecs = isFinite(lengthSecs) ? lengthSecs : null;
+
+      // PP: prefer NM, else max of visible pills
+      var nmText = $localCard.find('.pp-pill .pp-mod').filter(function(){ return (/^NM$/i).test(($(this).text() || '').trim()); }).closest('.pp-pill').find('.pp-val').first().text();
+      var ppNm = parseFloatSafe(nmText);
+      ppNm = isFinite(ppNm) ? ppNm : null;
+      var ppVals = [];
+      $localCard.find('.pp-pill .pp-val').each(function(){
+        var val = parseFloatSafe($(this).text());
+        if (isFinite(val)) ppVals.push(val);
+      });
+      var ppValue = (ppNm !== null) ? ppNm : (ppVals.length ? Math.max.apply(null, ppVals) : null);
+
+      // Windows per backend logic
+      var windows = {
+        star_min: starMin,
+        star_max: starMax,
+        bpm_min: bpm === null ? null : Math.max(0, bpm - 15.0),
+        bpm_max: bpm === null ? null : Math.max(0, bpm + 15.0),
+        ar_min: ar === null ? null : Math.max(0, ar - (1 - (ar - 1) * (1 - 0.3) / (10 - 1))),
+        ar_max: ar === null ? null : Math.min(10, ar + (1 - (ar - 1) * (1 - 0.3) / (10 - 1))),
+        drain_min: hp === null ? null : Math.max(0, hp - 0.8),
+        drain_max: hp === null ? null : Math.min(10, hp + 0.8),
+        cs_min: cs === null ? null : Math.max(0, cs - (cs * 0.09)),
+        cs_max: cs === null ? null : Math.min(10, cs + (cs * 0.09)),
+        accuracy_min: od === null ? null : Math.max(0, od - (1 - (od - 1) * (1 - 0.4) / (10 - 1))),
+        accuracy_max: od === null ? null : Math.min(10, od + (1 - (od - 1) * (1 - 0.4) / (10 - 1))),
+        length_min: lengthSecs === null ? null : Math.max(0, Math.floor(lengthSecs - (lengthSecs * 0.3))),
+        length_max: lengthSecs === null ? null : Math.max(0, Math.ceil(lengthSecs + (lengthSecs * 0.3))),
+        pp_min: ppValue === null ? null : Math.max(0, ppValue - (ppValue * 0.15)),
+        pp_max: ppValue === null ? null : Math.max(0, ppValue + (ppValue * 0.15))
+      };
+      return windows;
+    }
+
     // PP mod pills (NM/HD/HR/DT/HT/EZ/FL) -> ±15%
     $card.on('click', '.pp-pill', function() {
       var $pill = $(this);
@@ -631,23 +713,55 @@
           try {
             var arr = Array.isArray(tags) ? tags : [];
             var top = arr.slice(0, 10);
-            var tokens = top.map(function(t){
+            var tagTokens = top.map(function(t){
               var name = (t && t.name) ? String(t.name) : '';
               if (!name) return null;
               return /\s/.test(name) ? '"' + name.replace(/\"/g, '') + '"' : name;
             }).filter(Boolean);
+            // Derive attribute filters based on tags and compute windows from card
+            var tagNames = top.map(function(t){ return (t && t.name) ? String(t.name) : ''; }).filter(Boolean);
+            var filters = deriveFiltersFromTagsClient(tagNames);
+            var windows = computeWindowsFromCard($localCard);
+            var attrTokens = [];
+            function hasNumbers(minKey, maxKey) {
+              var a = windows[minKey]; var b = windows[maxKey];
+              return a !== null && b !== null && isFinite(a) && isFinite(b);
+            }
+            if (filters.indexOf('bpm') !== -1 && hasNumbers('bpm_min', 'bpm_max')) {
+              attrTokens.push('BPM>=' + String(Math.floor(windows['bpm_min'])));
+              attrTokens.push('BPM<=' + String(Math.ceil(windows['bpm_max'])));
+            }
+            if (filters.indexOf('ar') !== -1 && hasNumbers('ar_min', 'ar_max')) {
+              attrTokens.push('AR>=' + fmt(windows['ar_min'], 1));
+              attrTokens.push('AR<=' + fmt(windows['ar_max'], 1));
+            }
+            if (filters.indexOf('cs') !== -1 && hasNumbers('cs_min', 'cs_max')) {
+              attrTokens.push('CS>=' + fmt(windows['cs_min'], 1));
+              attrTokens.push('CS<=' + fmt(windows['cs_max'], 1));
+            }
+            if (filters.indexOf('drain') !== -1 && hasNumbers('drain_min', 'drain_max')) {
+              attrTokens.push('HP>=' + fmt(windows['drain_min'], 1));
+              attrTokens.push('HP<=' + fmt(windows['drain_max'], 1));
+            }
+            if (filters.indexOf('accuracy') !== -1 && hasNumbers('accuracy_min', 'accuracy_max')) {
+              attrTokens.push('OD>=' + fmt(windows['accuracy_min'], 1));
+              attrTokens.push('OD<=' + fmt(windows['accuracy_max'], 1));
+            }
+            if (filters.indexOf('length') !== -1 && hasNumbers('length_min', 'length_max')) {
+              attrTokens.push('LENGTH>=' + String(Math.max(0, Math.floor(windows['length_min']))));
+              attrTokens.push('LENGTH<=' + String(Math.max(0, Math.ceil(windows['length_max']))));
+            }
+            if (filters.indexOf('pp') !== -1 && hasNumbers('pp_min', 'pp_max')) {
+              attrTokens.push('PP>=' + fmt(windows['pp_min'], 1));
+              attrTokens.push('PP<=' + fmt(windows['pp_max'], 1));
+            }
             var url = buildSearchUrl();
-            if (tokens.length) { url.searchParams.set('query', tokens.join(' ')); }
+            var allTokens = tagTokens.concat(attrTokens);
+            if (allTokens.length) { url.searchParams.set('query', allTokens.join(' ')); }
             else { url.searchParams.delete('query'); }
             // Derive a star window from displayed star rating (±15%)
-            var starText = $localCard.find('.beatmap-stats .focus-stat').first().text();
-            var rating = parseFloatSafe(starText);
-            if (isFinite(rating)) {
-              var smin = Math.max(0, rating * 0.85);
-              var smax = rating * 1.15;
-              url.searchParams.set('star_min', fmt(smin, 2));
-              url.searchParams.set('star_max', fmt(smax, 2));
-            }
+            url.searchParams.set('star_min', fmt(windows.star_min, 2));
+            url.searchParams.set('star_max', fmt(windows.star_max, 2));
             url.searchParams.set('sort', 'tag_weight');
             navTo(url);
           } catch (err) {

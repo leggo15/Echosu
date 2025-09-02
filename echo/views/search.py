@@ -111,10 +111,14 @@ def search_results(request):
             stemmed.add(stem_phrase(sanitized) if ' ' in sanitized else stem_word(sanitized))
         return stemmed
 
-    def identify_exact_match_tags(include_tags, parsed_terms):
-        raw_terms = {(term or '').strip('\"\'').strip().lower() for term, _ in parsed_terms}
+    def identify_exact_match_tags(include_like_tags, parsed_terms):
+        # Normalize parsed terms by stripping quotes and operator prefixes like '.' or '-'
+        raw_terms = {
+            (term or '').strip('\"\'').strip().lower().lstrip('.-')
+            for term, _ in parsed_terms
+        }
         return {
-            tag for tag in include_tags
+            tag for tag in include_like_tags
             if (tag or '').strip('\"\'').strip().lower() in raw_terms
         }
 
@@ -122,20 +126,16 @@ def search_results(request):
         # Use a single filtered relation for positive tag applications to reduce join cost
         qs = qs.annotate(ta_pos=FilteredRelation('tagapplication', condition=Q(tagapplication__true_negative=False)))
 
-        # Filter by include_tags using filtered relation; honor predicted toggle
-        if predicted_mode == 'include':
-            qs = qs.filter(ta_pos__tag__name__in=include_tags).distinct()
-        elif predicted_mode == 'exclude':
-            qs = qs.filter(
-                ta_pos__tag__name__in=include_tags,
-                ta_pos__user__isnull=False,
-            ).distinct()
-        elif predicted_mode == 'only':
-            qs = qs.filter(
-                ta_pos__tag__name__in=include_tags,
-                ta_pos__user__isnull=True,
-            ).distinct()
-            qs = qs.annotate(_has_user_pos=Count('ta_pos__id', filter=Q(ta_pos__user__isnull=False))).filter(_has_user_pos=0)
+        # Gate to beatmaps that have at least one of include_tags, honoring predicted toggle,
+        # but DO NOT restrict the join used for weighting annotations.
+        if include_tags:
+            if predicted_mode == 'include':
+                qs = qs.annotate(_include_match=Count('ta_pos__id', filter=Q(ta_pos__tag__name__in=include_tags), distinct=True)).filter(_include_match__gt=0)
+            elif predicted_mode == 'exclude':
+                qs = qs.annotate(_include_match=Count('ta_pos__id', filter=Q(ta_pos__tag__name__in=include_tags, ta_pos__user__isnull=False), distinct=True)).filter(_include_match__gt=0)
+            elif predicted_mode == 'only':
+                qs = qs.annotate(_include_match=Count('ta_pos__id', filter=Q(ta_pos__tag__name__in=include_tags, ta_pos__user__isnull=True), distinct=True)).filter(_include_match__gt=0)
+                qs = qs.annotate(_has_user_pos=Count('ta_pos__id', filter=Q(ta_pos__user__isnull=False))).filter(_has_user_pos=0)
 
         # Count total tags per map; when excluding predictions, count only user-applied
         if predicted_mode == 'include':
@@ -215,12 +215,12 @@ def search_results(request):
                     tag_surplus_count=(F('total_app_count') - F('matched_exact_app_count')) - F('tag_surplus_count_distinct'),
                     tag_weight=(
                         (F('weighted_exact_distinct') * Value(1.5) + # distinct exact tag names (first copy only)
-                         F('weighted_exact_total_surplus') * Value(0.5) + # extra apps beyond first per exact tag
+                         F('weighted_exact_total_surplus') * Value(2.12) + # extra apps beyond first per exact tag
                          F('weighted_tag_match') * Value(0.2)) / # distinct non-exact tag matches
                         (
                             (F('tag_miss_match_count') * Value(1.5)) + # distinct search tags not present on map
                             (F('tag_surplus_count_distinct') * Value(0.5)) + # distinct extra tag names on map not in the search
-                            (F('tag_surplus_count') * Value(1.12)) + # extra duplicate applications beyond first of tags not in the search
+                            (F('tag_surplus_count') * Value(2.12)) + # extra duplicate applications beyond first of tags not in the search
                             Value(1.0) # base to avoid division by zero when perfect matches and no surplus
                         )
                     ),
@@ -369,10 +369,12 @@ def search_results(request):
         beatmaps = beatmaps.filter(status_q)
 
     parsed_terms = parse_query_with_quotes(query)
-    beatmaps, include_tags = build_query_conditions(beatmaps, [t[0] for t in parsed_terms], predicted_mode)
+    beatmaps, include_tags, required_tags = build_query_conditions(beatmaps, [t[0] for t in parsed_terms], predicted_mode)
 
     stemmed_terms = process_search_terms(parsed_terms)
-    exact_tags = identify_exact_match_tags(include_tags, parsed_terms)
+    # Combine include + required tags for weighting and exact-match purposes
+    include_like_tags = sorted(set(include_tags or []) | set(required_tags or []))
+    exact_tags = identify_exact_match_tags(include_like_tags, parsed_terms)
 
     if sort not in ['tag_weight', 'popularity']:
         if not request.user.is_authenticated:
@@ -380,10 +382,12 @@ def search_results(request):
             sort = 'tag_weight'
         else:
             # Default depends on query presence: tag_weight when query present, else popularity
-            sort = 'tag_weight' if include_tags else 'popularity'
+            sort = 'tag_weight' if include_like_tags else 'popularity'
 
-    if include_tags:
-        beatmaps = annotate_and_order_beatmaps(beatmaps, include_tags, exact_tags, sort, predicted_mode)
+    if include_like_tags:
+        # Use exact token-matched tags for weighting to avoid substring expansions
+        # affecting scores when '.' is used. Gating was already applied earlier.
+        beatmaps = annotate_and_order_beatmaps(beatmaps, exact_tags, exact_tags, sort, predicted_mode)
     else:
         # When no include tags are specified, still respect the predicted toggle:
         # - include: show all
@@ -828,16 +832,25 @@ def build_query_conditions(beatmaps, search_terms, predicted_mode='include'):
             .filter(num_required_tags=len(context.required_tags))
         )
     if context.include_tag_names:
+        # Gate to maps that have at least one of the include tags, without
+        # restricting the join rows used later for weighting annotations.
         context.beatmaps = context.beatmaps.annotate(ta_pos=FilteredRelation('tagapplication', condition=Q(tagapplication__true_negative=False)))
-        base = Q(ta_pos__tag__name__in=context.include_tag_names)
         if predicted_mode == 'include':
-            context.beatmaps = context.beatmaps.filter(base).distinct()
+            context.beatmaps = context.beatmaps.annotate(
+                _inc_cnt=Count('ta_pos__id', filter=Q(ta_pos__tag__name__in=context.include_tag_names), distinct=True)
+            ).filter(_inc_cnt__gt=0)
         elif predicted_mode == 'exclude':
-            context.beatmaps = context.beatmaps.filter(base & Q(ta_pos__user__isnull=False)).distinct()
+            context.beatmaps = context.beatmaps.annotate(
+                _inc_cnt=Count('ta_pos__id', filter=Q(ta_pos__tag__name__in=context.include_tag_names, ta_pos__user__isnull=False), distinct=True)
+            ).filter(_inc_cnt__gt=0)
         elif predicted_mode == 'only':
-            context.beatmaps = context.beatmaps.filter(base & Q(ta_pos__user__isnull=True)).distinct()
+            context.beatmaps = context.beatmaps.annotate(
+                _inc_cnt=Count('ta_pos__id', filter=Q(ta_pos__tag__name__in=context.include_tag_names, ta_pos__user__isnull=True), distinct=True),
+                _has_user_pos=Count('ta_pos__id', filter=Q(ta_pos__user__isnull=False))
+            ).filter(_inc_cnt__gt=0, _has_user_pos=0)
     if context.exclude_tags:
         # Exclude only when a positive (non-negative) tag application exists
         context.beatmaps = context.beatmaps.annotate(ta_pos=FilteredRelation('tagapplication', condition=Q(tagapplication__true_negative=False)))
         context.beatmaps = context.beatmaps.exclude(ta_pos__tag__name__in=context.exclude_tags)
-    return context.beatmaps, context.include_tag_names
+    # Return required tags so they can be included in weighting calculations
+    return context.beatmaps, context.include_tag_names, context.required_tags

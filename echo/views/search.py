@@ -547,14 +547,15 @@ def preset_search_farm(request):
             osu_id = None
     if not osu_id:
         osu_id = _resolve_osu_id_from_request(request)
-    if not osu_id:
-        return redirect('search_results')
-
-    top_tags, star_min_val, star_max_val = _compute_player_top_tags_and_star_window(osu_id, 'top', selected_mode)
-    tags_query_string = ' '.join([
-        ('.' if (t or '').strip().lower() == 'farm' else '') + (f'"{t}"' if ' ' in (t or '') else (t or ''))
-        for t in top_tags
-    ])
+    has_user = bool(osu_id)
+    top_tags, star_min_val, star_max_val = [], None, None
+    tags_query_string = ''
+    if has_user:
+        top_tags, star_min_val, star_max_val = _compute_player_top_tags_and_star_window(osu_id, 'top', selected_mode)
+        tags_query_string = ' '.join([
+            ('.' if (t or '').strip().lower() == 'farm' else '') + (f'"{t}"' if ' ' in (t or '') else (t or ''))
+            for t in top_tags
+        ])
 
     # Derive PP constraints based on user's top plays mod distribution
     def _derive_farm_pp_tokens(osu_id_int: int, mode_key: str):
@@ -646,7 +647,7 @@ def preset_search_farm(request):
         tokens = [f"{attr}>={lower:.0f}", f"{attr}<={upper:.0f}"]
         return tokens
 
-    pp_tokens = _derive_farm_pp_tokens(int(osu_id), selected_mode)
+    pp_tokens = _derive_farm_pp_tokens(int(osu_id), selected_mode) if has_user else []
 
     # Start from existing GET params to preserve user selections
     params = request.GET.copy()
@@ -661,7 +662,7 @@ def preset_search_farm(request):
 
     # Respect user's exclude selection; if none/absent, use top100
     exclude_player_val = (params.get('exclude_player') or 'none').strip().lower()
-    if exclude_player_val in ['', 'none']:
+    if has_user and exclude_player_val in ['', 'none']:
         params['exclude_player'] = 'top100'
 
     # Preserve star range if provided; otherwise use computed window
@@ -672,13 +673,25 @@ def preset_search_farm(request):
 
     # Do not force status defaults; keep whatever the user had (including none)
 
-    # Replace current tag input with generated tags, plus PP constraints
-    query_parts = []
-    if pp_tokens:
-        query_parts.extend(pp_tokens)
-    if tags_query_string:
-        query_parts.append(tags_query_string)
-    params['query'] = ' '.join(query_parts)
+    # Replace or augment query
+    if has_user:
+        # Use personalized tokens + tags
+        query_parts = []
+        if pp_tokens:
+            query_parts.extend(pp_tokens)
+        if tags_query_string:
+            query_parts.append(tags_query_string)
+        params['query'] = ' '.join(query_parts)
+    else:
+        # Anonymous fallback: add required farm tag to existing query
+        existing_query = (params.get('query') or '').strip()
+        if existing_query:
+            if 'farm' not in existing_query.lower():
+                params['query'] = f'.farm {existing_query}'
+            else:
+                params['query'] = existing_query
+        else:
+            params['query'] = '.farm'
 
     # Reset pagination
     if 'page' in params:
@@ -704,13 +717,14 @@ def preset_search_new_favorites(request):
             osu_id = None
     if not osu_id:
         osu_id = _resolve_osu_id_from_request(request)
-    if not osu_id:
-        return redirect('search_results')
-
-    top_tags, star_min_val, star_max_val = _compute_player_top_tags_and_star_window(osu_id, 'fav', selected_mode)
-    # Limit to top 3 tags for favorites-based discovery
-    top_tags = (top_tags or [])[:3]
-    tags_query_string = ' '.join([f'"{t}"' if ' ' in t else t for t in top_tags])
+    has_user = bool(osu_id)
+    top_tags, star_min_val, star_max_val = [], None, None
+    tags_query_string = ''
+    if has_user:
+        top_tags, star_min_val, star_max_val = _compute_player_top_tags_and_star_window(osu_id, 'fav', selected_mode)
+        # Limit to top 3 tags for favorites-based discovery
+        top_tags = (top_tags or [])[:3]
+        tags_query_string = ' '.join([f'"{t}"' if ' ' in t else t for t in top_tags])
 
     # Start from existing GET params to preserve user selections
     params = request.GET.copy()
@@ -725,7 +739,7 @@ def preset_search_new_favorites(request):
 
     # Respect user's exclude selection; if none/absent, use fav
     exclude_player_val = (params.get('exclude_player') or 'none').strip().lower()
-    if exclude_player_val in ['', 'none']:
+    if has_user and exclude_player_val in ['', 'none']:
         params['exclude_player'] = 'fav'
 
     # Preserve star range if provided; otherwise use computed window
@@ -736,8 +750,14 @@ def preset_search_new_favorites(request):
 
     # Do not force status defaults; keep whatever the user had (including none)
 
-    # Replace current tag input with generated tags (do not merge)
-    params['query'] = tags_query_string
+    # Replace or augment query
+    if has_user:
+        # Use personalized top tags
+        params['query'] = tags_query_string
+    else:
+        # Anonymous fallback: keep user's current query unchanged
+        existing_query = (params.get('query') or '').strip()
+        params['query'] = existing_query
 
     # Reset pagination
     if 'page' in params:

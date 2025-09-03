@@ -248,4 +248,57 @@
       });
     })();
   </script>
+  <script>
+    (function() {
+      // Determine if user has osu_id in session (required for player-based features)
+      var canUsePlayerFilters = {{ request.user.is_authenticated|yesno:'true,false' }};
+
+      // Message helper (same logic as edit_tags page)
+      function showMessage(message, type) {
+        var ul = document.querySelector('.messages');
+        if (!ul) {
+          try {
+            ul = document.createElement('ul');
+            ul.className = 'messages';
+            document.body.insertBefore(ul, document.body.firstChild);
+          } catch (e) {}
+        }
+        if (ul) {
+          var li = document.createElement('li');
+          li.className = type || '';
+          li.textContent = message;
+          ul.appendChild(li);
+          setTimeout(function(){ li.classList.add('fade-out'); }, 2000);
+          setTimeout(function(){ if (li && li.parentNode) { li.parentNode.removeChild(li); } }, 3500);
+          return;
+        }
+      }
+
+      // Guard preset buttons when not logged in
+      var presetButtons = document.querySelectorAll('.preset-button');
+      if (presetButtons && presetButtons.length) {
+        presetButtons.forEach(function(btn){
+          btn.addEventListener('click', function(e){
+            if (!canUsePlayerFilters) {
+              e.preventDefault();
+              e.stopPropagation();
+              showMessage('You need to login to use this feature.', 'error');
+            }
+          });
+        });
+      }
+
+      // Guard "Exclude My:" filter when not logged in
+      var excludeSel = document.getElementById('exclude_player');
+      if (excludeSel) {
+        excludeSel.addEventListener('change', function(){
+          var v = (excludeSel.value || 'none').toLowerCase();
+          if (v !== 'none' && !canUsePlayerFilters) {
+            showMessage('You need to login to use this feature.', 'error');
+            excludeSel.value = 'none';
+          }
+        });
+      }
+    })();
+  </script>
 {% endblock %}

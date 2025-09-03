@@ -156,8 +156,8 @@
                 <input type="text" class="search-input" name="query" id="tag-input" placeholder="Search by Tags, song genre, name, mapper, artist and more..." value="{{ request.GET.query }}">
                 <button type="submit" class="search-btn">Search</button>
                 <div class="preset-slider">
-                    <button type="submit" class="search-btn preset-button preset-button--farm" formaction="{% url 'search_preset_farm' %}">Find farm maps</button>
-                    <button type="submit" class="search-btn preset-button preset-button--favorites" formaction="{% url 'search_preset_new_favorites' %}">Find new favorites</button>
+                    <button type="submit" class="search-btn preset-button preset-button--farm" formaction="{% url 'search_preset_farm' %}">Find Farm Maps</button>
+                    <button type="submit" class="search-btn preset-button preset-button--favorites" formaction="{% url 'search_preset_new_favorites' %}">Find Favorites</button>
                 </div>
             </div>
         </form>

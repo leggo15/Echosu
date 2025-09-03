@@ -20,7 +20,7 @@ from collections import defaultdict
 # Third‑party imports
 # ---------------------------------------------------------------------------
 from nltk.stem import PorterStemmer
-from ossapi.enums import ScoreType, GameMode, UserBeatmapType
+from ossapi.enums import ScoreType, GameMode, UserBeatmapType, UserLookupKey
 from ossapi.mod import Mod
 
 # ---------------------------------------------------------------------------
@@ -533,7 +533,20 @@ def _compute_player_top_tags_and_star_window(osu_id: int, source: str, selected_
 
 def preset_search_farm(request):
     selected_mode = (request.GET.get('mode') or 'osu').strip().lower()
-    osu_id = _resolve_osu_id_from_request(request)
+    # Optional override from query param to support Statistics page user
+    osu_id = None
+    user_override = (request.GET.get('user') or '').strip()
+    if user_override:
+        try:
+            if user_override.isdigit():
+                u = api.user(int(user_override), key=UserLookupKey.ID)
+            else:
+                u = api.user(user_override, key=UserLookupKey.USERNAME)
+            osu_id = int(getattr(u, 'id', None) or 0) or None
+        except Exception:
+            osu_id = None
+    if not osu_id:
+        osu_id = _resolve_osu_id_from_request(request)
     if not osu_id:
         return redirect('search_results')
 
@@ -635,32 +648,30 @@ def preset_search_farm(request):
 
     pp_tokens = _derive_farm_pp_tokens(int(osu_id), selected_mode)
 
-    # Start with preserved selections and preselect exclude
-    params = {
-        'mode': selected_mode,
-        'sort': (request.GET.get('sort') or 'tag_weight'),
-        'exclude_player': 'top100',
-        'fetch_exclude_now': '1',
-    }
-    # Preserve include_predicted toggle if present
-    if request.GET.get('include_predicted'):
-        params['include_predicted'] = request.GET.get('include_predicted')
-    # Preserve statuses if user selected any; otherwise default to Ranked only
-    user_status_keys = [k for k in ['status_ranked', 'status_loved', 'status_unranked'] if request.GET.get(k)]
-    if user_status_keys:
-        for k in user_status_keys:
-            params[k] = request.GET.get(k)
-    else:
-        params['status_ranked'] = 'ranked'
+    # Start from existing GET params to preserve user selections
+    params = request.GET.copy()
+
+    # Normalize and override only what's needed
+    params['mode'] = selected_mode
+    params['fetch_exclude_now'] = '1'
+
+    # Prefer existing sort; default to tag_weight if blank
+    if not (params.get('sort') or '').strip():
+        params['sort'] = 'tag_weight'
+
+    # Respect user's exclude selection; if none/absent, use top100
+    exclude_player_val = (params.get('exclude_player') or 'none').strip().lower()
+    if exclude_player_val in ['', 'none']:
+        params['exclude_player'] = 'top100'
+
     # Preserve star range if provided; otherwise use computed window
-    if request.GET.get('star_min'):
-        params['star_min'] = request.GET.get('star_min')
-    elif star_min_val is not None:
+    if not params.get('star_min') and star_min_val is not None:
         params['star_min'] = f"{star_min_val:.2f}"
-    if request.GET.get('star_max'):
-        params['star_max'] = request.GET.get('star_max')
-    elif star_max_val is not None:
+    if not params.get('star_max') and star_max_val is not None:
         params['star_max'] = f"{star_max_val:.2f}"
+
+    # Do not force status defaults; keep whatever the user had (including none)
+
     # Replace current tag input with generated tags, plus PP constraints
     query_parts = []
     if pp_tokens:
@@ -669,50 +680,70 @@ def preset_search_farm(request):
         query_parts.append(tags_query_string)
     params['query'] = ' '.join(query_parts)
 
-    url = reverse('search_results') + ('?' + urlencode(params))
+    # Reset pagination
+    if 'page' in params:
+        del params['page']
+
+    url = reverse('search_results') + ('?' + params.urlencode())
     return redirect(url)
 
 
 def preset_search_new_favorites(request):
     selected_mode = (request.GET.get('mode') or 'osu').strip().lower()
-    osu_id = _resolve_osu_id_from_request(request)
+    # Optional override from query param to support Statistics page user
+    osu_id = None
+    user_override = (request.GET.get('user') or '').strip()
+    if user_override:
+        try:
+            if user_override.isdigit():
+                u = api.user(int(user_override), key=UserLookupKey.ID)
+            else:
+                u = api.user(user_override, key=UserLookupKey.USERNAME)
+            osu_id = int(getattr(u, 'id', None) or 0) or None
+        except Exception:
+            osu_id = None
+    if not osu_id:
+        osu_id = _resolve_osu_id_from_request(request)
     if not osu_id:
         return redirect('search_results')
 
     top_tags, star_min_val, star_max_val = _compute_player_top_tags_and_star_window(osu_id, 'fav', selected_mode)
+    # Limit to top 3 tags for favorites-based discovery
+    top_tags = (top_tags or [])[:3]
     tags_query_string = ' '.join([f'"{t}"' if ' ' in t else t for t in top_tags])
 
-    # Start with preserved selections and preselect exclude
-    params = {
-        'mode': selected_mode,
-        'sort': (request.GET.get('sort') or 'tag_weight'),
-        'exclude_player': 'fav',
-        'fetch_exclude_now': '1',
-    }
-    # Preserve include_predicted toggle if present
-    if request.GET.get('include_predicted'):
-        params['include_predicted'] = request.GET.get('include_predicted')
-    # Preserve statuses if user selected any; otherwise default to Ranked + Loved
-    user_status_keys = [k for k in ['status_ranked', 'status_loved', 'status_unranked'] if request.GET.get(k)]
-    if user_status_keys:
-        for k in user_status_keys:
-            params[k] = request.GET.get(k)
-    else:
-        params['status_ranked'] = 'ranked'
-        params['status_loved'] = 'loved'
+    # Start from existing GET params to preserve user selections
+    params = request.GET.copy()
+
+    # Normalize and override only what's needed
+    params['mode'] = selected_mode
+    params['fetch_exclude_now'] = '1'
+
+    # Prefer existing sort; default to tag_weight if blank
+    if not (params.get('sort') or '').strip():
+        params['sort'] = 'tag_weight'
+
+    # Respect user's exclude selection; if none/absent, use fav
+    exclude_player_val = (params.get('exclude_player') or 'none').strip().lower()
+    if exclude_player_val in ['', 'none']:
+        params['exclude_player'] = 'fav'
+
     # Preserve star range if provided; otherwise use computed window
-    if request.GET.get('star_min'):
-        params['star_min'] = request.GET.get('star_min')
-    elif star_min_val is not None:
+    if not params.get('star_min') and star_min_val is not None:
         params['star_min'] = f"{star_min_val:.2f}"
-    if request.GET.get('star_max'):
-        params['star_max'] = request.GET.get('star_max')
-    elif star_max_val is not None:
+    if not params.get('star_max') and star_max_val is not None:
         params['star_max'] = f"{star_max_val:.2f}"
+
+    # Do not force status defaults; keep whatever the user had (including none)
+
     # Replace current tag input with generated tags (do not merge)
     params['query'] = tags_query_string
 
-    url = reverse('search_results') + ('?' + urlencode(params))
+    # Reset pagination
+    if 'page' in params:
+        del params['page']
+
+    url = reverse('search_results') + ('?' + params.urlencode())
     return redirect(url)
 
 # ---------------------------------------------------------------------------

@@ -129,6 +129,26 @@
   overflow: hidden;
   display: block; /* ensure absolute children stack */
   background: transparent;
+  /* controls for the diagonal cut and accent divider */
+  --slant: 18px;            /* horizontal offset of the inner diagonal */
+  --divider-width: 16px;     /* thickness of the orange accent */
+  --divider-color: #fcb95c; /* orange accent color */
+  --seam-overlap: 10px;      /* tiny overlap to avoid visible gap */
+}
+
+/* Single accent divider that follows the moving boundary */
+.preset-slider::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  height: 100%;
+  width: var(--divider-width);
+  left: calc(50% - var(--divider-width) / 2);
+  background: var(--divider-color);
+  transform: skewX(-22deg);
+  transition: left .18s ease-in-out;
+  pointer-events: none;
+  z-index: 5;
 }
 
 .preset-slider .preset-button {
@@ -137,9 +157,11 @@
   bottom: 0;
   width: 50%;
   transition: all .18s ease-in-out;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
   margin: 0; /* no gap between halves */
 }
 
@@ -150,6 +172,27 @@
   background: #649bd6;
   /* round only the outer edges */
   border-radius: 12px 0 0 12px;
+  /* inner edge aligned to LEFT side of orange divider */
+  clip-path: polygon(
+    0 0,
+    calc(100% - (var(--divider-width) / 2) + var(--seam-overlap)) 0,
+    calc(100% - (var(--divider-width) / 2) - var(--slant) + var(--seam-overlap)) 100%,
+    0 100%
+  );
+}
+
+/* Extend the left button slightly beneath the divider to eliminate cap gaps */
+.search-row .preset-slider .preset-button--farm::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: calc(-1 * var(--seam-overlap));
+  width: calc(var(--seam-overlap) + (var(--divider-width) / 2));
+  background: inherit;
+  transform: skewX(-22deg);
+  z-index: 4; /* below divider (z=5), above opposite half */
+  pointer-events: none;
 }
 
 .search-row .preset-slider .preset-button--favorites {
@@ -159,7 +202,36 @@
   background: #2b87d1;
   /* round only the outer edges */
   border-radius: 0 12px 12px 0;
+  /* inner edge aligned to RIGHT side of orange divider */
+  clip-path: polygon(
+    calc(var(--slant) + (var(--divider-width) / 2) - var(--seam-overlap)) 0,
+    100% 0,
+    100% 100%,
+    calc((var(--divider-width) / 2) - var(--seam-overlap)) 100%
+  );
 }
+
+/* Extend the right button slightly beneath the divider to eliminate cap gaps */
+.search-row .preset-slider .preset-button--favorites::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(-1 * var(--seam-overlap));
+  width: calc(var(--seam-overlap) + (var(--divider-width) / 2));
+  background: inherit;
+  transform: skewX(-22deg);
+  z-index: 4; /* below divider (z=5), above opposite half */
+  pointer-events: none;
+}
+
+/* Move the divider with the hovered side (modern browsers) */
+.preset-slider:has(.preset-button--farm:hover)::after { left: calc(90% - var(--divider-width) / 2); }
+.preset-slider:has(.preset-button--favorites:hover)::after { left: calc(10% - var(--divider-width) / 2); }
+
+/* JS fallback classes already used to resize: move divider too */
+.preset-slider.hover-farm::after { left: calc(90% - var(--divider-width) / 2); }
+.preset-slider.hover-favorites::after { left: calc(10% - var(--divider-width) / 2); }
 
 /* Expand hovered button to 90%, shrink the other to 10% */
 .preset-slider:has(.preset-button--farm:hover) .preset-button--farm { width: 90%; z-index: 3; }

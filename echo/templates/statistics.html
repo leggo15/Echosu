@@ -65,6 +65,9 @@
     </div>
     <div class="chart-container"><canvas id="playerChart"></canvas></div>
     <div class="player-related">
+      <div class="preset-actions">
+        <button type="button" id="playerPresetBtn" class="search-btn">Open matching search</button>
+      </div>
       <div class="mapper-card">
         <h3>Most Related</h3>
         <div id="mostRelatedContainer">
@@ -102,6 +105,30 @@
           mapper: { labels: mapperLabels, data: mapperCounts, clickQueries: mapperClickQueries },
           player: { labels: playerLabels, data: playerCounts }
         });
+        // Wire preset button to match current source
+        (function(){
+          var btn = document.getElementById('playerPresetBtn');
+          if (!btn) return;
+          btn.addEventListener('click', function(){
+            var select = document.getElementById('playerSource');
+            var src = select ? select.value : 'top';
+            var url = new URL(window.location.origin + (src === 'fav' ? '/search/preset/new-favorites/' : '/search/preset/farm/'));
+            // pass through selected mode if present on stats page
+            var modeParam = new URLSearchParams(window.location.search).get('mode');
+            if (modeParam) url.searchParams.set('mode', modeParam);
+            // pass resolved user if available or input
+            var userInput = document.querySelector('.stats-form input[name="user"]');
+            var userVal = (userInput && userInput.value) ? userInput.value : (document.querySelector('.resolved') ? ('{{ resolved_username|default:"" }}' || '{{ resolved_user_id|default:"" }}') : '');
+            if (userVal) url.searchParams.set('user', userVal);
+            // preserve include_predicted/status toggles if present in URL
+            var params = new URLSearchParams(window.location.search);
+            ['include_predicted','status_ranked','status_loved','status_unranked','star_min','star_max','sort'].forEach(function(k){
+              var v = params.get(k);
+              if (v) url.searchParams.set(k, v);
+            });
+            window.location.href = url.toString();
+          });
+        })();
       } catch (e) {}
     })();
   </script>

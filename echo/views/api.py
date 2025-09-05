@@ -407,6 +407,11 @@ def admin_upload_predictions(request):
                     if not tag_name:
                         continue
                     tag, _ = Tag.objects.get_or_create(name=tag_name)
+                    # If a true negative exists for this beatmap+tag, ensure no predictions are kept
+                    if TagApplication.objects.filter(tag=tag, beatmap=beatmap, true_negative=True).exists():
+                        TagApplication.objects.filter(tag=tag, beatmap=beatmap, user__isnull=True, is_prediction=True).delete()
+                        skipped += 1
+                        continue
                     obj, created_row = TagApplication.objects.get_or_create(
                         tag=tag, beatmap=beatmap, user=None,
                         defaults={'is_prediction': True, 'prediction_confidence': confidence}
@@ -433,6 +438,11 @@ def admin_upload_predictions(request):
 
             beatmap = _ensure_beatmap(beatmap_id)
             tag, _ = Tag.objects.get_or_create(name=tag_name)
+            # Skip and delete predicted if a true negative exists
+            if TagApplication.objects.filter(tag=tag, beatmap=beatmap, true_negative=True).exists():
+                TagApplication.objects.filter(tag=tag, beatmap=beatmap, user__isnull=True, is_prediction=True).delete()
+                skipped += 1
+                continue
             obj, created_row = TagApplication.objects.get_or_create(
                 tag=tag, beatmap=beatmap, user=None,
                 defaults={'is_prediction': True, 'prediction_confidence': confidence}
@@ -828,3 +838,64 @@ def admin_refresh_beatmaps(request):
         except Exception as exc:
             errors.append(f"{bm_id}: {exc}")
     return Response({'status': 'ok', 'processed': processed, 'created': created, 'updated': updated, 'skipped': skipped, 'errors': errors})
+
+
+# ----------------------------- Admin Predictions Maintenance ----------------------------- #
+
+@api_view(['POST'])
+@authentication_classes([CustomTokenAuthentication])
+@permission_classes([IsAuthenticated])
+def admin_flush_predictions(request):
+    """Delete predicted tags for specific beatmap(s) (admin only).
+
+    Accepted payloads:
+      - {"beatmap_id": "123"}
+      - {"beatmap_ids": ["123", "456"]}
+      - {"items": ["123", {"beatmap_id": "456"}]}
+    """
+    user = request.user
+    if not getattr(user, 'is_staff', False):
+        return Response({'detail': 'Admin privileges required.'}, status=403)
+
+    payload = request.data
+    items = []
+    if isinstance(payload, dict):
+        if 'beatmap_id' in payload:
+            items = [payload.get('beatmap_id')]
+        elif 'beatmap_ids' in payload and isinstance(payload.get('beatmap_ids'), list):
+            items = payload.get('beatmap_ids')
+        elif 'items' in payload and isinstance(payload.get('items'), list):
+            items = payload.get('items')
+        else:
+            return Response({'detail': 'Invalid payload.'}, status=400)
+    elif isinstance(payload, list):
+        items = payload
+    else:
+        return Response({'detail': 'Invalid payload.'}, status=400)
+
+    def _extract_id(obj):
+        if isinstance(obj, dict):
+            return str(obj.get('beatmap_id') or obj.get('id') or '').strip()
+        return str(obj).strip()
+
+    ids = sorted({bm for bm in (_extract_id(x) for x in (items or [])) if bm})
+    if not ids:
+        return Response({'status': 'ok', 'deleted': 0})
+
+    qs = TagApplication.objects.filter(beatmap__beatmap_id__in=ids, user__isnull=True, is_prediction=True)
+    deleted_count, _ = qs.delete()
+    return Response({'status': 'ok', 'deleted': deleted_count, 'beatmap_ids': ids})
+
+
+@api_view(['POST'])
+@authentication_classes([CustomTokenAuthentication])
+@permission_classes([IsAuthenticated])
+def admin_flush_all_predictions(request):
+    """Delete all predicted tags across all beatmaps (admin only)."""
+    user = request.user
+    if not getattr(user, 'is_staff', False):
+        return Response({'detail': 'Admin privileges required.'}, status=403)
+
+    qs = TagApplication.objects.filter(user__isnull=True, is_prediction=True)
+    deleted_count, _ = qs.delete()
+    return Response({'status': 'ok', 'deleted': deleted_count})

@@ -12,6 +12,7 @@ from django.contrib.auth import get_user_model
 from .models import Beatmap, UserProfile, Tag, TagApplication, TagDescriptionHistory
 from .models import APIRequestLog
 from .views.beatmap import update_beatmap_info
+from .views.api import admin_flush_all_predictions
 
 @admin.register(Beatmap)
 class BeatmapAdmin(admin.ModelAdmin):
@@ -23,6 +24,7 @@ class BeatmapAdmin(admin.ModelAdmin):
         urls = super().get_urls()
         custom = [
             path('refresh-all/', self.admin_site.admin_view(self.refresh_all_view), name='echo_beatmap_refresh_all'),
+            path('flush-all-predictions/', self.admin_site.admin_view(self.flush_all_predictions_view), name='echo_flush_all_predictions'),
         ]
         return custom + urls
 
@@ -50,6 +52,25 @@ class BeatmapAdmin(admin.ModelAdmin):
         t = threading.Thread(target=_worker, args=(request.user.id, 5), daemon=True)
         t.start()
         self.message_user(request, 'Background refresh started. You may close this tab.')
+        return redirect('..')
+
+    def flush_all_predictions_view(self, request: HttpRequest):
+        if not request.user.is_staff:
+            self.message_user(request, 'Permission denied.', level=messages.ERROR)
+            return redirect('..')
+        # Call the API view directly with a forged request for consistency
+        rf = RequestFactory()
+        req = rf.post('/api/admin/flush/predictions/all/', data={})
+        req.user = request.user
+        try:
+            resp = admin_flush_all_predictions(req)
+            try:
+                deleted = getattr(resp, 'data', {}).get('deleted')
+            except Exception:
+                deleted = None
+            self.message_user(request, f'Flushed predictions. Deleted: {deleted if deleted is not None else "unknown"}.')
+        except Exception:
+            self.message_user(request, 'Failed to flush predictions.', level=messages.ERROR)
         return redirect('..')
 
 @admin.register(UserProfile)

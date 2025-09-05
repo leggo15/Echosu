@@ -52,8 +52,9 @@
           <a href="#" class="beatmap-link find-similar-btn" data-beatmap-id="{{ beatmap.beatmap_id }}" role="button">Find Similar Maps</a>
 
           {% if request.path == '/beatmap_detail/'|add:beatmap.beatmap_id|add:'/' and user.is_staff %}
-          <div class="admin-actions" style="margin-top: 8px;">
+          <div class="admin-actions" style="margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap;">
             <button type="button" class="api-test-btn" data-beatmap-id="{{ beatmap.beatmap_id }}">Run API tests</button>
+            <button type="button" class="flush-predictions-btn" data-beatmap-id="{{ beatmap.beatmap_id }}">Flush predictions</button>
           </div>
           {% endif %}
 

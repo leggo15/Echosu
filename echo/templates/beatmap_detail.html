@@ -58,6 +58,7 @@
   <script>
     (function(){
       const btn = document.querySelector('.api-test-btn');
+      const flushBtn = document.querySelector('.flush-predictions-btn');
       if (!btn) return;
       const output = document.getElementById('api-test-output');
       const beatmapId = btn.getAttribute('data-beatmap-id');
@@ -161,6 +162,29 @@
       }
 
       btn.addEventListener('click', run);
+
+      if (flushBtn) {
+        flushBtn.addEventListener('click', async function(){
+          try {
+            const url = base + '/api/admin/flush/predictions/';
+            const res = await postJson(url, { beatmap_id: String(beatmapId) });
+            const ok = res && res.status && res.status >= 200 && res.status < 300;
+            const msg = ok ? 'Flushed predictions for beatmap ' + beatmapId : 'Failed to flush predictions';
+            if (output) {
+              output.appendChild(h('Flush predictions'));
+              output.appendChild(pre(typeof res.data === 'string' ? res.data : JSON.stringify(res.data, null, 2)));
+            }
+            // Trigger tag refresh
+            try { window.TagManager && window.TagManager.clearTagCache && window.TagManager.clearTagCache(); } catch(e) { }
+            try { window.initTaggingFor && window.initTaggingFor(document); } catch(e) { }
+          } catch (e) {
+            if (output) {
+              output.appendChild(h('Flush predictions error'));
+              output.appendChild(pre(String(e)));
+            }
+          }
+        });
+      }
     })();
   </script>
   {% endif %}

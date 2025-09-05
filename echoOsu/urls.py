@@ -25,6 +25,7 @@ from echo.views.statistics import statistics, statistics_player_data
 from echo.views.api import (
     BeatmapViewSet, TagViewSet, TagApplicationViewSet, UserProfileViewSet,
     admin_upload_predictions, admin_upload_tag_applications, admin_refresh_beatmaps, admin_upload_users,
+    admin_flush_predictions, admin_flush_all_predictions,
 )
 
 
@@ -80,6 +81,8 @@ urlpatterns = [
     path('api/admin/upload/tag-applications/', admin_upload_tag_applications),
     path('api/admin/upload/users/', admin_upload_users),
     path('api/admin/refresh/beatmaps/', admin_refresh_beatmaps),
+    path('api/admin/flush/predictions/', admin_flush_predictions),
+    path('api/admin/flush/predictions/all/', admin_flush_all_predictions),
 ]
 
 handler404 = 'echo.views.custom_404_view'

@@ -457,6 +457,15 @@ def modify_tag(request):
                     tag.delete()
                 return JsonResponse({'status': 'success', 'action': 'removed', 'true_negative': want_true_negative})
 
+            # If an admin applies a true negative, remove any predicted tag for this beatmap+tag
+            if want_true_negative:
+                TagApplication.objects.filter(
+                    tag=tag,
+                    beatmap=beatmap,
+                    user__isnull=True,
+                    is_prediction=True,
+                ).delete()
+
             return JsonResponse({'status': 'success', 'action': 'applied', 'true_negative': want_true_negative})
 
     except Exception:

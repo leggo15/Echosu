@@ -120,18 +120,30 @@
 .search-row .search-btn { padding: 12px 16px; border: none; border-radius: 12px; background: #2b87d1; color: #fff; font-weight: 700; cursor: pointer; }
 .search-row .search-btn:hover { background: #1f6fb2; }
 
+/* Tablet: wrap preset buttons below the search row */
+@media (max-width: 900px) {
+  .search-row { flex-wrap: wrap; align-items: center; }
+  .search-row .preset-slider {
+    flex: 0 0 100%;
+    width: 100%;
+    order: 2;
+    margin-top: 6px;
+  }
+}
+
 /* Layered preset buttons container */
 .preset-slider {
   position: relative;
   width: 200px;
   height: 44px;
-  border-radius: 12px;
+  border-radius: 14px;
+  border: 2px solid var(--divider-color);
   overflow: hidden;
   display: block; /* ensure absolute children stack */
   background: transparent;
   /* controls for the diagonal cut and accent divider */
   --slant: 18px;            /* horizontal offset of the inner diagonal */
-  --divider-width: 16px;     /* thickness of the orange accent */
+  --divider-width: 18px;     /* thickness of the orange accent */
   --divider-color: #fcb95c; /* orange accent color */
   --seam-overlap: 10px;      /* tiny overlap to avoid visible gap */
 }
@@ -226,24 +238,24 @@
 }
 
 /* Move the divider with the hovered side (modern browsers) */
-.preset-slider:has(.preset-button--farm:hover)::after { left: calc(90% - var(--divider-width) / 2); }
-.preset-slider:has(.preset-button--favorites:hover)::after { left: calc(10% - var(--divider-width) / 2); }
+.preset-slider:has(.preset-button--farm:hover)::after { left: calc(80% - var(--divider-width) / 2); }
+.preset-slider:has(.preset-button--favorites:hover)::after { left: calc(20% - var(--divider-width) / 2); }
 
 /* JS fallback classes already used to resize: move divider too */
-.preset-slider.hover-farm::after { left: calc(90% - var(--divider-width) / 2); }
-.preset-slider.hover-favorites::after { left: calc(10% - var(--divider-width) / 2); }
+.preset-slider.hover-farm::after { left: calc(80% - var(--divider-width) / 2); }
+.preset-slider.hover-favorites::after { left: calc(20% - var(--divider-width) / 2); }
 
 /* Expand hovered button to 90%, shrink the other to 10% */
-.preset-slider:has(.preset-button--farm:hover) .preset-button--farm { width: 90%; z-index: 3; }
-.preset-slider:has(.preset-button--farm:hover) .preset-button--favorites { width: 10%; z-index: 2; }
-.preset-slider:has(.preset-button--favorites:hover) .preset-button--favorites { width: 90%; z-index: 3; }
-.preset-slider:has(.preset-button--favorites:hover) .preset-button--farm { width: 10%; z-index: 2; }
+.preset-slider:has(.preset-button--farm:hover) .preset-button--farm { width: 80%; z-index: 3; }
+.preset-slider:has(.preset-button--farm:hover) .preset-button--favorites { width: 20%; z-index: 2; }
+.preset-slider:has(.preset-button--favorites:hover) .preset-button--favorites { width: 80%; z-index: 3; }
+.preset-slider:has(.preset-button--favorites:hover) .preset-button--farm { width: 20%; z-index: 2; }
 
 /* JS fallback using classes for broader browser support */
-.preset-slider.hover-farm .preset-button--farm { width: 90%; z-index: 3; }
-.preset-slider.hover-farm .preset-button--favorites { width: 10%; z-index: 2; }
-.preset-slider.hover-favorites .preset-button--favorites { width: 90%; z-index: 3; }
-.preset-slider.hover-favorites .preset-button--farm { width: 10%; z-index: 2; }
+.preset-slider.hover-farm .preset-button--farm { width: 80%; z-index: 3; }
+.preset-slider.hover-farm .preset-button--favorites { width: 20%; z-index: 2; }
+.preset-slider.hover-favorites .preset-button--favorites { width: 80%; z-index: 3; }
+.preset-slider.hover-favorites .preset-button--farm { width: 20%; z-index: 2; }
 
 .preset-slider:not(:hover) .preset-button--farm,
 .preset-slider:not(:hover) .preset-button--favorites {

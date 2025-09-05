@@ -8,6 +8,8 @@ from django.test.client import RequestFactory
 import time
 import threading
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
+from django.utils import timezone
 
 from .models import Beatmap, UserProfile, Tag, TagApplication, TagDescriptionHistory
 from .models import APIRequestLog
@@ -42,6 +44,23 @@ class BeatmapAdmin(admin.ModelAdmin):
                 return
             rf = RequestFactory()
             for bm_id in Beatmap.objects.values_list('beatmap_id', flat=True).iterator(chunk_size=500):
+                # Wait while users are interacting (priority to user actions)
+                while True:
+                    try:
+                        cnt = int(cache.get('user_interaction_counter') or 0)
+                    except Exception:
+                        cnt = 0
+                    wait = cnt > 0
+                    if not wait:
+                        try:
+                            pu = float(cache.get('user_interaction_pause_until') or 0)
+                            now_ts = timezone.now().timestamp()
+                            wait = pu > now_ts
+                        except Exception:
+                            wait = False
+                    if not wait:
+                        break
+                    time.sleep(1)
                 try:
                     req = rf.post('/update_beatmap_info/', {'beatmap_id': bm_id})
                     req.user = user
@@ -75,10 +94,39 @@ class BeatmapAdmin(admin.ModelAdmin):
                 .distinct()
             )
             for bm_id in qs.iterator(chunk_size=500):
+                # Wait while users are interacting (priority to user actions)
+                while True:
+                    try:
+                        cnt = int(cache.get('user_interaction_counter') or 0)
+                    except Exception:
+                        cnt = 0
+                    wait = cnt > 0
+                    if not wait:
+                        try:
+                            pu = float(cache.get('user_interaction_pause_until') or 0)
+                            now_ts = timezone.now().timestamp()
+                            wait = pu > now_ts
+                        except Exception:
+                            wait = False
+                    if not wait:
+                        break
+                    time.sleep(1)
                 try:
                     req = rf.post('/update_beatmap_info/', {'beatmap_id': bm_id})
                     req.user = user
                     update_beatmap_info(req)
+                    # Also update PP fields for this beatmap
+                    try:
+                        from .helpers.rosu_utils import (
+                            get_or_compute_pp,
+                            get_or_compute_modded_pps,
+                        )
+                        bm_obj = Beatmap.objects.filter(beatmap_id=str(bm_id)).first()
+                        if bm_obj:
+                            get_or_compute_pp(bm_obj)
+                            get_or_compute_modded_pps(bm_obj)
+                    except Exception:
+                        pass
                 except Exception:
                     pass
                 time.sleep(delay_s)

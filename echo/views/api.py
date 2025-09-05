@@ -29,6 +29,8 @@ from rest_framework.decorators import (
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.response import Response
+from django.core.cache import cache
+from django.utils import timezone
 
 # ---------------------------------------------------------------------------
 # Local application imports
@@ -156,6 +158,20 @@ class TagApplicationViewSet(viewsets.ReadOnlyModelViewSet):
         Apply/remove a tag for a beatmap.  
         If the beatmap isn’t in the DB yet, fetch it from the osu! API first.
         """
+        # Signal active user interaction to pause background refreshers
+        try:
+            cache.incr('user_interaction_counter')
+        except Exception:
+            try:
+                cache.set('user_interaction_counter', 1, timeout=60)
+            except Exception:
+                pass
+        finally:
+            try:
+                # Short TTL pause guard in case counter fails
+                cache.set('user_interaction_pause_until', timezone.now().timestamp() + 5, timeout=10)
+            except Exception:
+                pass
         serializer = TagApplicationToggleSerializer(
             data=request.data, context={'request': request}
         )
@@ -233,6 +249,16 @@ class TagApplicationViewSet(viewsets.ReadOnlyModelViewSet):
                 return Response({'beatmap_id': [str(exc)]}, status=400)
 
         # other validation errors
+        # Decrement interaction counter on exit paths
+        try:
+            val = int(cache.decr('user_interaction_counter'))
+            if val < 0:
+                cache.set('user_interaction_counter', 0, timeout=60)
+        except Exception:
+            try:
+                cache.set('user_interaction_counter', 0, timeout=60)
+            except Exception:
+                pass
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def list(self, request, *args, **kwargs):

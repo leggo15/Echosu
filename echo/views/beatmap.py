@@ -41,6 +41,8 @@ from .shared import (
 from ..helpers.rosu_utils import get_or_compute_timeseries, get_or_compute_pp, get_or_compute_modded_pps
 from ..helpers.timestamps import consensus_intervals, normalize_intervals
 from rest_framework.authtoken.models import Token
+from django.core.cache import cache
+from django.utils import timezone
 
 # ---------------------------------------------------------------------------
 # Beatmap views
@@ -174,6 +176,19 @@ def save_tag_timestamps(request, beatmap_id: int):
 
     Body: JSON { tag_id: number, intervals: [[start_s, end_s], ...], version: 1 }
     """
+    # Signal active user interaction to pause background refreshers
+    try:
+        cache.incr('user_interaction_counter')
+    except Exception:
+        try:
+            cache.set('user_interaction_counter', 1, timeout=60)
+        except Exception:
+            pass
+    finally:
+        try:
+            cache.set('user_interaction_pause_until', timezone.now().timestamp() + 5, timeout=10)
+        except Exception:
+            pass
     beatmap = get_object_or_404(Beatmap, beatmap_id=str(beatmap_id))
     if not request.user.is_authenticated:
         return JsonResponse({'detail': 'Authentication required'}, status=401)
@@ -197,6 +212,16 @@ def save_tag_timestamps(request, beatmap_id: int):
     cleaned = normalize_intervals([(float(s), float(e)) for s, e in intervals], beatmap.total_length)
     ta.timestamp = {'version': 1, 'intervals': cleaned}
     ta.save(update_fields=['timestamp'])
+    # Decrement on completion
+    try:
+        val = int(cache.decr('user_interaction_counter'))
+        if val < 0:
+            cache.set('user_interaction_counter', 0, timeout=60)
+    except Exception:
+        try:
+            cache.set('user_interaction_counter', 0, timeout=60)
+        except Exception:
+            pass
     return JsonResponse({'status': 'ok', 'saved': ta.timestamp})
 
 

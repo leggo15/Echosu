@@ -24,6 +24,7 @@ class BeatmapAdmin(admin.ModelAdmin):
         urls = super().get_urls()
         custom = [
             path('refresh-all/', self.admin_site.admin_view(self.refresh_all_view), name='echo_beatmap_refresh_all'),
+            path('refresh-predicted/', self.admin_site.admin_view(self.refresh_predicted_view), name='echo_beatmap_refresh_predicted'),
             path('flush-all-predictions/', self.admin_site.admin_view(self.flush_all_predictions_view), name='echo_flush_all_predictions'),
         ]
         return custom + urls
@@ -52,6 +53,39 @@ class BeatmapAdmin(admin.ModelAdmin):
         t = threading.Thread(target=_worker, args=(request.user.id, 5), daemon=True)
         t.start()
         self.message_user(request, 'Background refresh started. You may close this tab.')
+        return redirect('..')
+
+    def refresh_predicted_view(self, request: HttpRequest):
+        if not request.user.is_staff:
+            self.message_user(request, 'Permission denied.', level=messages.ERROR)
+            return redirect('..')
+
+        def _worker(user_id: int, delay_s: int = 10):
+            User = get_user_model()
+            try:
+                user = User.objects.get(id=user_id)
+            except User.DoesNotExist:
+                return
+            rf = RequestFactory()
+            # Unique beatmap IDs that have predicted tags
+            qs = (
+                TagApplication.objects
+                .filter(is_prediction=True)
+                .values_list('beatmap__beatmap_id', flat=True)
+                .distinct()
+            )
+            for bm_id in qs.iterator(chunk_size=500):
+                try:
+                    req = rf.post('/update_beatmap_info/', {'beatmap_id': bm_id})
+                    req.user = user
+                    update_beatmap_info(req)
+                except Exception:
+                    pass
+                time.sleep(delay_s)
+
+        t = threading.Thread(target=_worker, args=(request.user.id, 10), daemon=True)
+        t.start()
+        self.message_user(request, 'Background refresh of predicted-tag beatmaps started (1 every 10s).')
         return redirect('..')
 
     def flush_all_predictions_view(self, request: HttpRequest):

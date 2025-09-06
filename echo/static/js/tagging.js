@@ -176,19 +176,22 @@
       if (!$targetApplied.length) return;
       
       $('.tooltip, .description-author').remove();
-      $targetApplied.empty().append('Tags: ');
+      var mode = (window.TAG_CATEGORY_DISPLAY || 'color');
+      $targetApplied.empty();
+      if (mode !== 'lists') { $targetApplied.append('Tags: '); }
       // Split positives and negatives if provided
       var negatives = [];
       var positives = [];
       (Array.isArray(tags) ? tags : []).forEach(function(tag){
         if (tag && tag.true_negative) { negatives.push(tag); } else { positives.push(tag); }
       });
-      
-      positives.forEach(function(tag) {
-        var tagClass = tag.is_applied_by_user ? 'tag-applied' : 
-                      (tag.is_predicted ? 'tag-predicted' : 'tag-unapplied');
-        
-        $('<span></span>')
+
+      // Render according to user preference
+      // mode already computed above
+
+      function renderTagInto($container, tag) {
+        var tagClass = tag.is_applied_by_user ? 'tag-applied' : (tag.is_predicted ? 'tag-predicted' : 'tag-unapplied');
+        var $el = $('<span></span>')
           .addClass('tag ' + tagClass)
           .attr('data-tag-name', tag.name)
           .attr('data-category', tag.category || 'other')
@@ -199,8 +202,32 @@
           .attr('data-description-author', tag.description_author || '')
           .attr('data-beatmap-id', beatmapId)
           .text(tag.name + (tag.apply_count ? ' (' + tag.apply_count + ')' : ''))
-          .appendTo($targetApplied);
-      });
+          .appendTo($container);
+        if (mode === 'none') {
+          $el.removeAttr('data-category');
+        }
+      }
+
+      if (mode === 'lists') {
+        var byCat = { mapping_genre: [], pattern_type: [], metadata: [], other: [] };
+        positives.forEach(function(t){ var c = t.category || 'other'; (byCat[c] = byCat[c] || []).push(t); });
+        var sections = [
+          { key: 'mapping_genre', title: 'Mapping Genre' },
+          { key: 'pattern_type', title: 'Pattern Type' },
+          { key: 'metadata', title: 'Metadata' },
+          { key: 'other', title: 'Other' }
+        ];
+        sections.forEach(function(sec){
+          var lst = byCat[sec.key] || [];
+          if (!lst.length) return;
+          $('<div class="tag-section-title"></div>').text(sec.title + ':').appendTo($targetApplied);
+          var $row = $('<div class="tag-section"></div>').appendTo($targetApplied);
+          lst.forEach(function(t){ renderTagInto($row, t); });
+        });
+      } else {
+        // color (default) or none (same layout)
+        positives.forEach(function(tag){ renderTagInto($targetApplied, tag); });
+      }
 
       // Render negatives if container present
       var $negTarget = $targetCard.find('.negative-tags');
@@ -210,7 +237,7 @@
           $('<span></span>')
             .addClass('tag tag-negative')
             .attr('data-tag-name', tag.name)
-            .attr('data-category', tag.category || 'other')
+            .attr('data-category', (window.TAG_CATEGORY_DISPLAY === 'none') ? null : (tag.category || 'other'))
             .attr('data-true-negative', 'true')
             .attr('data-beatmap-id', beatmapId)
             .text(tag.name)

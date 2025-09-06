@@ -18,7 +18,9 @@
 {% block content %}
     <div class="container">
         <div class="settings-page">
-            <h1>Settings</h1>
+            <h1>Settings
+              <button type="submit" form="settingsPreferencesForm" class="generic_btn" style="margin-left:12px; vertical-align:middle;">Save</button>
+            </h1>
 
             <!-- Display messages -->
             {% if messages %}
@@ -54,6 +56,24 @@
 
 
                 </div>
+            </div>
+
+            <!-- Tag Display Preferences -->
+            <div class="preferences-section">
+              <h2>Tag Display</h2>
+              <form method="post" action="{% url 'settings' %}" class="settings-form" id="settingsPreferencesForm">
+                {% csrf_token %}
+                <input type="hidden" name="update_preferences" value="1">
+                <label for="tag_category_display">Tag categories:</label>
+                <select id="tag_category_display" name="tag_category_display">
+                  {% with pref=tag_category_display|default:'color' %}
+                    <option value="none" {% if pref == 'none' %}selected{% endif %}>Do not display</option>
+                    <option value="color" {% if pref == 'color' %}selected{% endif %}>Color coding</option>
+                    <option value="lists" {% if pref == 'lists' %}selected{% endif %}>Separate lists per card</option>
+                  {% endwith %}
+                </select>
+                <button type="submit" class="generic_btn" style="margin-left:8px;">Save</button>
+              </form>
             </div>
 
             <!-- Data Deletion Section -->

@@ -269,6 +269,7 @@ class TagApplicationViewSet(viewsets.ReadOnlyModelViewSet):
             beatmap_id = str(request.query_params.get('beatmap_id'))
             include_tokens = [s.strip() for s in (request.query_params.get('include') or '').split(',') if s.strip()]
             include_true_negatives_flag = ('true_negatives' in include_tokens) or ('negative_tags' in include_tokens)
+            include_metadata_flag = ('metadata' in include_tokens)
             # Base lite serialization
             page = self.paginate_queryset(queryset)
             items = page or queryset
@@ -331,7 +332,7 @@ class TagApplicationViewSet(viewsets.ReadOnlyModelViewSet):
                         consensus_map[tid] = intervals
 
             # Attach extras into each item's tag
-            if need_counts or need_ts:
+            if need_counts or need_ts or include_metadata_flag:
                 for entry in data:
                     tag = entry.get('tag') or {}
                     tid = tag.get('id')
@@ -339,6 +340,19 @@ class TagApplicationViewSet(viewsets.ReadOnlyModelViewSet):
                         tag['count'] = counts_map.get(tid, 0)
                     if need_ts:
                         tag['consensus_intervals'] = consensus_map.get(tid, [])
+                    if include_metadata_flag and tid:
+                        # Attach category and parent associations
+                        try:
+                            t = Tag.objects.only('id', 'category').get(id=tid)
+                            tag['category'] = getattr(t, 'category', 'other')
+                            # Fetch parent ids via m2m through
+                            parent_ids = list(t.parent_relations.values_list('parent_id', flat=True))
+                            # Also include parent names for convenience
+                            parents = list(Tag.objects.filter(id__in=parent_ids).values_list('name', flat=True)) if parent_ids else []
+                            tag['parents'] = parents
+                        except Exception:
+                            tag['category'] = tag.get('category') or 'other'
+                            tag['parents'] = []
                     entry['tag'] = tag
 
             # Attach per-user intervals when requested via user=me

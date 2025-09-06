@@ -30,6 +30,9 @@
   </head>
   <body class="{% block body_class %}{% endblock %}">
     <button type="button" id="themeToggle" class="theme-toggle-btn" aria-label="Toggle dark mode" title="Toggle dark mode">🌙</button>
+    <script>
+      try { window.TAG_CATEGORY_DISPLAY = '{{ tag_category_display|default:"color" }}'; } catch (e) {}
+    </script>
     {% include '_navbar.html' %}
     <main class="container">
       {% block content %}{% endblock %}

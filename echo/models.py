@@ -332,3 +332,38 @@ class APIRequestLog(models.Model):
     def __str__(self):
         username = getattr(self.user, 'username', 'anonymous')
         return f"{username} - {self.method} {self.path} at {self.timestamp}"
+
+
+# ----------------------------- User Settings ----------------------------- #
+
+class UserSettings(models.Model):
+    """Per-user UI preferences and feature flags.
+
+    Currently stores the preferred tag category display mode for tag cards.
+    """
+    DISPLAY_NONE = 'none'
+    DISPLAY_COLOR = 'color'
+    DISPLAY_LISTS = 'lists'
+    DISPLAY_CHOICES = [
+        (DISPLAY_NONE, 'No Categories'),
+        (DISPLAY_COLOR, 'Color Coding'),
+        (DISPLAY_LISTS, 'Separate Lists'),
+    ]
+
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='settings')
+    tag_category_display = models.CharField(max_length=16, choices=DISPLAY_CHOICES, default=DISPLAY_NONE, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True, db_index=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['tag_category_display']),
+            models.Index(fields=['user', 'tag_category_display']),
+        ]
+
+    def __str__(self):
+        try:
+            uname = self.user.username
+        except Exception:
+            uname = 'unknown'
+        return f"Settings({uname}): tag_display={self.tag_category_display}"

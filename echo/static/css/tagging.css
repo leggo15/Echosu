@@ -19,9 +19,9 @@
 .applied-tags span.tag.tag-unapplied:hover, .applied-tags span.tag.tag-predicted:hover { background-color: #56bb91; }
 .applied-tags span.tag.tag-applied:hover { background-color: lightcoral; }
 /* Category borders */
-.applied-tags span.tag[data-category="mapping_genre"] { border: 2px solid #d49ed8; /* turquoise thin */ }
-.applied-tags span.tag[data-category="pattern_type"] { border: 2px solid #d77862; /* dark red */ }
-.applied-tags span.tag[data-category="metadata"] { border: 2px solid #d0d41d; /* dark grey */ }
+.applied-tags span.tag[data-category="mapping_genre"] { border: 2px solid #b1e9b0; /* turquoise thin */ }
+.applied-tags span.tag[data-category="pattern_type"] { border: 2px solid #ffca92; /* dark red */ }
+.applied-tags span.tag[data-category="metadata"] { border: 2px solid #ff89bc; /* dark grey */ }
 .applied-tags span.tag[data-category="other"] { border: none; }
 
 /* Tooltip */

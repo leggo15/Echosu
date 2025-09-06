@@ -1,15 +1,25 @@
-from .models import UserProfile
+from .models import UserProfile, UserSettings
 
 def add_user_profile_to_context(request):
+    # Default preference
+    tag_display = 'color'
+    # Prefer from authenticated user's settings if present
+    try:
+        if getattr(request, 'user', None) and request.user.is_authenticated:
+            s = getattr(request.user, 'settings', None)
+            if s and getattr(s, 'tag_category_display', None):
+                tag_display = s.tag_category_display
+    except Exception:
+        pass
+
     osu_id = request.session.get('osu_id')
     if osu_id:
         try:
             profile = UserProfile.objects.get(osu_id=osu_id)
-            return {'user_profile': profile}
+            return {'user_profile': profile, 'tag_category_display': tag_display}
         except UserProfile.DoesNotExist:
-            # If the profile doesn't exist, return an empty context
-            return {}
-    return {}
+            return {'tag_category_display': tag_display}
+    return {'tag_category_display': tag_display}
 
 
 from django.conf import settings

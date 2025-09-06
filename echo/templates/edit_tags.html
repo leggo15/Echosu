@@ -112,7 +112,7 @@
                                 </div>
                                 <div class="row">
                                     <label>Relations (comma separated)</label>
-                                    <input type="text" class="tag-relations-input" placeholder="e.g. aim, tapping">
+                                    <input type="text" class="tag-relations-input" value="{% for rel in tag.parent_relations.all %}{% if not forloop.first %}, {% endif %}{{ rel.parent.name }}{% endfor %}" placeholder="e.g. aim, tapping">
                                     <button type="button" class="tag-relations-save generic_btn">Save</button>
                                 </div>
                             </div>

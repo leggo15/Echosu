@@ -550,7 +550,7 @@ def configure_tag(request):
         tokens = [t.strip() for t in parents_raw.split(',') if t.strip()]
         parent_names = tokens
 
-    # Create or fetch parent tags and relations
+    # Create or fetch parent tags and relations, and remove any relations not present in submission
     created_relations = 0
     parent_ids = []
     for pname in parent_names:
@@ -564,6 +564,17 @@ def configure_tag(request):
             created_relations += 1
         except IntegrityError:
             pass
+
+    # If relations were submitted (even empty), sync: delete any not in provided set
+    try:
+        if isinstance(parents_raw, (list, str)):
+            if parent_ids:
+                TagRelation.objects.filter(child=tag).exclude(parent_id__in=parent_ids).delete()
+            else:
+                # Empty provided set → remove all existing relations
+                TagRelation.objects.filter(child=tag).delete()
+    except Exception:
+        pass
 
     # Optionally update description if provided
     if desc_raw is not None:
@@ -701,7 +712,7 @@ def edit_tags(request):
     search_query = request.GET.get('search', '').strip()
     tags = (
         Tag.objects.filter(name__icontains=search_query) if search_query else Tag.objects.all()
-    ).order_by('name').prefetch_related('parent_relations__parent')
+    ).order_by('name').prefetch_related('parents', 'parent_relations__parent')
     paginator = Paginator(tags, 20)
     page_obj = paginator.get_page(request.GET.get('page'))
     return render(request, 'edit_tags.html', {'tags': page_obj, 'search_query': search_query})

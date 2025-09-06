@@ -104,6 +104,27 @@ class Tag(models.Model):
     downvotes = models.PositiveIntegerField(default=0, db_index=True)
     is_locked = models.BooleanField(default=False, db_index=True)
     is_recommended = models.BooleanField(default=False, db_index=True)
+    # Tag categorization
+    CATEGORY_MAPPING_GENRE = 'mapping_genre'
+    CATEGORY_PATTERN_TYPE = 'pattern_type'
+    CATEGORY_METADATA = 'metadata'
+    CATEGORY_OTHER = 'other'
+    CATEGORY_CHOICES = [
+        (CATEGORY_MAPPING_GENRE, 'Mapping Genre'),
+        (CATEGORY_PATTERN_TYPE, 'Pattern Type'),
+        (CATEGORY_METADATA, 'Metadata'),
+        (CATEGORY_OTHER, 'Other'),
+    ]
+    category = models.CharField(max_length=32, choices=CATEGORY_CHOICES, default=CATEGORY_OTHER, db_index=True)
+    # Directed hierarchy: a tag can have multiple parent tags; children are derived via related_name
+    parents = models.ManyToManyField(
+        'self',
+        symmetrical=False,
+        through='TagRelation',
+        through_fields=('child', 'parent'),
+        related_name='children',
+        blank=True
+    )
 
     class Meta:
         indexes = [
@@ -113,6 +134,7 @@ class Tag(models.Model):
             models.Index(fields=['is_locked', 'upvotes']),
             # Text search optimization
             models.Index(fields=['name', 'is_recommended']),
+            models.Index(fields=['category']),
         ]
 
     def vote_score(self):
@@ -161,6 +183,24 @@ class TagDescriptionHistory(models.Model):
     def __str__(self):
         return f"{self.tag.name} - {self.date_written.strftime('%Y-%m-%d %H:%M:%S')} by {self.author}"
 
+
+class TagRelation(models.Model):
+    """Directed association between tags to support hierarchy (parent -> child)."""
+    parent = models.ForeignKey('Tag', on_delete=models.CASCADE, related_name='child_relations')
+    child = models.ForeignKey('Tag', on_delete=models.CASCADE, related_name='parent_relations')
+
+    class Meta:
+        unique_together = ('parent', 'child')
+        indexes = [
+            models.Index(fields=['parent', 'child']),
+            models.Index(fields=['child', 'parent']),
+        ]
+
+    def __str__(self):
+        try:
+            return f"{self.parent.name} -> {self.child.name}"
+        except Exception:
+            return "<tag relation>"
 
 class Vote(models.Model):
     UPVOTE = 'upvote'

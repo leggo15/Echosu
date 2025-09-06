@@ -36,6 +36,9 @@
                         <th>Tag Name</th>
                         <th class="narrow-column">Votes</th>
                         <th>Description <span class="muted">(max 100)</span></th>
+                        {% if user.is_staff %}
+                        <th>Category / Relations</th>
+                        {% endif %}
                         <th>Edited By</th>
                     </tr>
                 </thead>
@@ -95,6 +98,26 @@
                                 </div>
                             </div>
                         </td>
+                        {% if user.is_staff %}
+                        <td>
+                            <div class="staff-controls" data-tag-id="{{ tag.id }}" data-tag-name="{{ tag.name }}">
+                                <div class="row">
+                                    <label>Category</label>
+                                    <select class="tag-cat-select">
+                                        <option value="mapping_genre" {% if tag.category == 'mapping_genre' %}selected{% endif %}>Mapping Genre</option>
+                                        <option value="pattern_type" {% if tag.category == 'pattern_type' %}selected{% endif %}>Pattern Type</option>
+                                        <option value="metadata" {% if tag.category == 'metadata' %}selected{% endif %}>Metadata</option>
+                                        <option value="other" {% if tag.category == 'other' or not tag.category %}selected{% endif %}>Other</option>
+                                    </select>
+                                </div>
+                                <div class="row">
+                                    <label>Relations (comma separated)</label>
+                                    <input type="text" class="tag-relations-input" placeholder="e.g. aim, tapping">
+                                    <button type="button" class="tag-relations-save generic_btn">Save</button>
+                                </div>
+                            </div>
+                        </td>
+                        {% endif %}
                         <td>
                             {% if tag.description_author and tag.description_author.username != 'default_author' %}
                                 {{ tag.description_author.username }}
@@ -372,6 +395,46 @@
             const csrfInput = document.querySelector('[name=csrfmiddlewaretoken]');
             return csrfInput ? csrfInput.value : '';
         }
+
+        // Staff-only handlers for category and relations
+        {% if user.is_staff %}
+        document.querySelectorAll('.staff-controls').forEach(function(container){
+            var tagId = container.getAttribute('data-tag-id');
+            var select = container.querySelector('.tag-cat-select');
+            var input = container.querySelector('.tag-relations-input');
+            var saveBtn = container.querySelector('.tag-relations-save');
+
+            function save(payload){
+                fetch('/configure_tag/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'X-CSRFToken': getCSRFToken(),
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: new URLSearchParams(payload)
+                }).then(function(r){ return r.json(); }).then(function(data){
+                    if (data && data.status === 'success') {
+                        showMessage('Saved tag settings.', 'success');
+                    } else {
+                        showMessage((data && data.message) || 'Failed to save.', 'error');
+                    }
+                }).catch(function(){ showMessage('Failed to save tag settings.', 'error'); });
+            }
+
+            if (select) {
+                select.addEventListener('change', function(){
+                    save({ tag_id: tagId, category: select.value });
+                });
+            }
+            if (saveBtn) {
+                saveBtn.addEventListener('click', function(){
+                    var parents = (input && input.value) ? input.value.trim() : '';
+                    save({ tag_id: tagId, category: (select && select.value) || 'other', parents: parents });
+                });
+            }
+        });
+        {% endif %}
     });
 </script>
 {% endblock %}

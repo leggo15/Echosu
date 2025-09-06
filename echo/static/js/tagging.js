@@ -191,6 +191,7 @@
         $('<span></span>')
           .addClass('tag ' + tagClass)
           .attr('data-tag-name', tag.name)
+          .attr('data-category', tag.category || 'other')
           .attr('data-applied-by-user', tag.is_applied_by_user)
           .attr('data-is-predicted', tag.is_predicted ? 'true' : 'false')
           .attr('data-true-negative', tag.true_negative ? 'true' : 'false')
@@ -209,6 +210,7 @@
           $('<span></span>')
             .addClass('tag tag-negative')
             .attr('data-tag-name', tag.name)
+            .attr('data-category', tag.category || 'other')
             .attr('data-true-negative', 'true')
             .attr('data-beatmap-id', beatmapId)
             .text(tag.name)
@@ -259,6 +261,109 @@
     // Run cache cleanup every 5 minutes
     setInterval(clearExpiredCache, 5 * 60 * 1000);
 
+    function showConfigureTagModal(createdTag) {
+      // Build lightweight floating modal in DOM (single instance)
+      var $existing = $('#configure-tag-modal');
+      if ($existing.length) { $existing.remove(); }
+      var categories = [
+        { value: 'mapping_genre', label: 'Mapping Genre' },
+        { value: 'pattern_type', label: 'Pattern Type' },
+        { value: 'metadata', label: 'Metadata' },
+        { value: 'other', label: 'Other' }
+      ];
+      var $modal = $('<div id="configure-tag-modal" class="configure-tag-modal" role="dialog" aria-modal="true"></div>');
+      var $box = $('<div class="configure-tag-box"></div>').appendTo($modal);
+      var tagNameForHeader = (createdTag && createdTag.created_tag_name) ? createdTag.created_tag_name : 'Tag';
+      $('<div class="configure-tag-title"></div>').text(tagNameForHeader + ' is a New Tag').appendTo($box);
+      var $body = $('<div class="configure-tag-body"></div>').appendTo($box);
+      // Description input (top of form)
+      var $descRow = $('<div class="row"></div>').appendTo($body);
+      $('<label>Description</label>').appendTo($descRow);
+      var $desc = $('<textarea class="configure-tag-description" rows="2" placeholder="Add a short description (max 100)"></textarea>').appendTo($descRow);
+      // Category select
+      var $catRow = $('<div class="row"></div>').appendTo($body);
+      $('<label>Category</label>').appendTo($catRow);
+      var $sel = $('<select class="configure-tag-category"></select>').appendTo($catRow);
+      categories.forEach(function(c){ $('<option></option>').val(c.value).text(c.label).appendTo($sel); });
+      // Parents input
+      var $parRow = $('<div class="row"></div>').appendTo($body);
+      $('<label>Associations</label>').appendTo($parRow);
+      $('<input type="text" class="configure-tag-parents" placeholder="Enter related tags, comma separated" />').appendTo($parRow);
+      // Tree container
+      $('<div class="tree-label">Tag Tree</div>').appendTo($body);
+      var $tree = $('<div class="configure-tag-tree"></div>').appendTo($body);
+      // Footer
+      var $footer = $('<div class="configure-tag-footer"></div>').appendTo($box);
+      var $save = $('<button type="button" class="configure-tag-save">Save</button>').appendTo($footer);
+      var $cancel = $('<button type="button" class="configure-tag-cancel">Cancel</button>').appendTo($footer);
+      $('body').append($modal);
+
+      // Load current tree (for display)
+      $.get('/tag_tree/').done(function(resp){
+        try {
+          var tags = resp && resp.tags ? resp.tags : [];
+          var cats = resp && resp.categories ? resp.categories : [];
+          var byId = {}; tags.forEach(function(t){ byId[t.id] = t; });
+          // Build categorized, collapsible tree
+          function buildTree() {
+            var byCat = {};
+            tags.forEach(function(t){ var key = t.category || 'other'; (byCat[key] = byCat[key] || []).push(t); });
+            var $root = $('<div class="tree-root"></div>');
+            (cats && cats.length ? cats : [
+              {value:'mapping_genre',label:'Mapping Genre'},
+              {value:'pattern_type',label:'Pattern Type'},
+              {value:'metadata',label:'Metadata'},
+              {value:'other',label:'Other'}
+            ]).forEach(function(cat){
+              var lst = byCat[cat.value] || [];
+              var $cat = $('<div class="tree-cat"></div>').appendTo($root);
+              var $hdr = $('<div class="tree-cat-header" role="button" tabindex="0"></div>').text(cat.label).appendTo($cat);
+              var $wrap = $('<div class="tree-cat-wrap"></div>').appendTo($cat);
+              var $ul = $('<ul></ul>').appendTo($wrap);
+              function addNode($parent, tag) {
+                var $li = $('<li></li>').text(tag.name);
+                $parent.append($li);
+                var kids = tags.filter(function(tt){ return (tt.parent_ids || []).indexOf(tag.id) !== -1; });
+                if (kids.length) {
+                  var $childUl = $('<ul></ul>').appendTo($li);
+                  kids.slice(0, 50).forEach(function(k){ addNode($childUl, k); });
+                }
+              }
+              // roots within this category
+              var roots = lst.filter(function(t){ return !t.parent_ids || t.parent_ids.length === 0; });
+              roots.slice(0, 100).forEach(function(r){ addNode($ul, r); });
+              // collapse by default
+              $wrap.hide();
+              $hdr.on('click keydown', function(e){ if (e.type === 'click' || e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $wrap.toggle(); } });
+            });
+            return $root;
+          }
+          $tree.empty().append(buildTree());
+        } catch(e) { /* no-op */ }
+      });
+
+      // Wire actions
+      $cancel.on('click', function(){ $modal.remove(); });
+      $save.on('click', function(){
+        var category = $sel.val();
+        var parents = ($('.configure-tag-parents').val() || '').trim();
+        var description = ($('.configure-tag-description').val() || '').trim();
+        $.post('/configure_tag/', {
+          csrfmiddlewaretoken: csrf,
+          tag_id: createdTag.created_tag_id,
+          category: category,
+          parents: parents,
+          description: description
+        }).done(function(){
+          $modal.remove();
+          // Refresh the card tags to reflect any category-driven styles if added later
+          refreshTagsIndividual(beatmapId);
+        }).fail(function(err){
+          alert((err.responseJSON && err.responseJSON.message) || 'Failed to configure tag');
+        });
+      });
+    }
+
     function modifyTag($tagEl, tagName, action, isNegative) {
       if (!beatmapId) return;
       
@@ -269,13 +374,19 @@
       $.ajax({
         type: 'POST', url: '/modify_tag/',
         data: { action: action, tag: tagName, beatmap_id: beatmapId, csrfmiddlewaretoken: csrf, true_negative: isNegative ? '1' : '0' }
-      }).done(function() {
+      }).done(function(resp) {
         // Debounce UI refresh to coalesce rapid toggles, and update only this card.
         if (refreshDebounceTimer) { clearTimeout(refreshDebounceTimer); }
         refreshDebounceTimer = setTimeout(function(){
           refreshTagsIndividual(beatmapId);
           refreshDebounceTimer = null;
         }, 120);
+        try {
+          if (resp && resp.status === 'success' && resp.created === true && !isNegative) {
+            // Newly created tag by this user: prompt for metadata
+            showConfigureTagModal(resp);
+          }
+        } catch(e) { /* ignore */ }
       }).always(function(){
         pendingTagWrites = Math.max(0, pendingTagWrites - 1);
       });
@@ -833,23 +944,28 @@
     var allBeatmapIds = $('.beatmap-card-wrapper').map(function() {
       return $(this).data('beatmap-id');
     }).get();
-    
-    if (allBeatmapIds.length > 1) {
-      // Use the first card's tagging instance to trigger bulk loading
-      var $firstCard = $('.tag-card').first();
-      if ($firstCard.length) {
-        var taggingInstance = $firstCard.data('tagging-instance');
-        if (taggingInstance && taggingInstance.refreshTagsBulk) {
-          taggingInstance.refreshTagsBulk(allBeatmapIds);
-        }
-      }
+    // Always ensure each visible card has its tag list rendered with categories
+    if (allBeatmapIds.length === 0) return;
+    // Attempt bulk first for performance, fall back to individual
+    var $firstCard = $('.tag-card').first();
+    if ($firstCard.length) {
+      // Call the internal bulk loader via the first initialized instance if available
+      try {
+        // Try internal bulk API if attachTagging created it (legacy safety)
+        refreshTagsBulk(allBeatmapIds);
+        return;
+      } catch (e) { /* ignore and fallback */ }
     }
+    // Fallback: iterate and refresh individually (ensures category border attributes render)
+    allBeatmapIds.forEach(function(id){ refreshTagsIndividual(id); });
   }
   
   // Auto-load tags when DOM is ready
   $(document).ready(function() {
     // Small delay to ensure all cards are rendered
     setTimeout(loadAllBeatmapTags, 100);
+    // Also reload on visibility changes that commonly change content without full reload
+    $(document).on('ajaxComplete', function(){ setTimeout(loadAllBeatmapTags, 50); });
   });
 
   // Expose functions globally for external use

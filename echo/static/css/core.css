@@ -402,3 +402,55 @@ nav { background-color: var(--nav-glass-bg); -webkit-backdrop-filter: blur(12px)
   .floating-add-beatmap { right: 10px; min-width: 0; width: 84vw; }
   .bulk-download-panel { right: 10px; width: 84vw; }
 }
+
+/* ------------------------------- */
+/* Configure Tag floating modal    */
+/* ------------------------------- */
+.configure-tag-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 4000;
+  background: rgba(0,0,0,0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.configure-tag-box {
+  position: absolute;
+  max-width: 520px;
+  width: 92vw;
+  background: var(--surface-2);
+  color: var(--text-on-surface);
+  border-radius: 10px;
+  box-shadow: 0 10px 24px var(--shadow-color);
+  padding: 12px;
+}
+.configure-tag-title { font-weight: 700; margin-bottom: 8px; }
+.configure-tag-body .row { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; }
+.configure-tag-body label { font-size: 13px; color: var(--muted); }
+.configure-tag-description { resize: vertical; min-height: 44px; max-height: 120px; }
+.configure-tag-category, .configure-tag-parents {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text-on-surface);
+}
+.tree-label { margin-top: 8px; font-size: 12px; color: var(--muted); }
+.configure-tag-tree {
+  max-height: 220px;
+  overflow: auto;
+  padding: 8px;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+}
+.configure-tag-tree ul { list-style: none; margin: 0; padding-left: 16px; }
+.configure-tag-tree li { margin: 2px 0; }
+.configure-tag-tree .tree-cat { margin-bottom: 8px; border: 1px solid var(--border); border-radius: 6px; }
+.configure-tag-tree .tree-cat-header { padding: 6px 8px; background: var(--surface-2); cursor: pointer; font-weight: 600; }
+.configure-tag-tree .tree-cat-wrap { padding: 6px 8px; }
+.configure-tag-footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
+.configure-tag-footer .configure-tag-save { background: var(--accent); color: #fff; border: none; border-radius: 6px; padding: 8px 12px; cursor: pointer; }
+.configure-tag-footer .configure-tag-save:hover { background: var(--accent-hover); }
+.configure-tag-footer .configure-tag-cancel { background: var(--hover); color: var(--text-on-surface); border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; cursor: pointer; }

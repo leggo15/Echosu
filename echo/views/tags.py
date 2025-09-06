@@ -38,7 +38,7 @@ from collections import defaultdict
 # ---------------------------------------------------------------------------
 # Local application imports
 # ---------------------------------------------------------------------------
-from ..models import Beatmap, Tag, TagApplication, Vote
+from ..models import Beatmap, Tag, TagApplication, Vote, TagRelation
 from .auth import api
 from ..templatetags.custom_tags import has_tag_edit_permission
 
@@ -59,7 +59,7 @@ def get_tags(request):
         TagApplication.objects
         .filter(beatmap=beatmap, true_negative=False)
         .select_related('tag', 'tag__description_author')
-        .only('user_id', 'tag__id', 'tag__name', 'tag__description', 'tag__description_author__username')
+        .only('user_id', 'tag__id', 'tag__name', 'tag__description', 'tag__description_author__username', 'tag__category')
     )
 
     # Build structures in a single pass: user-applied counts, predictions, and description data
@@ -69,6 +69,8 @@ def get_tags(request):
     # Prefer user-authored description when available; else fall back to any description
     desc_by_name_user = {}
     desc_by_name_pred = {}
+    cat_by_name_user = {}
+    cat_by_name_pred = {}
 
     current_user_id = getattr(user, 'id', None)
     for app in applications:
@@ -83,6 +85,14 @@ def get_tags(request):
             else:
                 if tag_name not in desc_by_name_pred:
                     desc_by_name_pred[tag_name] = (app.tag.description, author_name)
+        # Cache categories similarly (prefer user-applied instance)
+        cat_val = getattr(app.tag, 'category', None)
+        if app.user_id:
+            if tag_name not in cat_by_name_user and cat_val is not None:
+                cat_by_name_user[tag_name] = cat_val
+        else:
+            if tag_name not in cat_by_name_pred and cat_val is not None:
+                cat_by_name_pred[tag_name] = cat_val
 
         if app.user_id:
             user_counts[tag_name] = user_counts.get(tag_name, 0) + 1
@@ -105,6 +115,7 @@ def get_tags(request):
             'apply_count': count,
             'description': desc,
             'description_author': author,
+            'category': cat_by_name_user.get(tag_name) or cat_by_name_pred.get(tag_name) or 'other',
         })
     
     # Add predicted tags if enabled
@@ -119,6 +130,7 @@ def get_tags(request):
                     'apply_count': 0,
                     'description': desc,
                     'description_author': author,
+                    'category': cat_by_name_pred.get(tag_name) or cat_by_name_user.get(tag_name) or 'other',
                 })
     
     # Optionally include true negatives for admin views when requested
@@ -181,7 +193,7 @@ def get_tags_bulk(request):
         TagApplication.objects
         .filter(beatmap__beatmap_id__in=beatmap_ids, true_negative=False)
         .select_related('beatmap', 'tag', 'tag__description_author')
-        .only('beatmap__beatmap_id', 'user_id', 'tag__id', 'tag__name', 'tag__description', 'tag__description_author__username')
+        .only('beatmap__beatmap_id', 'user_id', 'tag__id', 'tag__name', 'tag__description', 'tag__description_author__username', 'tag__category')
     )
     
     # Single query for user's tags across all beatmaps (if authenticated)
@@ -199,7 +211,7 @@ def get_tags_bulk(request):
     # Process tag applications and build tag data using counters instead of lists
     tag_data = defaultdict(lambda: defaultdict(lambda: {
         'name': '', 'is_applied_by_user': False, 'is_predicted': False,
-        'apply_count': 0, 'description': '', 'description_author': ''
+        'apply_count': 0, 'description': '', 'description_author': '', 'category': None
     }))
     for app in tag_apps:
         bm_id = app.beatmap.beatmap_id
@@ -211,6 +223,8 @@ def get_tags_bulk(request):
         if not entry['description'] and app.tag.description:
             entry['description'] = app.tag.description
             entry['description_author'] = getattr(app.tag.description_author, 'username', '') if app.tag.description_author else ''
+        # Always reflect the model category; fallback to 'other' during serialization
+        entry['category'] = getattr(app.tag, 'category', None) or entry.get('category')
         if app.user_id:
             entry['apply_count'] += 1
             # Mark as applied by current user if applicable
@@ -229,7 +243,7 @@ def get_tags_bulk(request):
             TagApplication.objects
             .filter(beatmap__beatmap_id__in=beatmap_ids, true_negative=True)
             .select_related('beatmap', 'tag')
-            .only('beatmap__beatmap_id', 'tag__name')
+            .only('beatmap__beatmap_id', 'tag__name', 'tag__category')
         )
         for app in neg_qs:
             bm_id = getattr(app.beatmap, 'beatmap_id', None)
@@ -239,10 +253,19 @@ def get_tags_bulk(request):
                 # Mark as negative; do not inflate counts
                 entry['name'] = entry['name'] or tag_name
                 entry['true_negative'] = True
+                # Attach category for border styling
+                if not entry.get('category'):
+                    entry['category'] = getattr(app.tag, 'category', None)
 
     # Finalize per-beatmap lists
     for bm_id, tags_for_bm in tag_data.items():
-        final_tags = sorted(tags_for_bm.values(), key=lambda x: (-x['apply_count'], x['name']))
+        # Ensure category defaults are filled at serialization time
+        final_tags = []
+        for node in tags_for_bm.values():
+            if not node.get('category'):
+                node['category'] = 'other'
+            final_tags.append(node)
+        final_tags.sort(key=lambda x: (-x['apply_count'], x['name']))
         result[bm_id] = final_tags
     
     return JsonResponse({'tags': result})
@@ -441,7 +464,7 @@ def modify_tag(request):
 
     try:
         with transaction.atomic():
-            tag, _ = Tag.objects.get_or_create(name=processed_tag)
+            tag, created_tag = Tag.objects.get_or_create(name=processed_tag)
             beatmap = get_object_or_404(Beatmap, beatmap_id=beatmap_id)
 
             tag_application, created = TagApplication.objects.get_or_create(
@@ -455,7 +478,7 @@ def modify_tag(request):
                 tag_application.delete()
                 if not TagApplication.objects.filter(tag=tag).exists():
                     tag.delete()
-                return JsonResponse({'status': 'success', 'action': 'removed', 'true_negative': want_true_negative})
+                return JsonResponse({'status': 'success', 'action': 'removed', 'true_negative': want_true_negative, 'created': False})
 
             # If an admin applies a true negative, remove any predicted tag for this beatmap+tag
             if want_true_negative:
@@ -466,10 +489,139 @@ def modify_tag(request):
                     is_prediction=True,
                 ).delete()
 
-            return JsonResponse({'status': 'success', 'action': 'applied', 'true_negative': want_true_negative})
+            return JsonResponse({
+                'status': 'success',
+                'action': 'applied',
+                'true_negative': want_true_negative,
+                'created': bool(created_tag),
+                'created_tag_id': tag.id if created_tag else None,
+                'created_tag_name': tag.name if created_tag else None,
+            })
 
     except Exception:
         return JsonResponse({'status': 'error', 'message': 'Internal server error.'}, status=500)
+
+
+@login_required
+def configure_tag(request):
+    """Set category and parent associations for a tag.
+
+    Accepts either POST form or JSON with fields:
+      - tag_id (preferred) or tag_name
+      - category: one of Tag.CATEGORY_CHOICES values (mapping_genre, pattern_type, metadata, other)
+      - parents: comma-separated names OR multiple values list (parents[])
+    Creates parent tags if missing. Idempotent for relations.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'Invalid request method'}, status=400)
+
+    tag_id = request.POST.get('tag_id') or (request.POST.get('tag') or request.POST.get('tag_name'))
+    category = (request.POST.get('category') or '').strip().lower() or Tag.CATEGORY_OTHER
+    parents_raw = request.POST.getlist('parents[]') or request.POST.get('parents') or ''
+    desc_raw = request.POST.get('description')
+
+    # Resolve target tag
+    tag = None
+    if tag_id and str(tag_id).isdigit():
+        tag = Tag.objects.filter(id=int(tag_id)).first()
+    if not tag:
+        name = (str(tag_id) if tag_id else '').strip().lower()
+        if name:
+            tag = Tag.objects.filter(name=name).first()
+    if not tag:
+        return JsonResponse({'status': 'error', 'message': 'Tag not found.'}, status=404)
+
+    # Validate category
+    valid_values = {c[0] for c in Tag.CATEGORY_CHOICES}
+    if category not in valid_values:
+        category = Tag.CATEGORY_OTHER
+
+    # Update category
+    if tag.category != category:
+        tag.category = category
+        tag.save(update_fields=['category'])
+
+    # Parse parents
+    parent_names: list[str] = []
+    if isinstance(parents_raw, list) and parents_raw:
+        parent_names = [str(p).strip() for p in parents_raw if str(p).strip()]
+    elif isinstance(parents_raw, str) and parents_raw.strip():
+        # Allow comma-separated
+        tokens = [t.strip() for t in parents_raw.split(',') if t.strip()]
+        parent_names = tokens
+
+    # Create or fetch parent tags and relations
+    created_relations = 0
+    parent_ids = []
+    for pname in parent_names:
+        pname_clean = pname.lower()
+        if pname_clean == tag.name:
+            continue  # skip self
+        parent_tag, _ = Tag.objects.get_or_create(name=pname_clean)
+        parent_ids.append(parent_tag.id)
+        try:
+            TagRelation.objects.get_or_create(parent=parent_tag, child=tag)
+            created_relations += 1
+        except IntegrityError:
+            pass
+
+    # Optionally update description if provided
+    if desc_raw is not None:
+        new_desc = sanitize_description(desc_raw or '')
+        if new_desc:
+            # Only allow non-staff to set description if it's empty (new tag); staff can always override
+            can_set = (not tag.description) or request.user.is_staff
+            if can_set and new_desc != (tag.description or '') and not tag.is_locked:
+                tag.description = new_desc
+                # Set author to current user on creation/change
+                try:
+                    tag.description_author = request.user
+                except Exception:
+                    pass
+                try:
+                    tag.save(user=request.user)
+                except TypeError:
+                    tag.save()
+
+    return JsonResponse({'status': 'success', 'tag_id': tag.id, 'category': tag.category, 'parents': parent_ids, 'created_relations': created_relations, 'description': tag.description})
+
+
+@login_required
+def tag_tree(request):
+    """Return a simple DAG listing to render a folder tree in the UI.
+
+    Response format:
+      {
+        "tags": [
+          {"id": 1, "name": "aim", "category": "pattern_type", "parent_ids": [5, 6] },
+          ...
+        ],
+        "categories": [ {"value": "mapping_genre", "label": "Mapping Genre"}, ... ]
+      }
+    """
+    # Bulk fetch all tags and relations
+    tags = list(Tag.objects.all().only('id', 'name', 'category'))
+    rels = list(TagRelation.objects.all().only('parent_id', 'child_id'))
+
+    parent_map = {}
+    for r in rels:
+        lst = parent_map.get(r.child_id)
+        if lst is None:
+            lst = []
+            parent_map[r.child_id] = lst
+        lst.append(r.parent_id)
+
+    data = []
+    for t in tags:
+        data.append({
+            'id': t.id,
+            'name': t.name,
+            'category': t.category,
+            'parent_ids': parent_map.get(t.id, []),
+        })
+
+    cats = [{'value': val, 'label': label} for (val, label) in Tag.CATEGORY_CHOICES]
+    return JsonResponse({'tags': data, 'categories': cats})
 
 
 # ----------------------------- Description editing ----------------------------- #
@@ -549,7 +701,7 @@ def edit_tags(request):
     search_query = request.GET.get('search', '').strip()
     tags = (
         Tag.objects.filter(name__icontains=search_query) if search_query else Tag.objects.all()
-    ).order_by('name')
+    ).order_by('name').prefetch_related('parent_relations__parent')
     paginator = Paginator(tags, 20)
     page_obj = paginator.get_page(request.GET.get('page'))
     return render(request, 'edit_tags.html', {'tags': page_obj, 'search_query': search_query})

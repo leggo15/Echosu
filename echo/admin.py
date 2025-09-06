@@ -11,7 +11,7 @@ from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.utils import timezone
 
-from .models import Beatmap, UserProfile, Tag, TagApplication, TagDescriptionHistory
+from .models import Beatmap, UserProfile, Tag, TagApplication, TagDescriptionHistory, TagRelation
 from .models import APIRequestLog
 from .views.beatmap import update_beatmap_info
 from .views.api import admin_flush_all_predictions
@@ -140,17 +140,11 @@ class BeatmapAdmin(admin.ModelAdmin):
         if not request.user.is_staff:
             self.message_user(request, 'Permission denied.', level=messages.ERROR)
             return redirect('..')
-        # Call the API view directly with a forged request for consistency
-        rf = RequestFactory()
-        req = rf.post('/api/admin/flush/predictions/all/', data={})
-        req.user = request.user
+        # Perform deletion directly to avoid API auth requirements
         try:
-            resp = admin_flush_all_predictions(req)
-            try:
-                deleted = getattr(resp, 'data', {}).get('deleted')
-            except Exception:
-                deleted = None
-            self.message_user(request, f'Flushed predictions. Deleted: {deleted if deleted is not None else "unknown"}.')
+            qs = TagApplication.objects.filter(user__isnull=True, is_prediction=True)
+            deleted_count, _ = qs.delete()
+            self.message_user(request, f'Flushed predictions. Deleted: {deleted_count}.')
         except Exception:
             self.message_user(request, 'Failed to flush predictions.', level=messages.ERROR)
         return redirect('..')
@@ -176,7 +170,17 @@ class UserProfileAdmin(admin.ModelAdmin):
         return obj.user.last_login
     get_last_login.admin_order_field = 'user__last_login'
     get_last_login.short_description = 'Last login'
-admin.site.register(Tag)
+class TagRelationInline(admin.TabularInline):
+    model = TagRelation
+    fk_name = 'child'
+    extra = 1
+
+@admin.register(Tag)
+class TagAdmin(admin.ModelAdmin):
+    list_display = ('name', 'category', 'upvotes', 'downvotes', 'is_locked', 'is_recommended')
+    list_filter = ('category', 'is_locked', 'is_recommended')
+    search_fields = ('name', 'description')
+    inlines = [TagRelationInline]
 admin.site.register(TagDescriptionHistory)
 admin.site.register(TagApplication)
 

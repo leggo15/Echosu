@@ -11,7 +11,7 @@ class UserSerializer(serializers.ModelSerializer):
 class TagSerializer(serializers.ModelSerializer):
     class Meta:
         model = Tag
-        fields = ['id', 'name']
+        fields = ['id', 'name', 'category']
 
 class BeatmapSerializer(serializers.ModelSerializer):
     tags = TagSerializer(many=True, read_only=True)

@@ -76,6 +76,14 @@
 
     <hr/>
 
+    <!-- Tag Tree Section -->
+    <section class="tag-tree-section">
+      <h2>Tag Folder View</h2>
+      <div class="tree" id="tag-tree"></div>
+    </section>
+
+    <hr/>
+
     <h1>Tag Library</h1>
     <input type="text" id="tag-search" class="search-field" placeholder="Search tags..." aria-label="Search Tags" />
     <ul class="tag-list" id="tag-list">
@@ -102,14 +110,6 @@
             <li class="no-tags-message">No tags available.</li>
         {% endfor %}
     </ul>
-
-    <hr/>
-
-    <!-- Tag Tree Section -->
-    <section class="tag-tree-section">
-      <h2>Tag Folder View</h2>
-      <div class="tree" id="tag-tree"></div>
-    </section>
 {% endblock %}
 
 {% block foot_js %}

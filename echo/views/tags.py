@@ -231,10 +231,8 @@ def get_tags_bulk(request):
             if (bm_id, tag_name) in user_tags:
                 entry['is_applied_by_user'] = True
         elif include_predicted:
-            # Keep predicted flag; count predicted as 1 for display parity with previous behavior
+            # Keep predicted flag; do not inflate user apply_count
             entry['is_predicted'] = True
-            if entry['apply_count'] == 0:
-                entry['apply_count'] = 1
 
     # Optionally include negatives (admin view helper)
     include_neg = str(request.GET.get('include_true_negatives', '0')).lower() in ['1', 'true', 'yes', 'on']
@@ -597,7 +595,6 @@ def configure_tag(request):
     return JsonResponse({'status': 'success', 'tag_id': tag.id, 'category': tag.category, 'parents': parent_ids, 'created_relations': created_relations, 'description': tag.description})
 
 
-@login_required
 def tag_tree(request):
     """Return a simple DAG listing to render a folder tree in the UI.
 

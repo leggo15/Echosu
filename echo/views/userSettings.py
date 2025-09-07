@@ -33,9 +33,9 @@ def settings(request):
             return render(request, 'settings.html', {'full_key': raw_key, 'user': request.user})
         # Save preferences
         if request.POST.get('update_preferences') == '1':
-            pref = (request.POST.get('tag_category_display') or 'color').strip().lower()
+            pref = (request.POST.get('tag_category_display') or 'none').strip().lower()
             if pref not in ['none', 'color', 'lists']:
-                pref = 'color'
+                pref = 'none'
             us, _ = UserSettings.objects.get_or_create(user=request.user)
             if us.tag_category_display != pref:
                 us.tag_category_display = pref
@@ -45,7 +45,7 @@ def settings(request):
     try:
         tag_pref = request.user.settings.tag_category_display
     except Exception:
-        tag_pref = 'color'
+        tag_pref = 'none'
     return render(request, 'settings.html', {'user': request.user, 'tag_category_display': tag_pref})
 
 

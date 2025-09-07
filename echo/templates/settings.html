@@ -66,7 +66,7 @@
                 <input type="hidden" name="update_preferences" value="1">
                 <label for="tag_category_display">Tag categories:</label>
                 <select id="tag_category_display" name="tag_category_display">
-                  {% with pref=tag_category_display|default:'color' %}
+                  {% with pref=tag_category_display|default:'none' %}
                     <option value="none" {% if pref == 'none' %}selected{% endif %}>Do not display</option>
                     <option value="color" {% if pref == 'color' %}selected{% endif %}>Color coding</option>
                     <option value="lists" {% if pref == 'lists' %}selected{% endif %}>Separate lists per card</option>

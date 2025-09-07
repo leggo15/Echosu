@@ -1,8 +1,8 @@
 from .models import UserProfile, UserSettings
 
 def add_user_profile_to_context(request):
-    # Default preference
-    tag_display = 'color'
+    # Default preference: hide categories unless user opts in
+    tag_display = 'none'
     # Prefer from authenticated user's settings if present
     try:
         if getattr(request, 'user', None) and request.user.is_authenticated:

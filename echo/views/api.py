@@ -1021,7 +1021,8 @@ def calculate_pp(request):
             beatmap, 
             accuracy=accuracy, 
             misses=count_miss, 
-            lazer=True
+            lazer=True,
+            mods=mods
         )
         
         if pp_value is None:

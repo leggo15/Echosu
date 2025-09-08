@@ -330,7 +330,7 @@ def get_or_compute_timeseries(
 
 
 
-def get_or_compute_pp(beatmap, accuracy: float = 100.0, misses: int = 0, lazer: bool = True) -> Optional[float]:
+def get_or_compute_pp(beatmap, accuracy: float = 100.0, misses: int = 0, lazer: bool = True, mods: Optional[str] = None) -> Optional[float]:
     """Return cached PP if present; otherwise compute with rosu-pp and cache.
 
     Returns None if rosu is unavailable or computation fails.
@@ -338,13 +338,14 @@ def get_or_compute_pp(beatmap, accuracy: float = 100.0, misses: int = 0, lazer: 
     if rosu is None:
         return None
 
-    # Use cached value if available
-    cached_pp = getattr(beatmap, 'pp', None)
-    try:
-        if cached_pp is not None:
-            return float(cached_pp)
-    except Exception:
-        pass
+    # Use cached value if available (only for nomod)
+    if mods is None:
+        cached_pp = getattr(beatmap, 'pp', None)
+        try:
+            if cached_pp is not None:
+                return float(cached_pp)
+        except Exception:
+            pass
 
     storage_name = ensure_osu_file_available(beatmap.beatmap_id)
     if not storage_name:
@@ -359,17 +360,20 @@ def get_or_compute_pp(beatmap, accuracy: float = 100.0, misses: int = 0, lazer: 
             tmp.flush()
 
             bm = rosu.Beatmap(path=tmp.name)
-            perf = rosu.Performance(accuracy=accuracy, misses=misses, lazer=lazer)
+            perf = rosu.Performance(accuracy=accuracy, misses=misses, lazer=lazer, mods=mods)
             attrs = perf.calculate(bm)
             pp_value = getattr(attrs, "pp", None)
             if pp_value is None:
                 return None
-            try:
-                beatmap.pp = float(pp_value)
-                beatmap.save(update_fields=["pp"])
-            except Exception:
-                # Silent failure to avoid impacting request path
-                pass
+            
+            # Only cache nomod PP
+            if mods is None:
+                try:
+                    beatmap.pp = float(pp_value)
+                    beatmap.save(update_fields=["pp"])
+                except Exception:
+                    # Silent failure to avoid impacting request path
+                    pass
             return float(pp_value)
     except Exception:
         return None

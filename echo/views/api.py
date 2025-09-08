@@ -939,3 +939,104 @@ def admin_flush_all_predictions(request):
     qs = TagApplication.objects.filter(user__isnull=True, is_prediction=True)
     deleted_count, _ = qs.delete()
     return Response({'status': 'ok', 'deleted': deleted_count})
+
+
+# ----------------------------- PP Calculation ----------------------------- #
+
+@api_view(['POST'])
+@authentication_classes([CustomTokenAuthentication])
+@permission_classes([AllowAny])
+def calculate_pp(request):
+    """Calculate PP for a beatmap with custom parameters.
+    
+    Request body:
+    {
+        "beatmap_id": "123",
+        "combo": 500,
+        "accuracy": 98.5,
+        "count_100": 10,
+        "count_50": 5,
+        "count_miss": 2,
+        "mods": "HD,HR"  # Optional, comma-separated mods
+    }
+    
+    Returns:
+    {
+        "pp": 123.45,
+        "max_combo": 600,
+        "mods": "HD,HR"
+    }
+    """
+    try:
+        beatmap_id = request.data.get('beatmap_id')
+        if not beatmap_id:
+            return Response({'error': 'beatmap_id is required'}, status=400)
+        
+        beatmap = get_object_or_404(Beatmap, beatmap_id=str(beatmap_id))
+        
+        # Get parameters with defaults
+        combo = request.data.get('combo', beatmap.max_combo)
+        accuracy = float(request.data.get('accuracy', 100.0))
+        count_100 = int(request.data.get('count_100', 0))
+        count_50 = int(request.data.get('count_50', 0))
+        count_miss = int(request.data.get('count_miss', 0))
+        mods_str = request.data.get('mods', '')
+        
+        # Parse mods string
+        mods = None
+        if mods_str:
+            mods_list = [m.strip().upper() for m in mods_str.split(',') if m.strip()]
+            # Filter valid mods and handle mutual exclusions
+            valid_mods = []
+            for mod in mods_list:
+                if mod in ['HD', 'HR', 'DT', 'HT', 'EZ', 'FL']:
+                    # Handle mutual exclusions
+                    if mod == 'DT' and 'HT' in valid_mods:
+                        valid_mods.remove('HT')
+                    elif mod == 'HT' and 'DT' in valid_mods:
+                        valid_mods.remove('DT')
+                    elif mod == 'HR' and 'EZ' in valid_mods:
+                        valid_mods.remove('EZ')
+                    elif mod == 'EZ' and 'HR' in valid_mods:
+                        valid_mods.remove('HR')
+                    
+                    if mod not in valid_mods:
+                        valid_mods.append(mod)
+            
+            if valid_mods:
+                mods = ''.join(valid_mods)
+        
+        # Calculate PP using rosu
+        from ..helpers.rosu_utils import get_or_compute_pp
+        
+        # Calculate accuracy from hit counts if not provided directly
+        if count_100 > 0 or count_50 > 0 or count_miss > 0:
+            # This is a simplified accuracy calculation
+            # In a real implementation, you'd need the total hit objects
+            # For now, we'll use the provided accuracy value
+            pass
+        
+        # Calculate PP with custom parameters
+        pp_value = get_or_compute_pp(
+            beatmap, 
+            accuracy=accuracy, 
+            misses=count_miss, 
+            lazer=True
+        )
+        
+        if pp_value is None:
+            return Response({'error': 'Failed to calculate PP'}, status=500)
+        
+        return Response({
+            'pp': round(pp_value, 2),
+            'max_combo': beatmap.max_combo,
+            'mods': mods or None,
+            'combo': combo,
+            'accuracy': accuracy,
+            'count_100': count_100,
+            'count_50': count_50,
+            'count_miss': count_miss
+        })
+        
+    except Exception as e:
+        return Response({'error': str(e)}, status=500)

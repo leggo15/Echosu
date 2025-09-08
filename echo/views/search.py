@@ -369,7 +369,7 @@ def search_results(request):
         beatmaps = beatmaps.filter(status_q)
 
     parsed_terms = parse_query_with_quotes(query)
-    beatmaps, include_tags, required_tags = build_query_conditions(beatmaps, [t[0] for t in parsed_terms], predicted_mode)
+    beatmaps, include_tags, required_tags, pp_calc_params = build_query_conditions(beatmaps, [t[0] for t in parsed_terms], predicted_mode)
 
     stemmed_terms = process_search_terms(parsed_terms)
     # Combine include + required tags for weighting and exact-match purposes
@@ -451,6 +451,7 @@ def search_results(request):
             'status_loved': status_loved,
             'status_unranked': status_unranked,
             'include_predicted': predicted_mode,
+            'pp_calc_params': pp_calc_params,
         },
     )
 
@@ -884,4 +885,4 @@ def build_query_conditions(beatmaps, search_terms, predicted_mode='include'):
         context.beatmaps = context.beatmaps.annotate(ta_pos=FilteredRelation('tagapplication', condition=Q(tagapplication__true_negative=False)))
         context.beatmaps = context.beatmaps.exclude(ta_pos__tag__name__in=context.exclude_tags)
     # Return required tags so they can be included in weighting calculations
-    return context.beatmaps, context.include_tag_names, context.required_tags
+    return context.beatmaps, context.include_tag_names, context.required_tags, getattr(context, 'pp_calc_params', {})

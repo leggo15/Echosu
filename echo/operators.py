@@ -23,9 +23,30 @@ def handle_attribute_queries(context, search_terms):
     #   (pp_nomod>=800 & pp_nomod<=850) |
     #   (pp_hd>=800 & pp_hd<=850) | ...
     pp_constraints = []  # list of tuples (lookup, value)
+    
+    # Store Acc and Miss parameters for PP calculation
+    context.pp_calc_params = {}
 
     for term in search_terms:
         t = (term or '').strip()
+        
+        # Detect Acc and Miss parameters for PP calculation
+        acc_match = re.match(r'^\s*acc=(\d+(?:\.\d+)?)\s*$', t, re.IGNORECASE)
+        if acc_match:
+            try:
+                context.pp_calc_params['accuracy'] = float(acc_match.group(1))
+                continue  # don't pass this term down further
+            except ValueError:
+                continue
+                
+        miss_match = re.match(r'^\s*miss=(\d+)\s*$', t, re.IGNORECASE)
+        if miss_match:
+            try:
+                context.pp_calc_params['misses'] = int(miss_match.group(1))
+                continue  # don't pass this term down further
+            except ValueError:
+                continue
+        
         # Detect generic PP constraints (case-insensitive)
         m = re.match(r'^\s*pp(>=|<=|>|<|=)(\d+(?:\.\d+)?)\s*$', t, re.IGNORECASE)
         if m:

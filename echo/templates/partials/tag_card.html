@@ -114,6 +114,36 @@
         </div>
     {% endwith %}
 
+      <!-- Interactive PP Calculator -->
+      <div class="pp-calculator" data-beatmap-id="{{ beatmap.beatmap_id }}">
+        <div class="pp-calc-header">
+          <h4>PP Calculator</h4>
+          <button type="button" class="pp-calc-toggle" aria-label="Toggle PP calculator">
+            <span class="pp-calc-icon">⚙️</span>
+          </button>
+        </div>
+        <div class="pp-calc-content" style="display: none;">
+          <div class="pp-calc-inputs">
+            <div class="pp-calc-row">
+              <label for="accuracy-{{ beatmap.beatmap_id }}">Acc:</label>
+              <input type="number" id="accuracy-{{ beatmap.beatmap_id }}" class="pp-calc-input" 
+                     value="100.0" min="0" max="100" step="0.01"
+                     data-field="accuracy">
+              <span class="pp-calc-unit">%</span>
+            </div>
+            <div class="pp-calc-row">
+              <label for="countmiss-{{ beatmap.beatmap_id }}">Miss:</label>
+              <input type="number" id="countmiss-{{ beatmap.beatmap_id }}" class="pp-calc-input" 
+                     value="0" min="0"
+                     data-field="count_miss">
+            </div>
+          </div>
+          <div class="pp-calc-actions">
+            <button type="button" class="pp-calc-calculate">Calculate</button>
+          </div>
+        </div>
+      </div>
+
       {% with genres_list=beatmap.genres.all %}
         {% if genres_list %}
           {% if genres_list|length > 10 %}

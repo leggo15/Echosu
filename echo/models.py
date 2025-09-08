@@ -44,6 +44,7 @@ class Beatmap(models.Model):
     pp_ht = models.FloatField(null=True, blank=True, db_index=True)
     pp_ez = models.FloatField(null=True, blank=True, db_index=True)
     pp_fl = models.FloatField(null=True, blank=True, db_index=True)
+    max_combo = models.IntegerField(null=True, blank=True, db_index=True)
 
     class Meta:
         indexes = [

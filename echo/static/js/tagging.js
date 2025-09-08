@@ -190,7 +190,7 @@
       // mode already computed above
 
       function renderTagInto($container, tag) {
-        var tagClass = tag.is_applied_by_user ? 'tag-applied' : (tag.is_predicted ? 'tag-predicted' : 'tag-unapplied');
+        var tagClass = tag.is_applied_by_user ? 'tag-applied' : (tag.is_predicted && tag.apply_count === 0 ? 'tag-predicted' : 'tag-unapplied');
         var $el = $('<span></span>')
           .addClass('tag ' + tagClass)
           .attr('data-tag-name', tag.name)
@@ -301,7 +301,7 @@
       var $modal = $('<div id="configure-tag-modal" class="configure-tag-modal" role="dialog" aria-modal="true"></div>');
       var $box = $('<div class="configure-tag-box"></div>').appendTo($modal);
       var tagNameForHeader = (createdTag && createdTag.created_tag_name) ? createdTag.created_tag_name : 'Tag';
-      $('<div class="configure-tag-title"></div>').text(tagNameForHeader + ' is a New Tag').appendTo($box);
+      $('<div class="configure-tag-title"></div>').text('"' + tagNameForHeader + '" is a New Tag').appendTo($box);
       var $body = $('<div class="configure-tag-body"></div>').appendTo($box);
       // Description input (top of form)
       var $descRow = $('<div class="row"></div>').appendTo($body);
@@ -537,6 +537,138 @@
 
     // Initial fetch
     refreshTags();
+
+    // PP Calculator functionality
+    function initPPCalculator($card) {
+      var beatmapId = $card.data('beatmap-id') || $card.attr('id')?.split('-').pop();
+      var $calculator = $card.find('.pp-calculator');
+      var $toggle = $calculator.find('.pp-calc-toggle');
+      var $content = $calculator.find('.pp-calc-content');
+      var $inputs = $calculator.find('.pp-calc-input');
+      var $calculateBtn = $calculator.find('.pp-calc-calculate');
+      
+      var isExpanded = false;
+      var hasInteracted = false;
+      
+      // Toggle calculator visibility
+      $toggle.on('click', function() {
+        isExpanded = !isExpanded;
+        $content.toggle(isExpanded);
+        $toggle.attr('aria-expanded', isExpanded);
+      });
+      
+      
+      // Calculate PP and update mod pills
+      function calculateAndUpdatePP() {
+        var data = {};
+        var maxCombo = $calculator.data('max-combo') || 0;
+        
+        // Set default values
+        data.combo = maxCombo;
+        data.count_100 = 0;
+        data.count_50 = 0;
+        data.mods = '';
+        
+        // Get user input values
+        $inputs.each(function() {
+          var $input = $(this);
+          var field = $input.data('field');
+          var value = $input.val();
+          
+          if (field === 'count_miss') {
+            data[field] = parseInt(value) || 0;
+          } else if (field === 'accuracy') {
+            data[field] = parseFloat(value) || 100.0;
+          }
+        });
+        
+        data.beatmap_id = beatmapId;
+        
+        // Show loading state
+        $calculateBtn.prop('disabled', true).text('Calculating...');
+        
+        // Add updating animation to all PP pills
+        $card.find('.pp-pill').addClass('updating');
+        
+        // Calculate PP for each mod combination
+        var mods = ['', 'HD', 'HR', 'DT', 'HT', 'EZ', 'FL'];
+        var modFields = ['pp_nomod', 'pp_hd', 'pp_hr', 'pp_dt', 'pp_ht', 'pp_ez', 'pp_fl'];
+        var completed = 0;
+        var results = {};
+        
+        mods.forEach(function(mod, index) {
+          var requestData = Object.assign({}, data);
+          if (mod) {
+            requestData.mods = mod;
+          }
+          
+          $.ajax({
+            url: '/api/calculate-pp/',
+            method: 'POST',
+            data: JSON.stringify(requestData),
+            contentType: 'application/json',
+            headers: {
+              'X-CSRFToken': csrf
+            }
+          }).done(function(response) {
+            results[modFields[index]] = response.pp;
+            completed++;
+            
+            // Update the corresponding PP pill
+            var $pill = $card.find('.pp-' + (mod ? mod.toLowerCase() : 'nm'));
+            if ($pill.length) {
+              $pill.find('.pp-val').text(Math.round(response.pp));
+              $pill.removeClass('updating');
+            }
+            
+            // If all calculations are done, hide loading state
+            if (completed === mods.length) {
+              $calculateBtn.prop('disabled', false).text('Calculate');
+              hasInteracted = true;
+            }
+          }).fail(function(xhr) {
+            completed++;
+            console.warn('Failed to calculate PP for mod:', mod, xhr.responseJSON);
+            
+            // Remove updating animation even on failure
+            var $pill = $card.find('.pp-' + (mod ? mod.toLowerCase() : 'nm'));
+            if ($pill.length) {
+              $pill.removeClass('updating');
+            }
+            
+            if (completed === mods.length) {
+              $calculateBtn.prop('disabled', false).text('Calculate');
+              if (completed === 1) { // Only show error if all failed
+                var error = 'Failed to calculate PP';
+                if (xhr.responseJSON && xhr.responseJSON.error) {
+                  error = xhr.responseJSON.error;
+                }
+                alert(error);
+              }
+            }
+          });
+        });
+      }
+      
+      $calculateBtn.on('click', calculateAndUpdatePP);
+      
+      // Auto-calculate on input change (with debounce)
+      var calcTimeout;
+      $inputs.on('input', function() {
+        hasInteracted = true;
+        clearTimeout(calcTimeout);
+        calcTimeout = setTimeout(function() {
+          calculateAndUpdatePP();
+        }, 500);
+      });
+      
+      // Store max combo for reset functionality
+      var maxCombo = $calculator.find('input[data-field="combo"]').attr('max');
+      $calculator.data('max-combo', maxCombo);
+    }
+    
+    // Initialize PP calculator for this card
+    initPPCalculator($card);
 
     // Ownership edit inline controls
     $wrapper.on('click', '.mapper-edit-btn', function(){
@@ -993,6 +1125,35 @@
     setTimeout(loadAllBeatmapTags, 100);
     // Also reload on visibility changes that commonly change content without full reload
     $(document).on('ajaxComplete', function(){ setTimeout(loadAllBeatmapTags, 50); });
+    
+    // Handle PP calc parameters from search
+    if (window.PP_CALC_PARAMS) {
+      setTimeout(function() {
+        var params = window.PP_CALC_PARAMS;
+        $('.pp-calculator').each(function() {
+          var $calculator = $(this);
+          var $accuracyInput = $calculator.find('input[data-field="accuracy"]');
+          var $missInput = $calculator.find('input[data-field="count_miss"]');
+          
+          if (params.accuracy !== undefined && $accuracyInput.length) {
+            $accuracyInput.val(params.accuracy);
+          }
+          if (params.misses !== undefined && $missInput.length) {
+            $missInput.val(params.misses);
+          }
+          
+          // Auto-calculate if parameters were provided
+          if ((params.accuracy !== undefined || params.misses !== undefined) && $calculator.length) {
+            // Expand the calculator
+            $calculator.find('.pp-calc-content').show();
+            $calculator.find('.pp-calc-toggle').attr('aria-expanded', 'true');
+            
+            // Trigger calculation
+            $calculator.find('.pp-calc-calculate').click();
+          }
+        });
+      }, 200); // Wait for calculators to be initialized
+    }
   });
 
   // Expose functions globally for external use

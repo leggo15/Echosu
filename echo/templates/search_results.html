@@ -65,6 +65,8 @@
                                 <li><code>BPM&gt;=170</code></li>
                                 <li><code>LENGTH&gt;=200(in seconds)</code></li>
                                 <li><code>FAV&lt;=30</code></li>
+                                <li><code>Acc=95</code> - Set accuracy for PP calculation</li>
+                                <li><code>Miss=3</code> - Set miss count for PP calculation</li>
                                 <li><code>COUNT&gt;10000</code></li>
                                  <li><code>PP&gt;=300 PP&lt;=350</code></li>
                             </ul>
@@ -219,6 +221,12 @@
 
 {% block foot_js %}
   <script src="{% static 'js/search_filters.js' %}"></script>
+  {% if pp_calc_params %}
+  {{ pp_calc_params|json_script:"pp-calc-params" }}
+  <script>
+    window.PP_CALC_PARAMS = JSON.parse(document.getElementById('pp-calc-params').textContent);
+  </script>
+  {% endif %}
   <script src="{% static 'js/tagging.js' %}"></script>
   <script src="{% static 'js/collapsible_descriptions.js' %}"></script>
   <script>

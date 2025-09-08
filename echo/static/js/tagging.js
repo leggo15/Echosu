@@ -662,8 +662,8 @@
         }, 500);
       });
       
-      // Store max combo for reset functionality
-      var maxCombo = $calculator.find('input[data-field="combo"]').attr('max');
+      // Store max combo from data attribute
+      var maxCombo = $calculator.data('max-combo') || 0;
       $calculator.data('max-combo', maxCombo);
     }
     

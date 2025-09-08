@@ -115,7 +115,7 @@
     {% endwith %}
 
       <!-- Interactive PP Calculator -->
-      <div class="pp-calculator" data-beatmap-id="{{ beatmap.beatmap_id }}">
+      <div class="pp-calculator" data-beatmap-id="{{ beatmap.beatmap_id }}" data-max-combo="{{ beatmap.max_combo|default:0 }}">
         <div class="pp-calc-header">
           <h4>PP Calculator</h4>
           <button type="button" class="pp-calc-toggle" aria-label="Toggle PP calculator">

@@ -9,9 +9,22 @@ class UserSerializer(serializers.ModelSerializer):
         fields = ['id', 'username']
 
 class TagSerializer(serializers.ModelSerializer):
+    parents = serializers.SerializerMethodField()
+    
+    def get_parents(self, obj):
+        """Return parent tags with full details instead of just IDs."""
+        return [
+            {
+                'id': parent.id,
+                'name': parent.name,
+                'category': parent.category
+            }
+            for parent in obj.parents.all()
+        ]
+    
     class Meta:
         model = Tag
-        fields = ['id', 'name', 'category']
+        fields = ['id', 'name', 'category', 'parents']
 
 class BeatmapSerializer(serializers.ModelSerializer):
     tags = TagSerializer(many=True, read_only=True)

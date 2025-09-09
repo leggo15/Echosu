@@ -54,7 +54,7 @@ headers = {
 
 All tag data for a beatmap is exposed via the tag applications endpoint, filtered by `beatmap_id`. `include` flags allow attaching derived data per tag.
 
-- **URL:** `/api/tag-applications/?beatmap_id=<beatmap_id>&include=tag_counts,tag_timestamps,predicted_tags&user=me`
+- **URL:** `/api/tag-applications/?beatmap_id=<beatmap_id>&include=tag_counts,tag_timestamps,predicted_tags,metadata&user=me`
 - **Methods:** `GET`
 - **Authentication:** Required (Token or logged-in session)
 - **Query Parameters:**
@@ -64,8 +64,8 @@ All tag data for a beatmap is exposed via the tag applications endpoint, filtere
     - `tag_counts`: attach `count` to each `tag` (applications per tag on this beatmap; excludes predictions by default)
     - `tag_timestamps`: attach `consensus_intervals` to each `tag` (aggregated intervals across users)
     - `predicted_tags`: include predicted tags
+    - `metadata`: include tag categories and relations to eachother.
   - `user` (optional): if `me`, attach `user_intervals` for the current user under each `tag`
-- **Response (lite entries with per-tag extras):**
 
 ```json
 [

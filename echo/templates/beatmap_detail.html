@@ -116,7 +116,11 @@
           // Consolidated retrieve with includes
           `/api/beatmaps/${beatmapId}/`,
           // Slim tag applications list (for comparison)
-          `/api/tag-applications/?beatmap_id=${beatmapId}&include=tag_counts,tag_timestamps,predicted_tags,true_negatives`
+          `/api/tag-applications/?beatmap_id=${beatmapId}&include=tag_counts,tag_timestamps,predicted_tags,true_negatives`,
+          // Test Categories and Relations - get all tags to see categories and parent relationships
+          `/api/tags/`,
+          // Test specific tag details (if any tags exist on this beatmap)
+          `/api/tag-applications/?beatmap_id=${beatmapId}&include=tag_counts,tag_timestamps,predicted_tags,true_negatives&limit=1`
         ];
         for (const path of endpoints){
           const url = path.startsWith('http') ? path : base + path;
@@ -157,6 +161,44 @@
           output.appendChild(pre(String(!hasMyTag(afterRemove, testTag))));
         } catch (e) {
           output.appendChild(h('Write API test error'));
+          output.appendChild(pre(String(e)));
+        }
+
+        // --- Test Categories and Relations ---
+        try {
+          output.appendChild(h('=== Categories and Relations Test ==='));
+          
+          // Get a sample of tags to test categories and relations
+          const tagsUrl = base + '/api/tags/';
+          output.appendChild(h('GET ' + tagsUrl + ' (first 5 tags)'));
+          const tagsRes = await fetchJson(tagsUrl);
+          const sampleTags = Array.isArray(tagsRes.data) ? tagsRes.data.slice(0, 5) : [];
+          output.appendChild(pre(JSON.stringify(sampleTags, null, 2)));
+          
+          // Test category distribution
+          if (sampleTags.length > 0) {
+            const categories = {};
+            sampleTags.forEach(tag => {
+              const cat = tag.category || 'unknown';
+              categories[cat] = (categories[cat] || 0) + 1;
+            });
+            output.appendChild(h('Category distribution in sample:'));
+            output.appendChild(pre(JSON.stringify(categories, null, 2)));
+          }
+          
+          // Test parent relationships
+          const tagsWithParents = sampleTags.filter(tag => tag.parents && tag.parents.length > 0);
+          if (tagsWithParents.length > 0) {
+            output.appendChild(h('Tags with parent relationships:'));
+            tagsWithParents.forEach(tag => {
+              output.appendChild(h(`- ${tag.name} (${tag.category}) -> parents: ${tag.parents.map(p => p.name).join(', ')}`));
+            });
+          } else {
+            output.appendChild(h('No parent relationships found in sample'));
+          }
+          
+        } catch (e) {
+          output.appendChild(h('Categories and Relations test error'));
           output.appendChild(pre(String(e)));
         }
       }

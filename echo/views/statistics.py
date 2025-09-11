@@ -323,7 +323,7 @@ def statistics_player_data(request: HttpRequest):
                 annotate_search_results_with_tags(Beatmap.objects.filter(id__in=[most_related.id]), request.user, include_predicted_toggle=True)
             except Exception:
                 pass
-            html = render_to_string('partials/tag_card.html', {'beatmap': most_related, 'request': request})
+            html = render_to_string('partials/tag_card.html', {'beatmap': most_related}, request=request)
         except Exception:
             html = ''
 

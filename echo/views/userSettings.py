@@ -14,6 +14,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.shortcuts import redirect, render
+from django.http import JsonResponse
 
 # ---------------------------------------------------------------------------
 # Local application imports
@@ -26,6 +27,38 @@ from ..models import CustomToken, TagApplication, UserSettings
 @login_required
 def settings(request):
     if request.method == 'POST':
+        # AJAX auto-save of preferences (JSON or form-encoded)
+        if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.headers.get('content-type', '').startswith('application/json'):
+            try:
+                payload = request.POST.dict() if request.content_type != 'application/json' else (request.body and __import__('json').loads(request.body.decode('utf-8')) or {})
+            except Exception:
+                payload = request.POST.dict()
+            us, _ = UserSettings.objects.get_or_create(user=request.user)
+            changed = []
+            # Allowed fields for auto-save
+            allowed_bool_fields = {
+                'group_related_tags',
+                'show_star_rating','show_status','show_cs','show_hp','show_od','show_ar',
+                'show_bpm','show_length','show_year','show_playcount','show_favourites',
+                'show_genres','show_pp_nm','show_pp_hd','show_pp_hr','show_pp_dt','show_pp_ht','show_pp_ez','show_pp_fl','show_pp_calculator'
+            }
+            allowed_select_fields = {'tag_category_display'}
+            for key, val in payload.items():
+                if key in allowed_bool_fields:
+                    new_val = str(val).lower() in ['1','true','on','yes']
+                    if getattr(us, key, None) != new_val:
+                        setattr(us, key, new_val)
+                        changed.append(key)
+                elif key in allowed_select_fields:
+                    new_pref = (val or 'none').strip().lower()
+                    if new_pref not in ['none','color','lists']:
+                        new_pref = 'none'
+                    if getattr(us, key, None) != new_pref:
+                        setattr(us, key, new_pref)
+                        changed.append(key)
+            if changed:
+                us.save(update_fields=changed)
+            return JsonResponse({'ok': True, 'changed': changed})
         # Generate API token
         if 'generate_token' in request.POST:
             CustomToken.objects.filter(user=request.user).delete()
@@ -37,16 +70,37 @@ def settings(request):
             if pref not in ['none', 'color', 'lists']:
                 pref = 'none'
             us, _ = UserSettings.objects.get_or_create(user=request.user)
-            if us.tag_category_display != pref:
+            changed = []
+            if getattr(us, 'tag_category_display', None) != pref:
                 us.tag_category_display = pref
-                us.save(update_fields=['tag_category_display'])
-            return render(request, 'settings.html', {'user': request.user, 'tag_category_display': us.tag_category_display})
+                changed.append('tag_category_display')
+            # Booleans (in case form posts non-AJAX)
+            bool_fields = [
+                'group_related_tags','show_star_rating','show_status','show_cs','show_hp','show_od','show_ar',
+                'show_bpm','show_length','show_year','show_playcount','show_favourites','show_genres',
+                'show_pp_nm','show_pp_hd','show_pp_hr','show_pp_dt','show_pp_ht','show_pp_ez','show_pp_fl','show_pp_calculator'
+            ]
+            for key in bool_fields:
+                if key in request.POST:
+                    new_val = str(request.POST.get(key)).lower() in ['1','true','on','yes']
+                    if getattr(us, key, None) != new_val:
+                        setattr(us, key, new_val)
+                        changed.append(key)
+            if changed:
+                us.save(update_fields=changed)
+            return render(request, 'settings.html', {
+                'user': request.user,
+                'tag_category_display': us.tag_category_display,
+                'group_related_tags': us.group_related_tags,
+            })
     # GET
     try:
         tag_pref = request.user.settings.tag_category_display
+        group_related = bool(getattr(request.user.settings, 'group_related_tags', False))
     except Exception:
         tag_pref = 'none'
-    return render(request, 'settings.html', {'user': request.user, 'tag_category_display': tag_pref})
+        group_related = False
+    return render(request, 'settings.html', {'user': request.user, 'tag_category_display': tag_pref, 'group_related_tags': group_related})
 
 
 @login_required

@@ -50,5 +50,50 @@ $(function(){
       window.location.href = window.settingsPage?.confirmUrl || '';
     }
   });
+
+  // -------------------- Auto-save preferences -------------------- //
+  function getCsrfToken(){
+    try { return window.settingsPage?.csrf || $('input[name=csrfmiddlewaretoken]').first().val(); } catch(e) {}
+    return '';
+  }
+  var saveInFlight = null;
+  var saveToastTimer = null;
+  function showToast(msg){
+    var $t = $('#settingsSaveToast');
+    if (!$t.length) {
+      $t = $('<div id="settingsSaveToast" class="settings-toast" role="status" aria-live="polite"></div>');
+      $('body').append($t);
+    }
+    $t.text(msg).addClass('show');
+    if (saveToastTimer) clearTimeout(saveToastTimer);
+    saveToastTimer = setTimeout(function(){ $t.removeClass('show'); }, 1200);
+  }
+  function postPrefs(data){
+    if (saveInFlight) { try { saveInFlight.abort(); } catch(e) {} }
+    saveInFlight = $.ajax({
+      url: window.settingsPage?.settingsUrl || window.location.href,
+      method: 'POST',
+      headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRFToken': (function(){ try { return $('input[name=csrfmiddlewaretoken]').first().val() || ''; } catch(e) { return ''; } })() },
+      data: Object.assign({ csrfmiddlewaretoken: getCsrfToken() }, data),
+    })
+    .done(function(resp){ showToast('Saved'); })
+    .fail(function(){ showToast('Save failed'); });
+  }
+  // Debounce for selects
+  var debounceTimer = null;
+  function debounce(fn){
+    if (debounceTimer) clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(fn, 150);
+  }
+  // Wire inputs
+  $('[data-autosave="checkbox"]').on('change', function(){
+    var key = this.name; var checked = this.checked;
+    var payload = {}; payload[key] = checked ? '1' : '0';
+    postPrefs(payload);
+  });
+  $('[data-autosave="select"]').on('change', function(){
+    var key = this.name; var val = $(this).val();
+    debounce(function(){ var payload = {}; payload[key] = val; postPrefs(payload); });
+  });
 });
 

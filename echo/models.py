@@ -353,6 +353,36 @@ class UserSettings(models.Model):
 
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='settings')
     tag_category_display = models.CharField(max_length=16, choices=DISPLAY_CHOICES, default=DISPLAY_NONE, db_index=True)
+    # Feature flag: when enabled, tags are visually grouped by parent relations on cards
+    group_related_tags = models.BooleanField(default=False, db_index=True)
+
+    # ---------------------- Tag Card Visibility Preferences ---------------------- #
+    # Major stats
+    show_star_rating = models.BooleanField(default=True, db_index=True)
+    show_status = models.BooleanField(default=True, db_index=True)
+    # Basic stats
+    show_cs = models.BooleanField(default=True, db_index=True)
+    show_hp = models.BooleanField(default=True, db_index=True)
+    show_od = models.BooleanField(default=True, db_index=True)
+    show_ar = models.BooleanField(default=True, db_index=True)
+    # Minor stats
+    show_bpm = models.BooleanField(default=True, db_index=True)
+    show_length = models.BooleanField(default=True, db_index=True)
+    show_year = models.BooleanField(default=True, db_index=True)
+    show_playcount = models.BooleanField(default=True, db_index=True)
+    show_favourites = models.BooleanField(default=True, db_index=True)
+    # Genres section
+    show_genres = models.BooleanField(default=True, db_index=True)
+    # PP pills (mods)
+    show_pp_nm = models.BooleanField(default=True, db_index=True)
+    show_pp_hd = models.BooleanField(default=True, db_index=True)
+    show_pp_hr = models.BooleanField(default=True, db_index=True)
+    show_pp_dt = models.BooleanField(default=True, db_index=True)
+    show_pp_ht = models.BooleanField(default=True, db_index=True)
+    show_pp_ez = models.BooleanField(default=True, db_index=True)
+    show_pp_fl = models.BooleanField(default=True, db_index=True)
+    # PP calculator
+    show_pp_calculator = models.BooleanField(default=True, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True, db_index=True)
 

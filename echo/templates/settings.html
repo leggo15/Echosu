@@ -1,3 +1,4 @@
+
 {% extends 'base.html' %}
 {% load static %}
 
@@ -36,16 +37,86 @@
               <form method="post" action="{% url 'settings' %}" class="settings-form" id="settingsPreferencesForm">
                 {% csrf_token %}
                 <input type="hidden" name="update_preferences" value="1">
-                <label for="tag_category_display">Tag categories:</label>
-                <select id="tag_category_display" name="tag_category_display">
-                  {% with pref=tag_category_display|default:'none' %}
-                    <option value="none" {% if pref == 'none' %}selected{% endif %}>Do not display</option>
-                    <option value="color" {% if pref == 'color' %}selected{% endif %}>Color coding</option>
-                    <option value="lists" {% if pref == 'lists' %}selected{% endif %}>Separate lists per card</option>
-                  {% endwith %}
-                </select>
-                <button type="submit" class="generic_btn" style="margin-left:8px;">Save</button>
+                <h3>Tag Card Layout Settings</h3>
+                <div class="settings-grid">
+                  <div class="settings-group">
+                    <h4>Major Metrics</h4>
+                    <div class="pill-toggle">
+                      <input type="checkbox" id="show_star_rating" name="show_star_rating" {% if show_star_rating %}checked{% endif %} style="display:none;" data-autosave="checkbox">
+                      <label for="show_star_rating" class="pill"><span class="pill-label">Star rating</span><span class="pill-switch" aria-hidden="true"></span></label>
+                    </div>
+                    <div style="height: 10px;"></div>
+                    <div class="pill-toggle">
+                      <input type="checkbox" id="show_status" name="show_status" {% if show_status %}checked{% endif %} style="display:none;" data-autosave="checkbox">
+                      <label for="show_status" class="pill"><span class="pill-label">Rank status</span><span class="pill-switch" aria-hidden="true"></span></label>
+                    </div>
+                    <div style="height: 10px;"></div>
+                    <div class="pill-toggle"><input type="checkbox" id="show_cs" name="show_cs" {% if show_cs %}checked{% endif %} style="display:none;" data-autosave="checkbox"><label for="show_cs" class="pill"><span class="pill-label">CS</span><span class="pill-switch"></span></label></div>
+                    <div style="height: 10px;"></div>
+                    <div class="pill-toggle"><input type="checkbox" id="show_hp" name="show_hp" {% if show_hp %}checked{% endif %} style="display:none;" data-autosave="checkbox"><label for="show_hp" class="pill"><span class="pill-label">HP</span><span class="pill-switch"></span></label></div>
+                    <div style="height: 10px;"></div>
+                    <div class="pill-toggle"><input type="checkbox" id="show_od" name="show_od" {% if show_od %}checked{% endif %} style="display:none;" data-autosave="checkbox"><label for="show_od" class="pill"><span class="pill-label">OD</span><span class="pill-switch"></span></label></div>
+                    <div style="height: 10px;"></div>
+                    <div class="pill-toggle"><input type="checkbox" id="show_ar" name="show_ar" {% if show_ar %}checked{% endif %} style="display:none;" data-autosave="checkbox"><label for="show_ar" class="pill"><span class="pill-label">AR</span><span class="pill-switch"></span></label></div>
+                  </div>
+
+                  <div class="settings-group">
+                    <h4>Minor Metrics</h4>
+                    <div class="pill-toggle"><input type="checkbox" id="show_bpm" name="show_bpm" {% if show_bpm %}checked{% endif %} style="display:none;" data-autosave="checkbox"><label for="show_bpm" class="pill"><span class="pill-label">BPM</span><span class="pill-switch"></span></label></div>
+                    <div style="height: 10px;"></div>
+                    <div class="pill-toggle"><input type="checkbox" id="show_length" name="show_length" {% if show_length %}checked{% endif %} style="display:none;" data-autosave="checkbox"><label for="show_length" class="pill"><span class="pill-label">Length</span><span class="pill-switch"></span></label></div>
+                    <div style="height: 10px;"></div>
+                    <div class="pill-toggle"><input type="checkbox" id="show_year" name="show_year" {% if show_year %}checked{% endif %} style="display:none;" data-autosave="checkbox"><label for="show_year" class="pill"><span class="pill-label">Year</span><span class="pill-switch"></span></label></div>
+                    <div style="height: 10px;"></div>
+                    <div class="pill-toggle"><input type="checkbox" id="show_playcount" name="show_playcount" {% if show_playcount %}checked{% endif %} style="display:none;" data-autosave="checkbox"><label for="show_playcount" class="pill"><span class="pill-label">Playcount</span><span class="pill-switch"></span></label></div>
+                    <div style="height: 10px;"></div>
+                    <div class="pill-toggle"><input type="checkbox" id="show_favourites" name="show_favourites" {% if show_favourites %}checked{% endif %} style="display:none;" data-autosave="checkbox"><label for="show_favourites" class="pill"><span class="pill-label">Favourites</span><span class="pill-switch"></span></label></div>
+                    <div style="height: 10px;"></div>
+                    <div class="pill-toggle"><input type="checkbox" id="show_genres" name="show_genres" {% if show_genres %}checked{% endif %} style="display:none;" data-autosave="checkbox"><label for="show_genres" class="pill"><span class="pill-label">Genres list</span><span class="pill-switch"></span></label></div>
+                  </div>
+
+                  <div class="settings-group">
+                    <h4>PP Display
+                    <div style="height: 10px;"></div>
+                    <div class="pill-toggle"><input type="checkbox" id="show_pp_nm" name="show_pp_nm" {% if show_pp_nm %}checked{% endif %} style="display:none;" data-autosave="checkbox"><label for="show_pp_nm" class="pill"><span class="pill-label">NM</span><span class="pill-switch"></span></label></div>
+                    <div style="height: 10px;"></div>
+                    <div class="pill-toggle"><input type="checkbox" id="show_pp_hd" name="show_pp_hd" {% if show_pp_hd %}checked{% endif %} style="display:none;" data-autosave="checkbox"><label for="show_pp_hd" class="pill"><span class="pill-label">HD</span><span class="pill-switch"></span></label></div>
+                    <div style="height: 10px;"></div>
+                    <div class="pill-toggle"><input type="checkbox" id="show_pp_hr" name="show_pp_hr" {% if show_pp_hr %}checked{% endif %} style="display:none;" data-autosave="checkbox"><label for="show_pp_hr" class="pill"><span class="pill-label">HR</span><span class="pill-switch"></span></label></div>
+                    <div style="height: 10px;"></div>
+                    <div class="pill-toggle"><input type="checkbox" id="show_pp_dt" name="show_pp_dt" {% if show_pp_dt %}checked{% endif %} style="display:none;" data-autosave="checkbox"><label for="show_pp_dt" class="pill"><span class="pill-label">DT</span><span class="pill-switch"></span></label></div>
+                    <div style="height: 10px;"></div>
+                    <div class="pill-toggle"><input type="checkbox" id="show_pp_ht" name="show_pp_ht" {% if show_pp_ht %}checked{% endif %} style="display:none;" data-autosave="checkbox"><label for="show_pp_ht" class="pill"><span class="pill-label">HT</span><span class="pill-switch"></span></label></div>
+                    <div style="height: 10px;"></div>
+                    <div class="pill-toggle"><input type="checkbox" id="show_pp_ez" name="show_pp_ez" {% if show_pp_ez %}checked{% endif %} style="display:none;" data-autosave="checkbox"><label for="show_pp_ez" class="pill"><span class="pill-label">EZ</span><span class="pill-switch"></span></label></div>
+                    <div style="height: 10px;"></div>
+                    <div class="pill-toggle"><input type="checkbox" id="show_pp_fl" name="show_pp_fl" {% if show_pp_fl %}checked{% endif %} style="display:none;" data-autosave="checkbox"><label for="show_pp_fl" class="pill"><span class="pill-label">FL</span><span class="pill-switch"></span></label></div>
+                  </div>
+
+                  <div class="settings-group">
+                    <h4>Other</h4>
+                    <label for="tag_category_display">Display style</label>
+                    <select id="tag_category_display" name="tag_category_display" data-autosave="select">
+                      {% with pref=tag_category_display|default:'none' %}
+                        <option value="none" {% if pref == 'none' %}selected{% endif %}>Do not display</option>
+                        <option value="color" {% if pref == 'color' %}selected{% endif %}>Color coding</option>
+                        <option value="lists" {% if pref == 'lists' %}selected{% endif %}>Separate lists per card</option>
+                      {% endwith %}
+                    </select>
+                    <div style="height: 10px;"></div>
+                    <div class="pill-toggle">
+                      <input type="checkbox" id="group_related_tags" name="group_related_tags" value="1" {% if group_related_tags %}checked{% endif %} style="display:none;" data-autosave="checkbox">
+                      <label for="group_related_tags" class="pill">
+                        <span class="pill-label">Group related tags</span>
+                        <span class="pill-switch" aria-hidden="true"></span>
+                      </label>
+                    </div>
+                    <div style="height: 10px;"></div>
+                    <div class="pill-toggle"><input type="checkbox" id="show_pp_calculator" name="show_pp_calculator" {% if show_pp_calculator %}checked{% endif %} style="display:none;" data-autosave="checkbox"><label for="show_pp_calculator" class="pill"><span class="pill-label">Show PP calculator</span><span class="pill-switch"></span></label></div>
+                  </div>
+                </div>
               </form>
+              <hr/>
             </div>
 
             {% if full_key %}
@@ -74,7 +145,7 @@
 
                 </div>
             </div>
-
+            <hr/>
             <!-- Data Deletion Section -->
             <div class="data-deletion-section">
                 <h2>Delete All Your Data</h2>

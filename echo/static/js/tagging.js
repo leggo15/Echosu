@@ -3,6 +3,12 @@
   // Global cache for bulk tag loading
   var tagCache = {};
   var pendingBulkRequests = {};
+  // Relation cache for grouping feature
+  var relationCache = {
+    loaded: false,
+    parentNameToChildren: {}, // aim -> [jumps, large jumps]
+    childNameToParents: {}    // jumps -> [aim]
+  };
   // Track in-flight tag writes so we can wait before navigating
   var pendingTagWrites = 0;
   
@@ -177,6 +183,18 @@
       
       $('.tooltip, .description-author').remove();
       var mode = (window.TAG_CATEGORY_DISPLAY || 'color');
+      var wantGrouping = !!window.GROUP_RELATED_TAGS;
+      // If grouping is enabled but relations aren't loaded yet, load them and re-render once ready
+      if (wantGrouping && !(relationCache && relationCache.loaded)) {
+        try {
+          ensureRelationsLoaded(function(){
+            try {
+              var cached = (tagCache[beatmapId] && tagCache[beatmapId].data) || tags;
+              updateTagDisplay(beatmapId, cached);
+            } catch (e) {}
+          });
+        } catch (e) {}
+      }
       $targetApplied.empty();
       if (mode !== 'lists') { $targetApplied.append('Tags: '); }
       // Split positives and negatives if provided
@@ -208,22 +226,154 @@
         }
       }
 
+      // Special handling for 'lists' layout: optionally group per category, then return
       if (mode === 'lists') {
-        var byCat = { mapping_genre: [], pattern_type: [], metadata: [], other: [] };
-        positives.forEach(function(t){ var c = t.category || 'other'; (byCat[c] = byCat[c] || []).push(t); });
+        var allByCat = { mapping_genre: [], pattern_type: [], metadata: [], other: [] };
+        positives.forEach(function(t){ var c = t.category || 'other'; (allByCat[c] = allByCat[c] || []).push(t); });
         var sections = [
           { key: 'mapping_genre', title: 'Mapping Genre' },
           { key: 'pattern_type', title: 'Pattern Type' },
           { key: 'metadata', title: 'Metadata' },
           { key: 'other', title: 'Other' }
         ];
+
+        // Only group if relations are loaded and toggle is on; otherwise fall back gracefully
+        var canGroup = !!(wantGrouping && relationCache && relationCache.loaded);
+
+        function sortNamesByCountFactory(nameToTag) {
+          return function(names) {
+            return names.slice().sort(function(a,b){
+              var ta = nameToTag[a] || {}; var tb = nameToTag[b] || {};
+              var ca = ta.apply_count || 0; var cb = tb.apply_count || 0;
+              if (cb !== ca) return cb - ca;
+              return (a < b) ? -1 : (a > b ? 1 : 0);
+            });
+          };
+        }
+
         sections.forEach(function(sec){
-          var lst = byCat[sec.key] || [];
+          var lst = allByCat[sec.key] || [];
           if (!lst.length) return;
+
           $('<div class="tag-section-title"></div>').text(sec.title + ':').appendTo($targetApplied);
           var $row = $('<div class="tag-section"></div>').appendTo($targetApplied);
-          lst.forEach(function(t){ renderTagInto($row, t); });
+
+          if (!canGroup) {
+            lst.forEach(function(t){ renderTagInto($row, t); });
+            return;
+          }
+
+          // Grouping within category
+          var scopeNameToTag = {};
+          lst.forEach(function(t){ if (t && t.name) { scopeNameToTag[String(t.name).toLowerCase()] = t; } });
+          var sortNamesByCount = sortNamesByCountFactory(scopeNameToTag);
+
+          function getChildren(name) {
+            var relChildren = relationCache.parentNameToChildren[name] || [];
+            return relChildren.filter(function(c){ return !!scopeNameToTag[c]; });
+          }
+          function getParents(name) {
+            var relParents = relationCache.childNameToParents[name] || [];
+            return relParents.filter(function(p){ return !!scopeNameToTag[p]; });
+          }
+          function renderGroup(name, $into, path) {
+            var pathSet = path || new Set();
+            if (pathSet.has(name)) { renderTagInto($into, scopeNameToTag[name]); return; }
+            var kids = getChildren(name);
+            if (!kids.length) { renderTagInto($into, scopeNameToTag[name]); return; }
+            var $wrap = $('<span class="tag-group"></span>').css({ display: 'inline-flex' }).appendTo($into);
+            var $parent = $('<span class="tag-group-parent"></span>').appendTo($wrap);
+            renderTagInto($parent, scopeNameToTag[name]);
+            $('<span class="tag-group-divider">|</span>').appendTo($wrap);
+            var $kids = $('<span class="tag-group-children"></span>').appendTo($wrap);
+            var nextPath = new Set(Array.from(pathSet)); nextPath.add(name);
+            sortNamesByCount(kids).forEach(function(childName){
+              var gkids = getChildren(childName);
+              if (gkids.length && !nextPath.has(childName)) { renderGroup(childName, $kids, nextPath); }
+              else { var $inner = $('<span class="tag-child"></span>').appendTo($kids); renderTagInto($inner, scopeNameToTag[childName]); }
+            });
+          }
+
+          var roots = Object.keys(scopeNameToTag).filter(function(n){ var kids = getChildren(n); if (!kids.length) return false; var parents = getParents(n); return parents.length === 0; });
+          sortNamesByCount(roots).forEach(function(r){ renderGroup(r, $row, new Set()); });
+          Object.keys(scopeNameToTag).forEach(function(n){ var parents = getParents(n); var kids = getChildren(n); if (parents.length === 0 && kids.length === 0) { renderTagInto($row, scopeNameToTag[n]); } });
         });
+        return; // lists handled fully
+      }
+
+      if (wantGrouping) {
+        // Nested grouping: build a tree among present tags and allow multi-parent duplication.
+        var nameToTag = {};
+        positives.forEach(function(t){ if (t && t.name) { nameToTag[String(t.name).toLowerCase()] = t; } });
+
+        function getChildren(name) {
+          var relChildren = relationCache.parentNameToChildren[name] || [];
+          // Filter to only present tags
+          return relChildren.filter(function(c){ return !!nameToTag[c]; });
+        }
+
+        function getParents(name) {
+          var relParents = relationCache.childNameToParents[name] || [];
+          return relParents.filter(function(p){ return !!nameToTag[p]; });
+        }
+
+        // Determine root parents: have at least one child present and have no parents present
+        var roots = Object.keys(nameToTag).filter(function(n){
+          var kids = getChildren(n);
+          if (!kids.length) return false; // must have children to be a group root
+          var parents = getParents(n);
+          return parents.length === 0; // no parent present → top-level group
+        });
+
+        // Stable ordering: by apply_count desc then name
+        function sortNamesByCount(names) {
+          return names.slice().sort(function(a,b){
+            var ta = nameToTag[a] || {}; var tb = nameToTag[b] || {};
+            var ca = ta.apply_count || 0; var cb = tb.apply_count || 0;
+            if (cb !== ca) return cb - ca;
+            return (a < b) ? -1 : (a > b ? 1 : 0);
+          });
+        }
+
+        function renderGroup(name, $into, path) {
+          var pathSet = path || new Set();
+          if (pathSet.has(name)) { // cycle guard
+            renderTagInto($into, nameToTag[name]);
+            return;
+          }
+          var kids = getChildren(name);
+          // If no children present, render as a simple tag
+          if (!kids.length) { renderTagInto($into, nameToTag[name]); return; }
+
+          var $wrap = $('<span class="tag-group"></span>').css({ display: 'inline-flex' }).appendTo($into);
+          var $parent = $('<span class="tag-group-parent"></span>').appendTo($wrap);
+          renderTagInto($parent, nameToTag[name]);
+          $('<span class="tag-group-divider">|</span>').appendTo($wrap);
+          var $kids = $('<span class="tag-group-children"></span>').appendTo($wrap);
+
+          var nextPath = new Set(Array.from(pathSet)); nextPath.add(name);
+          sortNamesByCount(kids).forEach(function(childName){
+            // If child has its own children present, render nested group, else render as a plain tag
+            var gkids = getChildren(childName);
+            if (gkids.length && !nextPath.has(childName)) {
+              renderGroup(childName, $kids, nextPath);
+            } else {
+              var $inner = $('<span class="tag-child"></span>').appendTo($kids);
+              renderTagInto($inner, nameToTag[childName]);
+            }
+          });
+        }
+
+        // Render all roots
+        sortNamesByCount(roots).forEach(function(r){ renderGroup(r, $targetApplied, new Set()); });
+
+        // Render standalone tags (no parent present and not a root with children)
+        Object.keys(nameToTag).forEach(function(n){
+          var parents = getParents(n);
+          var kids = getChildren(n);
+          if (parents.length === 0 && kids.length === 0) { renderTagInto($targetApplied, nameToTag[n]); }
+        });
+
       } else {
         // color (default) or none (same layout)
         positives.forEach(function(tag){ renderTagInto($targetApplied, tag); });
@@ -246,10 +396,50 @@
       }
     }
 
+    // Ensure relations are loaded once if grouping is enabled
+    function ensureRelationsLoaded(callback) {
+      if (!window.GROUP_RELATED_TAGS) { callback && callback(); return; }
+      if (relationCache.loaded) { callback && callback(); return; }
+      $.get('/tag_tree/').done(function(resp){
+        try {
+          var tags = resp && resp.tags ? resp.tags : [];
+          var byId = {}; tags.forEach(function(t){ byId[t.id] = t; });
+          var parentNameToChildren = {};
+          var childNameToParents = {};
+          tags.forEach(function(t){
+            var nm = String(t.name || '').toLowerCase();
+            var parents = Array.isArray(t.parent_ids) ? t.parent_ids : [];
+            parents.forEach(function(pid){
+              var p = byId[pid];
+              if (!p) return;
+              var pn = String(p.name || '').toLowerCase();
+              (parentNameToChildren[pn] = parentNameToChildren[pn] || []).push(nm);
+              (childNameToParents[nm] = childNameToParents[nm] || []).push(pn);
+            });
+          });
+          // Deduplicate and sort for stability
+          Object.keys(parentNameToChildren).forEach(function(k){
+            var set = Array.from(new Set(parentNameToChildren[k]));
+            set.sort();
+            parentNameToChildren[k] = set;
+          });
+          Object.keys(childNameToParents).forEach(function(k){
+            var set = Array.from(new Set(childNameToParents[k]));
+            set.sort();
+            childNameToParents[k] = set;
+          });
+          relationCache.parentNameToChildren = parentNameToChildren;
+          relationCache.childNameToParents = childNameToParents;
+          relationCache.loaded = true;
+        } catch(e) {}
+        callback && callback();
+      }).fail(function(){ callback && callback(); });
+    }
+
     // Main refresh function - tries bulk first, falls back to individual
     function refreshTags() {
       if (!beatmapId) return;
-      
+      ensureRelationsLoaded(function(){
       // Try to use bulk loading if we have multiple beatmaps on the page
       var allBeatmapIds = $('.beatmap-card-wrapper').map(function() {
         return $(this).data('beatmap-id');
@@ -260,6 +450,7 @@
       } else {
         refreshTagsIndividual(beatmapId);
       }
+      });
     }
 
     // Cache invalidation when tags are modified

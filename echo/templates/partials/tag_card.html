@@ -101,20 +101,25 @@
       </h3>
 
       {% with nm=beatmap.pp_nomod hd=beatmap.pp_hd hr=beatmap.pp_hr dt=beatmap.pp_dt ht=beatmap.pp_ht ez=beatmap.pp_ez fl=beatmap.pp_fl %}
+        {% if show_pp_nm or show_pp_hd or show_pp_hr or show_pp_dt or show_pp_ht or show_pp_ez or show_pp_fl %}
         <div class="pp-mods" aria-label="PP by mod">
+          {% if show_pp_nm %}
           <div class="pp-pill pp-nm" title="No Mod"><span class="pp-mod">NM</span><span class="pp-val">{{ nm|floatformat:"0" }}</span></div>
+          {% endif %}
           <div class="pp-grid">
-            <div class="pp-pill pp-mini pp-hd" title="Hidden"><span class="pp-mod">HD</span><span class="pp-val">{{ hd|floatformat:"0" }}</span></div>
-            <div class="pp-pill pp-mini pp-hr" title="Hard Rock"><span class="pp-mod">HR</span><span class="pp-val">{{ hr|floatformat:"0" }}</span></div>
-            <div class="pp-pill pp-mini pp-dt" title="Double Time"><span class="pp-mod">DT</span><span class="pp-val">{{ dt|floatformat:"0" }}</span></div>
-            <div class="pp-pill pp-mini pp-ht" title="Half Time"><span class="pp-mod">HT</span><span class="pp-val">{{ ht|floatformat:"0" }}</span></div>
-            <div class="pp-pill pp-mini pp-ez" title="Easy"><span class="pp-mod">EZ</span><span class="pp-val">{{ ez|floatformat:"0" }}</span></div>
-            <div class="pp-pill pp-mini pp-fl" title="Flashlight"><span class="pp-mod">FL</span><span class="pp-val">{{ fl|floatformat:"0" }}</span></div>
+            {% if show_pp_hd %}<div class="pp-pill pp-mini pp-hd" title="Hidden"><span class="pp-mod">HD</span><span class="pp-val">{{ hd|floatformat:"0" }}</span></div>{% endif %}
+            {% if show_pp_hr %}<div class="pp-pill pp-mini pp-hr" title="Hard Rock"><span class="pp-mod">HR</span><span class="pp-val">{{ hr|floatformat:"0" }}</span></div>{% endif %}
+            {% if show_pp_dt %}<div class="pp-pill pp-mini pp-dt" title="Double Time"><span class="pp-mod">DT</span><span class="pp-val">{{ dt|floatformat:"0" }}</span></div>{% endif %}
+            {% if show_pp_ht %}<div class="pp-pill pp-mini pp-ht" title="Half Time"><span class="pp-mod">HT</span><span class="pp-val">{{ ht|floatformat:"0" }}</span></div>{% endif %}
+            {% if show_pp_ez %}<div class="pp-pill pp-mini pp-ez" title="Easy"><span class="pp-mod">EZ</span><span class="pp-val">{{ ez|floatformat:"0" }}</span></div>{% endif %}
+            {% if show_pp_fl %}<div class="pp-pill pp-mini pp-fl" title="Flashlight"><span class="pp-mod">FL</span><span class="pp-val">{{ fl|floatformat:"0" }}</span></div>{% endif %}
           </div>
         </div>
+        {% endif %}
     {% endwith %}
 
       <!-- Interactive PP Calculator -->
+      {% if show_pp_calculator %}
       <div class="pp-calculator" data-beatmap-id="{{ beatmap.beatmap_id }}" data-max-combo="{{ beatmap.max_combo|default:0 }}">
         <div class="pp-calc-header">
           <h4>PP Calculator</h4>
@@ -143,9 +148,10 @@
           </div>
         </div>
       </div>
+      {% endif %}
 
       {% with genres_list=beatmap.genres.all %}
-        {% if genres_list %}
+        {% if genres_list and show_genres %}
           {% if genres_list|length > 10 %}
             <h4 class="genres" aria-expanded="false" aria-controls="genres-content-{{ beatmap.beatmap_id }}" role="button" tabindex="0">
               Genres
@@ -162,35 +168,37 @@
           <!-- list 5 genres -->
           <i class="genres">Genres: {% for genre in genres_list|slice:":5" %}{{ genre.name }}{% if not forloop.last %}, {% endif %}{% endfor %}</i>
           {% endif %}
-        {% else %}
+        {% elif show_genres %}
           <i class="genres">No genres associated.</i>
         {% endif %}
       {% endwith %}
 
       <div class="beatmap-stats">
-        <span class="focus-stat">★{{ beatmap.difficulty_rating }}</span>
-        {% if beatmap.status == 'Ranked' or beatmap.status == 'Approved' %}
-          <span class="focus-stat status-pill status--ranked">{{ beatmap.status }}</span>
-        {% elif beatmap.status == 'Loved' %}
-          <span class="focus-stat status-pill status--loved">{{ beatmap.status }}</span>
-        {% elif beatmap.status == 'Pending' %}
-          <span class="focus-stat status-pill status--pending">{{ beatmap.status }}</span>
-        {% else %}
-          <span class="focus-stat status-pill status--unranked">{{ beatmap.status }}</span>
+        {% if show_star_rating %}<span class="focus-stat">★{{ beatmap.difficulty_rating }}</span>{% endif %}
+        {% if show_status %}
+          {% if beatmap.status == 'Ranked' or beatmap.status == 'Approved' %}
+            <span class="focus-stat status-pill status--ranked">{{ beatmap.status }}</span>
+          {% elif beatmap.status == 'Loved' %}
+            <span class="focus-stat status-pill status--loved">{{ beatmap.status }}</span>
+          {% elif beatmap.status == 'Pending' %}
+            <span class="focus-stat status-pill status--pending">{{ beatmap.status }}</span>
+          {% else %}
+            <span class="focus-stat status-pill status--unranked">{{ beatmap.status }}</span>
+          {% endif %}
         {% endif %}
-        <span>|</span>
-        <span>CS: {{ beatmap.cs }}</span>
-        <span>HP: {{ beatmap.drain }}</span>
-        <span>OD: {{ beatmap.accuracy }}</span>
-        <span>AR: {{ beatmap.ar }}</span>
+        {% if show_cs or show_hp or show_od or show_ar %}<span>|</span>{% endif %}
+        {% if show_cs %}<span>CS: {{ beatmap.cs }}</span>{% endif %}
+        {% if show_hp %}<span>HP: {{ beatmap.drain }}</span>{% endif %}
+        {% if show_od %}<span>OD: {{ beatmap.accuracy }}</span>{% endif %}
+        {% if show_ar %}<span>AR: {{ beatmap.ar }}</span>{% endif %}
       </br>
-        <span class="minor-stat">BPM: {{ beatmap.bpm }}</span>
-        <span class="beatmap-length minor-stat">Length: {{ beatmap.length_formatted|default:beatmap.total_length }}</span>
-        {% if beatmap.last_updated %}
+        {% if show_bpm %}<span class="minor-stat">BPM: {{ beatmap.bpm }}</span>{% endif %}
+        {% if show_length %}<span class="beatmap-length minor-stat">Length: {{ beatmap.length_formatted|default:beatmap.total_length }}</span>{% endif %}
+        {% if show_year and beatmap.last_updated %}
           <span class="minor-stat">Year: {{ beatmap.last_updated|date:"Y" }}</span>
         {% endif %}
-        <span class="minor-stat">Playcount: {{ beatmap.playcount|default:"0" }}</span>
-        <span class="minor-stat">Favourites: {{ beatmap.favourite_count|default:"0" }}</span>
+        {% if show_playcount %}<span class="minor-stat">Playcount: {{ beatmap.playcount|default:"0" }}</span>{% endif %}
+        {% if show_favourites %}<span class="minor-stat">Favourites: {{ beatmap.favourite_count|default:"0" }}</span>{% endif %}
       </div>
     
       <div class="card-footer">

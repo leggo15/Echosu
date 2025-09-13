@@ -173,12 +173,12 @@
   top: 140px;
   right: 0;
   width: 166px;
-  border: 1px solid #e0e0e0;
+  border: 1px solid var(--border);
   border-radius: 4px;
-  background: #f9f9f9;
+  background: var(--surface-2);
   overflow: hidden;
   z-index: 4;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  box-shadow: 0 2px 8px var(--shadow-color);
 }
 
 .pp-calc-header {
@@ -186,14 +186,14 @@
   justify-content: space-between;
   align-items: center;
   padding: 0px 2px;
-  background: #f0f0f0;
-  border-bottom: 1px solid #e0e0e0;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
 }
 
 .pp-calc-header h4 {
   margin: 0;
   font-size: 14px;
-  color: #333;
+  color: var(--text-on-surface);
   font-weight: 600;
 }
 
@@ -207,7 +207,7 @@
 }
 
 .pp-calc-toggle:hover {
-  background-color: #e0e0e0;
+  background-color: var(--hover);
 }
 
 .pp-calc-toggle[aria-expanded="true"] .pp-calc-icon {
@@ -240,7 +240,7 @@
 .pp-calc-row label {
   font-size: 12px;
   font-weight: 500;
-  color: #555;
+  color: var(--muted);
   min-width: 30px;
   text-align: left;
 }
@@ -248,7 +248,7 @@
 .pp-calc-input {
   flex: 1;
   padding: 4px 6px;
-  border: 1px solid #ccc;
+  border: 1px solid var(--border);
   border-radius: 4px;
   font-size: 12px;
   min-width: 0;
@@ -256,7 +256,7 @@
 
 .pp-calc-input:focus {
   outline: none;
-  border-color: #649bd6;
+  border-color: var(--accent);
   box-shadow: 0 0 0 2px rgba(100, 155, 214, 0.2);
 }
 

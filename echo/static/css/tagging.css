@@ -20,14 +20,18 @@
 .applied-tags span.tag.tag-applied:hover { background-color: lightcoral; }
 
 /* Grouped relations UI */
-.applied-tags .tag-group { display: inline-flex; align-items: center; gap: 8px; padding: 6px 8px; margin: 5px; border: 2px solid var(--border); border-radius: 18px; box-sizing: border-box; max-width: 100%; flex: 0 0 auto; }
+.applied-tags .tag-group { display: inline-flex; align-items: center; gap: 8px; padding: 6px 8px; margin: 5px; border: 2px solid var(--border); background: var(--surface-2); color: var(--text-on-surface); border-radius: 18px; box-sizing: border-box; max-width: 100%; flex: 0 0 auto; }
 .applied-tags .tag-group-parent > .tag { margin: 0; }
 .applied-tags .tag-group-parent { display: flex; align-items: center; }
 .applied-tags .tag-group-children { display: flex; align-items: center; gap: 6px; row-gap: 4px; flex-wrap: wrap; flex: 0 1 auto; min-width: 120px; }
 .applied-tags .tag-group-children > * { flex: 0 0 auto; }
 .applied-tags .tag-group-children .tag-child > .tag { margin: 0; }
 .applied-tags .tag-group .tag-group { margin: 0 0 0 8px; padding: 2px 6px; flex: 0 0 auto; }
-.applied-tags .tag-group-divider { opacity: 0.55; font-weight: 600; padding: 0 6px; align-self: stretch; display: inline-flex; align-items: center; }
+.applied-tags .tag-group-divider { opacity: 0.55; font-weight: 600; padding: 0 6px; align-self: stretch; display: inline-flex; align-items: center; color: var(--muted); }
+
+/* Ensure clear outlines in both themes */
+html:not([data-theme="dark"]) .applied-tags .tag-group { border-color: var(--border); background: var(--surface-2); }
+[data-theme="dark"] .applied-tags .tag-group { border-color: var(--border); background: var(--surface); }
 
 /* Improve wrapping behavior on narrow screens */
 /* Constrain group width only inside separated list rows so outline fits content */

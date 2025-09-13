@@ -487,13 +487,13 @@ def _compute_player_top_tags_and_star_window(osu_id: int, source: str, selected_
     beatmaps_for_player = Beatmap.objects.none()
     try:
         if source == 'top':
-            scores = api.user_scores(int(osu_id), ScoreType.BEST, mode=gm, limit=100)
+            scores = api.user_scores(int(osu_id), ScoreType.BEST, mode=gm, limit=10)
             ids = [str(getattr(s.beatmap, 'id', '')) for s in scores if getattr(s, 'beatmap', None)]
             ids = [i for i in ids if i]
             if ids:
                 beatmaps_for_player = Beatmap.objects.filter(beatmap_id__in=ids, mode__iexact=mapped_mode)
         else:  # 'fav'
-            fav_sets = api.user_beatmaps(int(osu_id), UserBeatmapType.FAVOURITE, limit=100)
+            fav_sets = api.user_beatmaps(int(osu_id), UserBeatmapType.FAVOURITE, limit=20)
             set_ids = [str(getattr(bs, 'id', '')) for bs in fav_sets]
             set_ids = [i for i in set_ids if i]
             if set_ids:

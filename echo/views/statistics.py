@@ -239,6 +239,131 @@ def statistics(request: HttpRequest):
     player_counts: List[int] = []
     most_related: Beatmap | None = None
 
+    # -------------------- Global Statistics (all users/maps) --------------------
+    global_total_applications: int = 0
+    global_maps_tagged_count: int = 0
+    global_avg_tags_per_map: float | int = 0
+    global_predicted_applications: int = 0
+    global_predicted_only_maps_count: int = 0
+    global_star_hist_labels: List[str] = []
+    global_star_hist_counts: List[int] = []
+    global_human_star_counts: List[int] = []
+    global_pred_star_counts: List[int] = []
+    global_top_mappers = []
+
+    try:
+        # Totals
+        ta_pos = TagApplication.objects.filter(true_negative=False)
+        global_total_applications = ta_pos.count()
+        global_maps_tagged_count = ta_pos.values('beatmap_id').distinct().count()
+        global_avg_tags_per_map = (float(global_total_applications) / global_maps_tagged_count) if global_maps_tagged_count else 0.0
+        global_predicted_applications = ta_pos.filter(user__isnull=True).count()
+
+        # Predicted-only maps
+        pred_only_ids = (
+            Beatmap.objects
+            .annotate(user_pos=Count('tagapplication', filter=Q(tagapplication__true_negative=False, tagapplication__user__isnull=False)))
+            .annotate(pred_pos=Count('tagapplication', filter=Q(tagapplication__true_negative=False, tagapplication__user__isnull=True)))
+            .filter(user_pos=0, pred_pos__gt=0)
+            .values_list('id', flat=True)
+        )
+        global_predicted_only_maps_count = len(list(pred_only_ids))
+
+        # Helper: bin list of stars into 0.25 width with final 14.75+
+        def bin_stars(stars_list: List[float]) -> tuple[list[str], list[int]]:
+            stars_list = [float(s) for s in stars_list if s is not None]
+            if not stars_list:
+                return [], []
+            bin_w = 0.25
+            upper_cap = 15.0
+            last_bin_start = upper_cap - bin_w
+            s_min = min(stars_list)
+            start_val = bin_w * math.floor(max(0.0, s_min) / bin_w)
+            num_bins = int(round((last_bin_start - start_val) / bin_w)) + 1
+            if num_bins < 1:
+                num_bins = 1
+                start_val = last_bin_start
+            bins = [0] * num_bins
+            for s in stars_list:
+                if s >= last_bin_start:
+                    idx = num_bins - 1
+                else:
+                    idx = int(math.floor((s - start_val) / bin_w))
+                    if idx < 0:
+                        idx = 0
+                    if idx >= num_bins:
+                        idx = num_bins - 1
+                bins[idx] += 1
+            labels = [f"{(start_val + i * bin_w):.2f}" for i in range(num_bins)]
+            labels[-1] = f"{last_bin_start:.2f}+"
+            return labels, bins
+
+        # Global star distribution over ALL maps in DB (not only tagged)
+        all_stars = list(Beatmap.objects.values_list('difficulty_rating', flat=True))
+        global_star_hist_labels, global_star_hist_counts = bin_stars([float(s) for s in all_stars if s is not None])
+
+        # Human vs Predicted distributions
+        human_ids = list(
+            TagApplication.objects
+            .filter(true_negative=False, user__isnull=False)
+            .values_list('beatmap_id', flat=True)
+            .distinct()
+        )
+        pred_only_ids_list = list(pred_only_ids)
+        human_stars = list(Beatmap.objects.filter(id__in=human_ids).values_list('difficulty_rating', flat=True))
+        pred_only_stars = list(Beatmap.objects.filter(id__in=pred_only_ids_list).values_list('difficulty_rating', flat=True))
+
+        # Align bins between human and predicted using global labels as base if available
+        # If global labels not available, compute from human set
+        if global_star_hist_labels:
+            # Build mapping for index by start value (strip '+' for last)
+            def build_bins_with_labels(stars_list: List[float], labels: List[str]) -> List[int]:
+                bin_w = 0.25
+                # Extract start values
+                starts: List[float] = []
+                for i, lb in enumerate(labels):
+                    if lb.endswith('+'):
+                        starts.append(float(lb[:-1]))
+                    else:
+                        starts.append(float(lb))
+                counts = [0] * len(labels)
+                last_start = starts[-1]
+                for s in stars_list:
+                    if s is None:
+                        continue
+                    s = float(s)
+                    if s >= last_start:
+                        idx = len(labels) - 1
+                    else:
+                        idx = int(math.floor((s - starts[0]) / bin_w))
+                        if idx < 0:
+                            idx = 0
+                        if idx >= len(labels):
+                            idx = len(labels) - 1
+                    counts[idx] += 1
+                return counts
+
+            global_human_star_counts = build_bins_with_labels([float(s) for s in human_stars if s is not None], global_star_hist_labels)
+            global_pred_star_counts = build_bins_with_labels([float(s) for s in pred_only_stars if s is not None], global_star_hist_labels)
+        else:
+            # Fallback to independent binning
+            _, global_human_star_counts = bin_stars([float(s) for s in human_stars if s is not None])
+            _, global_pred_star_counts = bin_stars([float(s) for s in pred_only_stars if s is not None])
+
+        # Top mappers by distinct maps with human-applied tags
+        top_rows = (
+            TagApplication.objects
+            .filter(true_negative=False, user__isnull=False)
+            .values('beatmap__listed_owner')
+            .annotate(map_count=Count('beatmap_id', distinct=True))
+            .exclude(beatmap__listed_owner__isnull=True)
+            .exclude(beatmap__listed_owner='')
+            .order_by('-map_count', 'beatmap__listed_owner')[:25]
+        )
+        global_top_mappers = [{'listed_owner': r['beatmap__listed_owner'], 'count': int(r['map_count'])} for r in top_rows]
+    except Exception:
+        pass
+
     # -------------------- My Statistics (current user) --------------------
     my_total_applications: int = 0
     my_maps_tagged_count: int = 0
@@ -453,6 +578,17 @@ def statistics(request: HttpRequest):
         request,
         'statistics.html',
         {
+            # Global
+            'global_total_applications': global_total_applications,
+            'global_maps_tagged_count': global_maps_tagged_count,
+            'global_avg_tags_per_map': global_avg_tags_per_map,
+            'global_predicted_applications': global_predicted_applications,
+            'global_predicted_only_maps_count': global_predicted_only_maps_count,
+            'global_star_hist_labels': global_star_hist_labels,
+            'global_star_hist_counts': global_star_hist_counts,
+            'global_human_star_counts': global_human_star_counts,
+            'global_pred_star_counts': global_pred_star_counts,
+            'global_top_mappers': global_top_mappers,
             'input_user': user_query,
             'resolved_user_id': osu_id,
             'resolved_username': username,

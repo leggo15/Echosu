@@ -11,12 +11,46 @@
 {% block content %}
 <div class="stats-page">
   <div class="tabs" data-default-tab="{% if input_user or resolved_username %}user{% else %}latest{% endif %}">
+    <button class="tab-button" type="button" data-tab="global">Global Statistics</button>
     <button class="tab-button {% if not input_user and not resolved_username %}active{% endif %}" type="button" data-tab="latest">Latest Maps</button>
     <button class="tab-button {% if input_user or resolved_username %}active{% endif %}" type="button" data-tab="user">User Statistics</button>
     <button class="tab-button" type="button" data-tab="mine">My Statistics</button>
     <button class="tab-button" type="button" data-tab="activity">My Tagging Activity</button>
     <button class="tab-button" type="button" data-tab="history">My Search History</button>
   </div>
+
+  <!-- Global Statistics Tab -->
+  <section class="tab-section" data-section="global" style="display:none;">
+    <div class="stats-section">
+      <h2>Global Statistics</h2>
+      <div class="my-stats-overview">
+        <div class="stat-item"><span class="label">Tag applications</span><span class="value">{{ global_total_applications|default:0 }}</span></div>
+        <div class="stat-item"><span class="label">Maps tagged</span><span class="value">{{ global_maps_tagged_count|default:0 }}</span></div>
+        <div class="stat-item"><span class="label">Avg tags per map</span><span class="value">{{ global_avg_tags_per_map|default:0|floatformat:"2" }}</span></div>
+        <div class="stat-item"><span class="label">Predicted tag applications</span><span class="value">{{ global_predicted_applications|default:0 }}</span></div>
+        <div class="stat-item"><span class="label">Predicted-only maps</span><span class="value">{{ global_predicted_only_maps_count|default:0 }}</span></div>
+      </div>
+
+      <h3>Star Range (All Maps)</h3>
+      <div class="chart-container"><canvas id="globalStarChart"></canvas></div>
+
+      <h3>Star Range: Human vs Predicted-only</h3>
+      <div class="chart-container"><canvas id="globalHumanPredChart"></canvas></div>
+
+      <div class="my-top-mappers" style="margin-top:16px;">
+        <h3>Most-tagged mappers (human-applied)</h3>
+        {% if global_top_mappers %}
+          <ul class="tag-usage-list">
+            {% for row in global_top_mappers %}
+              <li><span class="tag-name">{{ row.listed_owner }}</span><span class="tag-count">{{ row.count }}</span></li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p>No data.</p>
+        {% endif %}
+      </div>
+    </div>
+  </section>
 
   <!-- Latest Maps Tab (default) -->
   <section class="tab-section {% if not input_user and not resolved_username %}is-active{% endif %}" data-section="latest" {% if input_user or resolved_username %}style="display:none;"{% endif %}>
@@ -238,6 +272,10 @@
   {{ mapper_click_queries|default:'[]'|json_script:'mapperClickQueries' }}
   {{ player_labels|default:'[]'|json_script:'playerLabels' }}
   {{ player_counts|default:'[]'|json_script:'playerCounts' }}
+  {{ global_star_hist_labels|default:'[]'|json_script:'globalStarLabels' }}
+  {{ global_star_hist_counts|default:'[]'|json_script:'globalStarCounts' }}
+  {{ global_human_star_counts|default:'[]'|json_script:'globalHumanCounts' }}
+  {{ global_pred_star_counts|default:'[]'|json_script:'globalPredCounts' }}
   {{ my_star_hist_labels|default:'[]'|json_script:'myStarLabels' }}
   {{ my_star_hist_counts|default:'[]'|json_script:'myStarCounts' }}
   <script>
@@ -250,6 +288,18 @@
         el = document.getElementById('mapperClickQueries'); if (el) cfg.mapper.clickQueries = JSON.parse(el.textContent);
         el = document.getElementById('playerLabels'); if (el) cfg.player.labels = JSON.parse(el.textContent);
         el = document.getElementById('playerCounts'); if (el) cfg.player.data = JSON.parse(el.textContent);
+        var gsl = document.getElementById('globalStarLabels');
+        var gsc = document.getElementById('globalStarCounts');
+        var ghc = document.getElementById('globalHumanCounts');
+        var gpc = document.getElementById('globalPredCounts');
+        if (gsl && gsc) {
+          cfg.global = {
+            starLabels: JSON.parse(gsl.textContent),
+            starCounts: JSON.parse(gsc.textContent),
+            humanCounts: ghc ? JSON.parse(ghc.textContent) : [],
+            predCounts: gpc ? JSON.parse(gpc.textContent) : []
+          };
+        }
         el = document.getElementById('myStarLabels'); var msl = el ? JSON.parse(el.textContent) : [];
         el = document.getElementById('myStarCounts'); var msc = el ? JSON.parse(el.textContent) : [];
         cfg.mine = { starLabels: msl, starCounts: msc };

@@ -100,6 +100,7 @@
 (function(){
   var chartsInitialized = false;
   var myChartsInitialized = false;
+  var globalChartsInitialized = false;
 
   function setActiveTab(tabName) {
     var buttons = document.querySelectorAll('.tab-button');
@@ -131,6 +132,10 @@
         chartsInitialized = true;
         try { window.initStatistics(cfg || {}); } catch(e) {}
       }
+      if (initial === 'global' && !globalChartsInitialized) {
+        globalChartsInitialized = true;
+        try { initGlobalCharts(cfg && cfg.global ? cfg.global : {}); } catch (e) {}
+      }
       if (initial === 'mine' && !myChartsInitialized) {
         myChartsInitialized = true;
         try { initMyCharts(cfg && cfg.mine ? cfg.mine : {}); } catch (e) {}
@@ -154,6 +159,10 @@
           if (target === 'mine' && !myChartsInitialized) {
             myChartsInitialized = true;
             try { initMyCharts(cfg && cfg.mine ? cfg.mine : {}); } catch (e) {}
+          }
+          if (target === 'global' && !globalChartsInitialized) {
+            globalChartsInitialized = true;
+            try { initGlobalCharts(cfg && cfg.global ? cfg.global : {}); } catch (e) {}
           }
         });
       });
@@ -196,6 +205,45 @@ function initMyCharts(mineCfg) {
         }
       }
     });
+  } catch (e) {}
+}
+
+// Global charts (star distribution and overlay human vs predicted-only)
+function initGlobalCharts(globalCfg) {
+  try {
+    var labels = (globalCfg && globalCfg.starLabels) || [];
+    var data = (globalCfg && globalCfg.starCounts) || [];
+    var human = (globalCfg && globalCfg.humanCounts) || [];
+    var pred = (globalCfg && globalCfg.predCounts) || [];
+    var c1 = document.getElementById('globalStarChart');
+    if (c1 && labels.length) {
+      var maxY = 0; try { maxY = Math.max.apply(null, (data || []).map(function(v){ return Number(v) || 0; })); } catch(e) {}
+      new Chart(c1.getContext('2d'), {
+        type: 'bar',
+        data: { labels: labels, datasets: [{ label: 'Maps', data: data, backgroundColor: 'rgba(75, 192, 192, 0.5)', borderColor: 'rgba(75, 192, 192, 1)', borderWidth: 1 }] },
+        options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, ticks: { precision: 0 }, suggestedMax: (maxY>0)?(maxY+Math.ceil(maxY*0.1)):undefined, grace: '10%' } } }
+      });
+    }
+    var c2 = document.getElementById('globalHumanPredChart');
+    if (c2 && labels.length && (human.length || pred.length)) {
+      var max2 = 0; try { max2 = Math.max.apply(null, (human.concat(pred)).map(function(v){ return Number(v)||0; })); } catch(e) {}
+      new Chart(c2.getContext('2d'), {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [
+            { label: 'Human', data: human, backgroundColor: 'rgba(54, 162, 235, 0.5)', borderColor: 'rgba(54, 162, 235, 1)', borderWidth: 1 },
+            { label: 'Predicted-only', data: pred, backgroundColor: 'rgba(255, 99, 132, 0.35)', borderColor: 'rgba(255, 99, 132, 0.9)', borderWidth: 1 }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: { y: { beginAtZero: true, ticks: { precision: 0 }, suggestedMax: (max2>0)?(max2+Math.ceil(max2*0.1)):undefined, grace: '10%' } },
+          plugins: { legend: { position: 'top' } }
+        }
+      });
+    }
   } catch (e) {}
 }
 

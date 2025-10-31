@@ -20,7 +20,7 @@ from echo.views.userSettings  import (
     settings, confirm_data_deletion, delete_user_data,
 )
 from echo.views.pages      import error_page_view, custom_404_view
-from echo.views.statistics import statistics, statistics_player_data
+from echo.views.statistics import statistics, statistics_player_data, statistics_latest_maps
 
 # DRF viewsets
 from echo.views.api import (
@@ -58,6 +58,7 @@ urlpatterns = [
     path('search/preset/new-favorites/', preset_search_new_favorites, name='search_preset_new_favorites'),
     path('statistics/', statistics, name='statistics'),
     path('statistics/player-data/', statistics_player_data, name='statistics_player_data'),
+    path('statistics/latest-maps/', statistics_latest_maps, name='statistics_latest_maps'),
     path('search/saved/toggle/', toggle_saved_search, name='toggle_saved_search'),
     path('search/saved/update-title/', update_saved_search_title, name='update_saved_search_title'),
     path('search/saved/delete/', delete_saved_search, name='delete_saved_search'),

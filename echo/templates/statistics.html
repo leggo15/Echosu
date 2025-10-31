@@ -54,7 +54,7 @@
 
   <!-- Latest Maps Tab (default) -->
   <section class="tab-section {% if not input_user and not resolved_username %}is-active{% endif %}" data-section="latest" {% if input_user or resolved_username %}style="display:none;"{% endif %}>
-    <div class="latest-maps-list">
+    <div class="latest-maps-list" id="latestMapsList">
       <h2>The 10 latest maps added to the database</h2>
       {% if latest_maps %}
         {% for beatmap in latest_maps %}

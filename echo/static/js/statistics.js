@@ -101,6 +101,40 @@
   var chartsInitialized = false;
   var myChartsInitialized = false;
   var globalChartsInitialized = false;
+  var latestPollTimer = null;
+
+  function startLatestPoll() {
+    if (latestPollTimer) return;
+    function tick(){
+      try {
+        var sec = document.querySelector('.tab-section.is-active');
+        if (!sec || sec.getAttribute('data-section') !== 'latest') return;
+        fetch('/statistics/latest-maps/', { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+          .then(function(r){ return r.json(); })
+          .then(function(payload){
+            if (!payload || !payload.html) return;
+            var list = document.getElementById('latestMapsList');
+            if (!list) return;
+            // Preserve heading
+            var head = list.querySelector('h2');
+            list.innerHTML = '';
+            if (head) { list.appendChild(head); }
+            var wrapper = document.createElement('div');
+            wrapper.innerHTML = payload.html;
+            while (wrapper.firstChild) { list.appendChild(wrapper.firstChild); }
+            if (window.initAudioDefaults) { window.initAudioDefaults(list); }
+            if (window.initTaggingFor) { window.initTaggingFor(list); }
+          });
+      } catch (e) {}
+    }
+    // Initial fetch quickly, then interval
+    tick();
+    latestPollTimer = setInterval(function(){ if (!document.hidden) tick(); }, 30000);
+  }
+
+  function stopLatestPoll() {
+    if (latestPollTimer) { clearInterval(latestPollTimer); latestPollTimer = null; }
+  }
 
   function setActiveTab(tabName) {
     var buttons = document.querySelectorAll('.tab-button');
@@ -128,6 +162,7 @@
       var initial = urlParams.get('tab') || (root && (root.getAttribute('data-default-tab') || root.dataset.defaultTab)) || 'latest';
       // Set initial state per default
       setActiveTab(initial);
+      if (initial === 'latest') { startLatestPoll(); }
       if (initial === 'user' && !chartsInitialized && window.initStatistics) {
         chartsInitialized = true;
         try { window.initStatistics(cfg || {}); } catch(e) {}
@@ -146,6 +181,7 @@
         btn.addEventListener('click', function(){
           var target = btn.getAttribute('data-tab') || 'latest';
           setActiveTab(target);
+          if (target === 'latest') { startLatestPoll(); } else { stopLatestPoll(); }
           // Persist tab in URL without reloading
           try {
             var u = new URL(window.location.href);

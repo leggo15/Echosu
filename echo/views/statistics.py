@@ -656,3 +656,23 @@ def statistics_player_data(request: HttpRequest):
     })
 
 
+def statistics_latest_maps(request: HttpRequest):
+    """AJAX endpoint: return the 10 latest maps (with any positive tags) as HTML cards."""
+    try:
+        latest_maps = list(
+            Beatmap.objects
+            .filter(tagapplication__true_negative=False)
+            .order_by('-id')
+            .distinct()[:10]
+            .prefetch_related('genres')
+        )
+        html_parts: list[str] = []
+        for bm in latest_maps:
+            try:
+                html_parts.append(render_to_string('partials/tag_card.html', {'beatmap': bm}, request=request))
+            except Exception:
+                continue
+        return JsonResponse({ 'html': ''.join(html_parts) })
+    except Exception:
+        return JsonResponse({ 'html': '' })
+

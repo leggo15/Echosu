@@ -52,4 +52,168 @@
   border-radius: 6px;
 }
 
+/* Modern buttons on User Statistics */
+.stats-page .stats-form button,
+.stats-page #playerPresetBtn,
+.stats-page .preset-actions .search-btn {
+  padding: 10px 14px;
+  border: none;
+  border-radius: 10px;
+  background: #2b87d1;
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+}
+.stats-page .stats-form button:hover,
+.stats-page #playerPresetBtn:hover,
+.stats-page .preset-actions .search-btn:hover {
+  background: #1f6fb2;
+}
+
+/* Input spacing alignment */
+.stats-page .stats-form .search-row button { margin-left: 8px; }
+
+/* Modernize User Statistics form inputs */
+.stats-page .stats-form .search-row { display: flex; align-items: center; gap: 8px; }
+.stats-page .stats-form input[type="text"] {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text-on-surface);
+  min-width: 260px;
+}
+.stats-page .stats-form input[type="text"]::placeholder { color: var(--muted); }
+.stats-page .stats-form input[type="text"]:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(100, 155, 214, 0.2);
+}
+
+/* Unify selects to match inputs */
+.stats-page select {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text-on-surface);
+}
+
+/* Tabs */
+.tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin: 12px 0 16px 0;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid #e8e8e8;
+  background: linear-gradient(180deg, rgba(255,255,255,0.85), rgba(255,255,255,0.65));
+  box-shadow: inset 0 2px 8px rgba(0,0,0,0.05);
+}
+.tab-button {
+  position: relative;
+  padding: 10px 16px;
+  border: none;
+  background: transparent;
+  color: #444;
+  font-weight: 600;
+  cursor: pointer;
+}
+.tab-button + .tab-button::before {
+  content: '';
+  position: absolute;
+  left: -3px;
+  top: 30%;
+  bottom: 30%;
+  width: 1px;
+  background: linear-gradient(180deg, rgba(0,0,0,0), rgba(0,0,0,0.18), rgba(0,0,0,0));
+}
+.tab-button.active { color: #111; }
+.tab-button.active::after {
+  content: '';
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: -8px;
+  height: 4px;
+  border-radius: 4px;
+  background: radial-gradient(closest-side, rgba(255,180,0,0.75), rgba(255,180,0,0.25) 70%, rgba(255,180,0,0));
+  box-shadow: 0 0 10px rgba(255,180,0,0.55);
+}
+/* Dark theme adjustments */
+[data-theme="dark"] .tabs {
+  border-color: #2b2f3a;
+  background: linear-gradient(180deg, rgba(20,24,34,0.9), rgba(20,24,34,0.7));
+  box-shadow: inset 0 2px 10px rgba(0,0,0,0.4);
+}
+[data-theme="dark"] .tab-button { color: #d0d6e0; }
+[data-theme="dark"] .tab-button + .tab-button::before { background: linear-gradient(180deg, rgba(255,255,255,0), rgba(255,255,255,0.2), rgba(255,255,255,0)); }
+[data-theme="dark"] .tab-button.active::after {
+  background: radial-gradient(closest-side, rgba(255,200,0,0.85), rgba(255,200,0,0.35) 70%, rgba(255,200,0,0));
+  box-shadow: 0 0 14px rgba(255,200,0,0.6);
+}
+.tab-section { display: none; }
+.tab-section.is-active { display: block; }
+
+/* My Statistics */
+.my-stats-overview {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  margin: 12px 0 16px 0;
+}
+.my-stats-overview .stat-item {
+  background: #ffffff;
+  border: 1px solid #eeeeee;
+  border-radius: 8px;
+  padding: 12px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+}
+.my-stats-overview .label {
+  display: block;
+  font-size: 12px;
+  color: #666;
+  margin-bottom: 6px;
+}
+.my-stats-overview .value {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.tag-usage-list { list-style: none; margin: 8px 0 0 0; padding: 0; }
+.tag-usage-list li { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; border-bottom: 1px solid rgba(0,0,0,0.08); }
+.tag-usage-list .tag-name { font-weight: 600; }
+.tag-usage-list .tag-count { color: #555; }
+
+.saved-row, .history-row { cursor: pointer; }
+.saved-row button.saved-edit-btn, .saved-row button.saved-save-btn { cursor: pointer; }
+.saved-row .saved-remove-btn { margin-left: 8px; border: none; background: transparent; color: #999; cursor: pointer; font-size: 16px; }
+.saved-row .saved-remove-btn:hover { color: #cc4444; }
+.saved-row:hover, .history-row:hover { background: rgba(0,0,0,0.03); }
+[data-theme="dark"] .saved-row:hover, [data-theme="dark"] .history-row:hover { background: rgba(255,255,255,0.04); }
+
+[data-theme="dark"] .my-stats-overview .stat-item { background: #151a2a; border-color: #2b2f3a; box-shadow: none; }
+[data-theme="dark"] .my-stats-overview .label { color: #9aa4b2; }
+[data-theme="dark"] .tag-usage-list li { border-color: rgba(255,255,255,0.08); }
+[data-theme="dark"] .tag-usage-list .tag-count { color: #c6d1e0; }
+
+/* Modern star button for search history */
+.fav-btn {
+  appearance: none;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  margin-left: 10px;
+  color: #888;
+  transition: transform 0.12s ease, color 0.12s ease;
+}
+.fav-btn:hover { transform: scale(1.1); color: #555; }
+.fav-btn.is-starred { color: #f2b01e; }
+[data-theme="dark"] .fav-btn { color: #aab3c0; }
+[data-theme="dark"] .fav-btn:hover { color: #d3dbe6; }
+[data-theme="dark"] .fav-btn.is-starred { color: #ffd36a; }
+
 

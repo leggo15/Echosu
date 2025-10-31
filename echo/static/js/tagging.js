@@ -175,12 +175,11 @@
 
     // Update tag display for a specific beatmap
     function updateTagDisplay(beatmapId, tags) {
-      var $targetCard = $('#beatmap-' + beatmapId);
-      if (!$targetCard.length) return;
-      
-      var $targetApplied = $targetCard.find('.applied-tags');
-      if (!$targetApplied.length) return;
-      
+      // Support multiple instances of the same beatmap card on a page (e.g., different tabs)
+      var $cards = $('.beatmap-card-wrapper[data-beatmap-id="' + beatmapId + '"] .tag-card');
+      if (!$cards.length) { $cards = $('#beatmap-' + beatmapId); }
+      if (!$cards.length) return;
+
       $('.tooltip, .description-author').remove();
       var mode = (window.TAG_CATEGORY_DISPLAY || 'color');
       var wantGrouping = !!window.GROUP_RELATED_TAGS;
@@ -189,23 +188,29 @@
         try {
           ensureRelationsLoaded(function(){
             try {
-              var cached = (tagCache[beatmapId] && tagCache[beatmapId].data) || tags;
-              updateTagDisplay(beatmapId, cached);
+              var cachedData = tagCache[beatmapId] && tagCache[beatmapId].data;
+              updateTagDisplay(beatmapId, Array.isArray(cachedData) ? cachedData : []);
             } catch (e) {}
           });
         } catch (e) {}
       }
-      $targetApplied.empty();
-      if (mode !== 'lists') { $targetApplied.append('Tags: '); }
-      // Split positives and negatives if provided
-      var negatives = [];
-      var positives = [];
-      (Array.isArray(tags) ? tags : []).forEach(function(tag){
-        if (tag && tag.true_negative) { negatives.push(tag); } else { positives.push(tag); }
-      });
 
-      // Render according to user preference
-      // mode already computed above
+      $cards.each(function(){
+        var $targetCard = $(this);
+        var $targetApplied = $targetCard.find('.applied-tags');
+        if (!$targetApplied.length) return;
+
+        $targetApplied.empty();
+        if (mode !== 'lists') { $targetApplied.append('Tags: '); }
+        // Split positives and negatives if provided
+        var negatives = [];
+        var positives = [];
+        (Array.isArray(tags) ? tags : []).forEach(function(tag){
+          if (tag && tag.true_negative) { negatives.push(tag); } else { positives.push(tag); }
+        });
+
+        // Render according to user preference
+        // mode already computed above
 
       function renderTagInto($container, tag) {
         var tagClass = tag.is_applied_by_user ? 'tag-applied' : (tag.is_predicted && tag.apply_count === 0 ? 'tag-predicted' : 'tag-unapplied');
@@ -226,8 +231,8 @@
         }
       }
 
-      // Special handling for 'lists' layout: optionally group per category, then return
-      if (mode === 'lists') {
+        // Special handling for 'lists' layout: optionally group per category, then return
+        if (mode === 'lists') {
         var allByCat = { mapping_genre: [], pattern_type: [], metadata: [], other: [] };
         positives.forEach(function(t){ var c = t.category || 'other'; (allByCat[c] = allByCat[c] || []).push(t); });
         var sections = [
@@ -298,10 +303,10 @@
           sortNamesByCount(roots).forEach(function(r){ renderGroup(r, $row, new Set()); });
           Object.keys(scopeNameToTag).forEach(function(n){ var parents = getParents(n); var kids = getChildren(n); if (parents.length === 0 && kids.length === 0) { renderTagInto($row, scopeNameToTag[n]); } });
         });
-        return; // lists handled fully
-      }
+          return; // lists handled fully
+        }
 
-      if (wantGrouping) {
+        if (wantGrouping) {
         // Nested grouping: build a tree among present tags and allow multi-parent duplication.
         var nameToTag = {};
         positives.forEach(function(t){ if (t && t.name) { nameToTag[String(t.name).toLowerCase()] = t; } });
@@ -374,26 +379,27 @@
           if (parents.length === 0 && kids.length === 0) { renderTagInto($targetApplied, nameToTag[n]); }
         });
 
-      } else {
-        // color (default) or none (same layout)
-        positives.forEach(function(tag){ renderTagInto($targetApplied, tag); });
-      }
+        } else {
+          // color (default) or none (same layout)
+          positives.forEach(function(tag){ renderTagInto($targetApplied, tag); });
+        }
 
-      // Render negatives if container present
-      var $negTarget = $targetCard.find('.negative-tags');
-      if ($negTarget.length) {
-        $negTarget.empty().append('Negative Tags: ');
-        negatives.forEach(function(tag) {
-          $('<span></span>')
-            .addClass('tag tag-negative')
-            .attr('data-tag-name', tag.name)
-            .attr('data-category', (window.TAG_CATEGORY_DISPLAY === 'none') ? null : (tag.category || 'other'))
-            .attr('data-true-negative', 'true')
-            .attr('data-beatmap-id', beatmapId)
-            .text(tag.name)
-            .appendTo($negTarget);
-        });
-      }
+        // Render negatives if container present
+        var $negTarget = $targetCard.find('.negative-tags');
+        if ($negTarget.length) {
+          $negTarget.empty().append('Negative Tags: ');
+          negatives.forEach(function(tag) {
+            $('<span></span>')
+              .addClass('tag tag-negative')
+              .attr('data-tag-name', tag.name)
+              .attr('data-category', (window.TAG_CATEGORY_DISPLAY === 'none') ? null : (tag.category || 'other'))
+              .attr('data-true-negative', 'true')
+              .attr('data-beatmap-id', beatmapId)
+              .text(tag.name)
+              .appendTo($negTarget);
+          });
+        }
+      });
     }
 
     // Ensure relations are loaded once if grouping is enabled
@@ -1291,23 +1297,9 @@
 
   // Global function to load tags for all beatmaps on the page
   function loadAllBeatmapTags() {
-    var allBeatmapIds = $('.beatmap-card-wrapper').map(function() {
-      return $(this).data('beatmap-id');
-    }).get();
-    // Always ensure each visible card has its tag list rendered with categories
-    if (allBeatmapIds.length === 0) return;
-    // Attempt bulk first for performance, fall back to individual
-    var $firstCard = $('.tag-card').first();
-    if ($firstCard.length) {
-      // Call the internal bulk loader via the first initialized instance if available
-      try {
-        // Try internal bulk API if attachTagging created it (legacy safety)
-        refreshTagsBulk(allBeatmapIds);
-        return;
-      } catch (e) { /* ignore and fallback */ }
-    }
-    // Fallback: iterate and refresh individually (ensures category border attributes render)
-    allBeatmapIds.forEach(function(id){ refreshTagsIndividual(id); });
+    // No-op: per-card initialisation performs a single coalesced bulk load.
+    // Leaving this as a stub avoids duplicate network requests on large pages.
+    return;
   }
   
   // Auto-load tags when DOM is ready

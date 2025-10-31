@@ -10,7 +10,7 @@ from echo.views.beatmap   import (
     beatmap_detail, update_beatmap_info, beatmap_timeseries,
     save_tag_timestamps, quick_add_beatmap,
 )
-from echo.views.search    import search_results, preset_search_farm, preset_search_new_favorites
+from echo.views.search    import search_results, preset_search_farm, preset_search_new_favorites, toggle_saved_search, update_saved_search_title, delete_saved_search
 from echo.views.tags      import (
     modify_tag, get_tags, edit_tags,
     update_tag_description, vote_description, search_tags, edit_ownership, get_tags_bulk,
@@ -58,6 +58,9 @@ urlpatterns = [
     path('search/preset/new-favorites/', preset_search_new_favorites, name='search_preset_new_favorites'),
     path('statistics/', statistics, name='statistics'),
     path('statistics/player-data/', statistics_player_data, name='statistics_player_data'),
+    path('search/saved/toggle/', toggle_saved_search, name='toggle_saved_search'),
+    path('search/saved/update-title/', update_saved_search_title, name='update_saved_search_title'),
+    path('search/saved/delete/', delete_saved_search, name='delete_saved_search'),
     path('edit_tags/', edit_tags, name='edit_tags'),
     path('update_tag_description/', update_tag_description, name='update_tag_description'),
     path('vote_description/', vote_description, name='vote_description'),

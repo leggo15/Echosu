@@ -96,3 +96,100 @@
 })();
 
 
+// Tabs logic for Statistics page (Latest Maps default, lazy-init charts on User tab)
+(function(){
+  var chartsInitialized = false;
+  var myChartsInitialized = false;
+
+  function setActiveTab(tabName) {
+    var buttons = document.querySelectorAll('.tab-button');
+    var sections = document.querySelectorAll('.tab-section');
+    buttons.forEach(function(btn){
+      var isActive = (btn.getAttribute('data-tab') === tabName);
+      if (isActive) { btn.classList.add('active'); } else { btn.classList.remove('active'); }
+    });
+    sections.forEach(function(sec){
+      var isActive = (sec.getAttribute('data-section') === tabName);
+      if (isActive) { 
+        sec.classList.add('is-active'); 
+        try { sec.style.display = 'block'; } catch (e) {}
+      } else { 
+        sec.classList.remove('is-active'); 
+        try { sec.style.display = 'none'; } catch (e) {}
+      }
+    });
+  }
+
+  window.initStatisticsTabs = function(cfg){
+    try {
+      var root = document.querySelector('.tabs');
+      var urlParams = new URLSearchParams(window.location.search);
+      var initial = urlParams.get('tab') || (root && (root.getAttribute('data-default-tab') || root.dataset.defaultTab)) || 'latest';
+      // Set initial state per default
+      setActiveTab(initial);
+      if (initial === 'user' && !chartsInitialized && window.initStatistics) {
+        chartsInitialized = true;
+        try { window.initStatistics(cfg || {}); } catch(e) {}
+      }
+      if (initial === 'mine' && !myChartsInitialized) {
+        myChartsInitialized = true;
+        try { initMyCharts(cfg && cfg.mine ? cfg.mine : {}); } catch (e) {}
+      }
+
+      var buttons = document.querySelectorAll('.tab-button');
+      buttons.forEach(function(btn){
+        btn.addEventListener('click', function(){
+          var target = btn.getAttribute('data-tab') || 'latest';
+          setActiveTab(target);
+          // Persist tab in URL without reloading
+          try {
+            var u = new URL(window.location.href);
+            u.searchParams.set('tab', target);
+            window.history.replaceState({}, '', u.toString());
+          } catch (e) {}
+          if (target === 'user' && !chartsInitialized && window.initStatistics) {
+            chartsInitialized = true;
+            try { window.initStatistics(cfg || {}); } catch(e) {}
+          }
+          if (target === 'mine' && !myChartsInitialized) {
+            myChartsInitialized = true;
+            try { initMyCharts(cfg && cfg.mine ? cfg.mine : {}); } catch (e) {}
+          }
+        });
+      });
+    } catch (e) {}
+  };
+})();
+
+// My stats charts
+function initMyCharts(mineCfg) {
+  try {
+    var labels = (mineCfg && mineCfg.starLabels) || [];
+    var data = (mineCfg && mineCfg.starCounts) || [];
+    var canvas = document.getElementById('myStarChart');
+    if (!canvas || !labels.length) return;
+    new Chart(canvas.getContext('2d'), {
+      type: 'bar',
+      data: {
+        labels: labels,
+        datasets: [{
+          label: 'Star bins (0.25)',
+          data: data,
+          backgroundColor: 'rgba(255, 159, 64, 0.5)',
+          borderColor: 'rgba(255, 159, 64, 1)',
+          borderWidth: 1
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          y: { beginAtZero: true, ticks: { precision: 0 } },
+          x: { ticks: { autoSkip: true, maxTicksLimit: 20 } }
+        }
+      }
+    });
+  } catch (e) {}
+}
+
+

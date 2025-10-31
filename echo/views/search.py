@@ -50,7 +50,7 @@ from urllib.parse import urlencode
 # ---------------------------------------------------------------------------
 # Local application imports
 # ---------------------------------------------------------------------------
-from ..models import Beatmap, Tag, TagApplication, UserProfile
+from ..models import Beatmap, Tag, TagApplication, UserProfile, SavedSearch
 from .auth import api
 from .shared import (
     compute_attribute_windows,
@@ -65,6 +65,74 @@ from ..operators import (
     handle_general_inclusion,
 )
 from ..utils import QueryContext
+# -------------------------- Search History Actions -------------------------- #
+
+from django.views.decorators.http import require_POST
+from django.http import HttpResponseBadRequest
+import json as _json
+
+
+@require_POST
+def toggle_saved_search(request):
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'auth required'}, status=403)
+    try:
+        hid = (request.POST.get('history_id') or '').strip()
+        q = (request.POST.get('query') or '').strip()
+        params = request.POST.get('params_json')
+        history = request.session.get('search_history', [])
+        rec = next((r for r in history if r.get('id') == hid), None)
+        if rec:
+            q = rec.get('query') or ''
+            params = _json.dumps(rec.get('params') or {}, sort_keys=True)
+        else:
+            try:
+                params = _json.dumps(_json.loads(params or '{}'), sort_keys=True)
+            except Exception:
+                params = _json.dumps({}, sort_keys=True)
+
+        existing = SavedSearch.objects.filter(user=request.user, query=q, params_json=params).first()
+        if existing:
+            existing.delete()
+            return JsonResponse({'saved': False})
+        # Default display name should not be the query; use a generic label
+        title = 'Saved query'
+        ss = SavedSearch.objects.create(user=request.user, title=title[:255], query=q, params_json=params)
+        return JsonResponse({'saved': True, 'saved_id': ss.id, 'title': ss.title})
+    except Exception as exc:
+        return JsonResponse({'error': str(exc)}, status=400)
+
+
+@require_POST
+def update_saved_search_title(request):
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'auth required'}, status=403)
+    try:
+        sid = int((request.POST.get('saved_id') or '0').strip())
+        title = (request.POST.get('title') or '').strip() or 'Search'
+        ss = SavedSearch.objects.filter(id=sid, user=request.user).first()
+        if not ss:
+            return JsonResponse({'error': 'not found'}, status=404)
+        ss.title = title[:255]
+        ss.save(update_fields=['title', 'updated_at'])
+        return JsonResponse({'ok': True, 'title': ss.title})
+    except Exception as exc:
+        return JsonResponse({'error': str(exc)}, status=400)
+
+
+@require_POST
+def delete_saved_search(request):
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'auth required'}, status=403)
+    try:
+        sid = int((request.POST.get('saved_id') or '0').strip())
+        ss = SavedSearch.objects.filter(id=sid, user=request.user).first()
+        if not ss:
+            return JsonResponse({'error': 'not found'}, status=404)
+        ss.delete()
+        return JsonResponse({'ok': True})
+    except Exception as exc:
+        return JsonResponse({'error': str(exc)}, status=400)
 ## NOTE: PP computation is intentionally not invoked in the search view to avoid
 ## heavy per-result work on every request. If PP is required, precompute it
 ## offline and store on model fields, or compute asynchronously.
@@ -438,6 +506,30 @@ def search_results(request):
         except Exception:
             bm.length_formatted = None
 
+    # Record search history in session for authenticated users (simple, per-browser)
+    # Ignore empty queries
+    try:
+        if request.user.is_authenticated and (query or '').strip():
+            params = request.GET.copy()
+            if 'page' in params:
+                del params['page']
+            history = request.session.get('search_history', [])
+            import uuid, time as _time
+            record = {
+                'id': str(uuid.uuid4()),
+                'query': query,
+                'params': dict(params),
+                'ts': int(_time.time()),
+                'favorite': False,
+            }
+            # De-duplicate identical (same query and params) older entries
+            new_hist = [r for r in history if not (r.get('query') == record['query'] and r.get('params') == record['params'])]
+            new_hist.insert(0, record)
+            request.session['search_history'] = new_hist[:50]
+            request.session.modified = True
+    except Exception:
+        pass
+
     return render(
         request,
         'search_results.html',
@@ -568,7 +660,7 @@ def preset_search_farm(request):
                 'mania': GameMode.MANIA,
             }
             gm = GAME_MODE_ENUM_LOCAL.get(mode_key, GameMode.OSU)
-            scores = api.user_scores(int(osu_id_int), ScoreType.BEST, mode=gm, limit=100)
+            scores = api.user_scores(int(osu_id_int), ScoreType.BEST, mode=gm, limit=10)
         except Exception:
             return []
 

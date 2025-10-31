@@ -5,18 +5,22 @@ from __future__ import annotations
 # Standard library
 from typing import Iterable, List, Tuple
 import re
+import math
+from urllib.parse import urlencode
+import json
 
 # Third-party
 from ossapi.enums import ScoreType, GameMode, UserBeatmapType, UserLookupKey
 
 # Django
-from django.db.models import Q, Count, F, Value, IntegerField, Subquery, OuterRef
+from django.db.models import Q, Count, F, Value, IntegerField, Subquery, OuterRef, Exists, Max
+from django.db.models.functions import Coalesce
 from django.http import HttpRequest, JsonResponse
 from django.shortcuts import render
 from django.template.loader import render_to_string
 
 # Local
-from ..models import Beatmap, Tag, TagApplication
+from ..models import Beatmap, Tag, TagApplication, SavedSearch
 from .auth import api
 from .shared import format_length_hms
 from ..helpers.rosu_utils import get_or_compute_pp
@@ -235,6 +239,152 @@ def statistics(request: HttpRequest):
     player_counts: List[int] = []
     most_related: Beatmap | None = None
 
+    # -------------------- My Statistics (current user) --------------------
+    my_total_applications: int = 0
+    my_maps_tagged_count: int = 0
+    my_avg_tags_per_map: float | int = 0
+    my_tag_usage = []
+    my_consensus_rate: float | int = 0
+    my_star_hist_labels: List[str] = []
+    my_star_hist_counts: List[int] = []
+    my_top_mappers = []
+    my_activity_beatmaps: List[Beatmap] = []
+    my_activity_page: int = 1
+    my_activity_total_pages: int = 1
+    my_search_history = []
+    my_saved_searches = []
+
+    try:
+        if getattr(request, 'user', None) and request.user.is_authenticated:
+            user_apps = TagApplication.objects.filter(user=request.user, true_negative=False)
+            my_total_applications = user_apps.count()
+            my_maps_tagged_count = user_apps.values('beatmap_id').distinct().count()
+            my_avg_tags_per_map = (float(my_total_applications) / my_maps_tagged_count) if my_maps_tagged_count else 0.0
+            my_tag_usage = list(
+                user_apps.values('tag__name').annotate(c=Count('id')).order_by('-c', 'tag__name')
+            )
+
+            # Consensus rate: share of your tag applications that others also applied on same map
+            other_exists = TagApplication.objects.filter(
+                beatmap_id=OuterRef('beatmap_id'), tag_id=OuterRef('tag_id'), true_negative=False
+            ).exclude(user=request.user)
+            with_consensus = user_apps.annotate(has_other=Exists(other_exists)).filter(has_other=True).count()
+            my_consensus_rate = ((with_consensus / float(my_total_applications)) * 100.0) if my_total_applications else 0.0
+
+            # Star histogram (0.25 bins) over distinct maps you've tagged
+            # Cap at 15.0 and group anything >= 14.75 into the last ("14.75+") bin
+            stars = list(
+                Beatmap.objects.filter(tagapplication__user=request.user, tagapplication__true_negative=False)
+                .distinct()
+                .values_list('difficulty_rating', flat=True)
+            )
+            stars = [float(s) for s in stars if s is not None]
+            if stars:
+                bin_w = 0.25
+                upper_cap = 15.0
+                last_bin_start = upper_cap - bin_w  # 14.75
+                # Use observed minimum to keep chart compact
+                s_min = min(stars)
+                start_val = bin_w * math.floor(max(0.0, s_min) / bin_w)
+                # Number of bins from start_val up to and including [14.75, 15.0]
+                num_bins = int(round((last_bin_start - start_val) / bin_w)) + 1
+                if num_bins < 1:
+                    # If all data are >= 14.75, show a single aggregated bin
+                    num_bins = 1
+                    start_val = last_bin_start
+                bins = [0] * num_bins
+                for s in stars:
+                    if s >= last_bin_start:
+                        idx = num_bins - 1
+                    else:
+                        idx = int(math.floor((s - start_val) / bin_w))
+                        if idx < 0:
+                            idx = 0
+                        if idx >= num_bins:
+                            idx = num_bins - 1
+                    bins[idx] += 1
+                labels = [f"{(start_val + i * bin_w):.2f}" for i in range(num_bins)]
+                # Replace final label with 14.75+
+                labels[-1] = f"{last_bin_start:.2f}+"
+                my_star_hist_counts = bins
+                my_star_hist_labels = labels
+
+            # Most-tagged mappers (by distinct maps you've tagged)
+            mapper_rows = (
+                user_apps
+                .values('beatmap__listed_owner')
+                .annotate(map_count=Count('beatmap_id', distinct=True))
+                .exclude(beatmap__listed_owner__isnull=True)
+                .exclude(beatmap__listed_owner='')
+                .order_by('-map_count', 'beatmap__listed_owner')[:10]
+            )
+            my_top_mappers = [{'listed_owner': r['beatmap__listed_owner'], 'count': int(r['map_count'])} for r in mapper_rows]
+
+            # My Tagging Activity: last maps you tagged (distinct beatmaps ordered by newest tag)
+            try:
+                page_size = 10
+                my_activity_page = max(1, int((request.GET.get('my_page') or '1').strip()))
+            except Exception:
+                page_size = 10
+                my_activity_page = 1
+            activity_qs = (
+                TagApplication.objects
+                .filter(user=request.user, true_negative=False)
+                .values('beatmap_id')
+                .annotate(last_ts=Max('created_at'))
+                .order_by('-last_ts')
+            )
+            total_groups = activity_qs.count()
+            my_activity_total_pages = max(1, int(math.ceil(total_groups / float(page_size))))
+            offset = (my_activity_page - 1) * page_size
+            ids = list(activity_qs.values_list('beatmap_id', flat=True)[offset:offset + page_size])
+            bm_by_id = {bm.id: bm for bm in Beatmap.objects.filter(id__in=ids)}
+            my_activity_beatmaps = [bm_by_id[i] for i in ids if i in bm_by_id]
+            # Light-weight display extras only (avoid PP compute for responsiveness)
+            for bm in my_activity_beatmaps:
+                try:
+                    bm.length_formatted = format_length_hms(getattr(bm, 'total_length', None))
+                except Exception:
+                    bm.length_formatted = None
+
+            # My Search History (from session) + Saved searches from DB
+            history = request.session.get('search_history', [])
+            # Build a quick lookup of saved signatures
+            saved_qs = SavedSearch.objects.filter(user=request.user).order_by('-updated_at')
+            saved_set = set()
+            for s in saved_qs:
+                saved_set.add((s.query or '', s.params_json or ''))
+            # Build linkable items for recent history (first 10)
+            def _qs(p):
+                try:
+                    return urlencode(p or {}, doseq=True)
+                except Exception:
+                    return ''
+            my_search_history = []
+            for h in (history[:15] if isinstance(history, list) else []):
+                q = h.get('query') or ''
+                p_json = json.dumps(h.get('params') or {}, sort_keys=True)
+                my_search_history.append({
+                    'id': h.get('id'),
+                    'query': q,
+                    'saved': (q, p_json) in saved_set,
+                    'qs': _qs(h.get('params') or {}),
+                    'ts': int(h.get('ts') or 0),
+                })
+            # Saved list for display
+            my_saved_searches = [
+                {
+                    'id': s.id,
+                    'title': s.title,
+                    'query': s.query or '',
+                    'qs': s.params_json and urlencode(json.loads(s.params_json), doseq=True) or '',
+                }
+                for s in saved_qs
+            ]
+    except Exception:
+        # Leave defaults if any error
+        pass
+
     if username:
         # -------------------- Mapper Statistics --------------------
         # Only consider maps where this user is the listed owner (by id).
@@ -280,6 +430,16 @@ def statistics(request: HttpRequest):
         # -------------------- Player Statistics --------------------
         player_labels, player_counts, most_related = _compute_player_stats(osu_id, source)
 
+    # Latest maps (default tab): newest entries by DB insert order
+    # Skip maps with no tags (predicted or user-applied) and avoid heavy PP computation here
+    latest_maps = list(
+        Beatmap.objects
+        .filter(tagapplication__true_negative=False)
+        .order_by('-id')
+        .distinct()[:10]
+        .prefetch_related('genres')
+    )
+
     # Render template
     return render(
         request,
@@ -300,6 +460,22 @@ def statistics(request: HttpRequest):
             'player_labels': player_labels,
             'player_counts': player_counts,
             'most_related_map': most_related,
+            # My stats
+            'my_total_applications': my_total_applications,
+            'my_maps_tagged_count': my_maps_tagged_count,
+            'my_avg_tags_per_map': my_avg_tags_per_map,
+            'my_tag_usage': my_tag_usage,
+            'my_consensus_rate': my_consensus_rate,
+            'my_star_hist_labels': my_star_hist_labels,
+            'my_star_hist_counts': my_star_hist_counts,
+            'my_top_mappers': my_top_mappers,
+            'my_activity_beatmaps': my_activity_beatmaps,
+            'my_activity_page': my_activity_page,
+            'my_activity_total_pages': my_activity_total_pages,
+            'my_search_history': my_search_history,
+            'my_saved_searches': my_saved_searches,
+            # Latest maps tab
+            'latest_maps': latest_maps,
         },
     )
 

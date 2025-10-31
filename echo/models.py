@@ -398,3 +398,26 @@ class UserSettings(models.Model):
         except Exception:
             uname = 'unknown'
         return f"Settings({uname}): tag_display={self.tag_category_display}"
+
+
+# ----------------------------- Saved Searches ----------------------------- #
+class SavedSearch(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='saved_searches')
+    title = models.CharField(max_length=255, default='Search', db_index=True)
+    query = models.CharField(max_length=1000, blank=True, default='')
+    params_json = models.TextField(blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True, db_index=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['user', 'created_at']),
+            models.Index(fields=['user', 'updated_at']),
+            models.Index(fields=['user', 'title']),
+        ]
+
+    def __str__(self):
+        try:
+            return f"SavedSearch({self.user.username}): {self.title}"
+        except Exception:
+            return "SavedSearch"

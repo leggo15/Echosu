@@ -10,75 +10,220 @@
 
 {% block content %}
 <div class="stats-page">
-  <h1>Statistics</h1>
+  <div class="tabs" data-default-tab="{% if input_user or resolved_username %}user{% else %}latest{% endif %}">
+    <button class="tab-button {% if not input_user and not resolved_username %}active{% endif %}" type="button" data-tab="latest">Latest Maps</button>
+    <button class="tab-button {% if input_user or resolved_username %}active{% endif %}" type="button" data-tab="user">User Statistics</button>
+    <button class="tab-button" type="button" data-tab="mine">My Statistics</button>
+    <button class="tab-button" type="button" data-tab="activity">My Tagging Activity</button>
+    <button class="tab-button" type="button" data-tab="history">My Search History</button>
+  </div>
 
-  <form method="get" action="" class="stats-form">
-    <div class="search-row">
-      <input type="text" name="user" placeholder="osu! username or id" value="{{ input_user|default:resolved_username|default:'' }}">
-      <button type="submit">Load User</button>
-    </div>
-    {% if resolve_error %}
-      <div class="error">{{ resolve_error }}</div>
-    {% endif %}
-    {% if resolved_username %}
-      <div class="resolved">User: <strong>{{ resolved_username }}</strong> ({{ resolved_user_id }})</div>
-    {% endif %}
-  </form>
-
-  <hr/>
-
-  <section class="mapper-stats stats-section">
-    <h2>Mapper Statistics</h2>
-    <div class="chart-container"><canvas id="mapperChart"></canvas></div>
-    <div class="mapper-cards">
-      <div class="mapper-card full-width">
-        <h3>Most Representative</h3>
-        {% if mapper_most_map %}
-          {% include 'partials/tag_card.html' with beatmap=mapper_most_map %}
-        {% else %}
-          <p>No data.</p>
-        {% endif %}
-      </div>
-      <div class="mapper-card full-width">
-        <h3>Least Representative</h3>
-        {% if mapper_least_map %}
-          {% include 'partials/tag_card.html' with beatmap=mapper_least_map %}
-        {% else %}
-          <p>No data.</p>
-        {% endif %}
-      </div>
+  <!-- Latest Maps Tab (default) -->
+  <section class="tab-section {% if not input_user and not resolved_username %}is-active{% endif %}" data-section="latest" {% if input_user or resolved_username %}style="display:none;"{% endif %}>
+    <div class="latest-maps-list">
+      <h2>The 10 latest maps added to the database</h2>
+      {% if latest_maps %}
+        {% for beatmap in latest_maps %}
+          {% include 'partials/tag_card.html' with beatmap=beatmap %}
+        {% endfor %}
+      {% else %}
+        <p>No maps available.</p>
+      {% endif %}
     </div>
   </section>
 
-  <hr/>
+  <!-- User Statistics Tab (previous page content) -->
+  <section class="tab-section {% if input_user or resolved_username %}is-active{% endif %}" data-section="user" {% if not input_user and not resolved_username %}style="display:none;"{% endif %}>
+    <form method="get" action="" class="stats-form">
+      <div class="search-row">
+        <input type="text" name="user" placeholder="osu! username or id" value="{{ input_user|default:resolved_username|default:'' }}">
+        <button type="submit">Load User</button>
+      </div>
+      {% if resolve_error %}
+        <div class="error">{{ resolve_error }}</div>
+      {% endif %}
+      {% if resolved_username %}
+        <div class="resolved">User: <strong>{{ resolved_username }}</strong> ({{ resolved_user_id }})</div>
+      {% endif %}
+    </form>
 
-  <section class="player-stats stats-section">
-    <div class="section-header">
-      <h2>Player Statistics</h2>
-      <div class="player-toggle">
-        <label for="playerSource">From:</label>
-        <select id="playerSource">
-          <option value="top" {% if source == 'top' %}selected{% endif %}>Top 100 Plays</option>
-          <option value="fav" {% if source == 'fav' %}selected{% endif %}>Favourites</option>
-        </select>
-      </div>
-    </div>
-    <div class="chart-container"><canvas id="playerChart"></canvas></div>
-    <div class="player-related">
-      <div class="preset-actions">
-        <button type="button" id="playerPresetBtn" class="search-btn">Open matching search</button>
-      </div>
-      <div class="mapper-card">
-        <h3>Most Related</h3>
-        <div id="mostRelatedContainer">
-          {% if most_related_map %}
-            {% include 'partials/tag_card.html' with beatmap=most_related_map %}
+    <hr/>
+
+    <section class="mapper-stats stats-section">
+      <h2>Mapper Statistics</h2>
+      <div class="chart-container"><canvas id="mapperChart"></canvas></div>
+      <div class="mapper-cards">
+        <div class="mapper-card full-width">
+          <h3>Most Representative</h3>
+          {% if mapper_most_map %}
+            {% include 'partials/tag_card.html' with beatmap=mapper_most_map %}
+          {% else %}
+            <p>No data.</p>
+          {% endif %}
+        </div>
+        <div class="mapper-card full-width">
+          <h3>Least Representative</h3>
+          {% if mapper_least_map %}
+            {% include 'partials/tag_card.html' with beatmap=mapper_least_map %}
           {% else %}
             <p>No data.</p>
           {% endif %}
         </div>
       </div>
+    </section>
+
+    <hr/>
+
+    <section class="player-stats stats-section">
+      <div class="section-header">
+        <h2>Player Statistics</h2>
+        <div class="player-toggle">
+          <label for="playerSource">From:</label>
+          <select id="playerSource">
+            <option value="top" {% if source == 'top' %}selected{% endif %}>Top 100 Plays</option>
+            <option value="fav" {% if source == 'fav' %}selected{% endif %}>Favourites</option>
+          </select>
+        </div>
+      </div>
+      <div class="chart-container"><canvas id="playerChart"></canvas></div>
+      <div class="player-related">
+        <div class="preset-actions">
+          <button type="button" id="playerPresetBtn" class="search-btn">Open matching search</button>
+        </div>
+        <div class="mapper-card">
+          <h3>Most Related</h3>
+          <div id="mostRelatedContainer">
+            {% if most_related_map %}
+              {% include 'partials/tag_card.html' with beatmap=most_related_map %}
+            {% else %}
+              <p>No data.</p>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </section>
+  </section>
+
+  <!-- My Statistics Tab -->
+  <section class="tab-section" data-section="mine" style="display:none;">
+    {% if user.is_authenticated %}
+    <div class="stats-section">
+      <h2>My Statistics</h2>
+      <div class="my-stats-overview">
+        <div class="stat-item"><span class="label">Tag applications</span><span class="value">{{ my_total_applications|default:0 }}</span></div>
+        <div class="stat-item"><span class="label">Maps tagged</span><span class="value">{{ my_maps_tagged_count|default:0 }}</span></div>
+        <div class="stat-item"><span class="label">Avg tags per map</span><span class="value">{{ my_avg_tags_per_map|default:0|floatformat:"2" }}</span></div>
+        <div class="stat-item"><span class="label">Consensus rate</span><span class="value">{{ my_consensus_rate|floatformat:"1" }}%</span></div>
+      </div>
+      <h3>Star Range</h3>
+      <div class="chart-container"><canvas id="myStarChart"></canvas></div>
+      <div class="my-top-mappers" style="margin-top:16px;">
+        <h3>Most-tagged mappers</h3>
+        {% if my_top_mappers %}
+          <ul class="tag-usage-list">
+            {% for row in my_top_mappers %}
+              <li><span class="tag-name">{{ row.listed_owner }}</span><span class="tag-count">{{ row.count }}</span></li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p>No data.</p>
+        {% endif %}
+      </div>
+      <div class="my-tag-usage">
+        <h3>Tags I've used</h3>
+        {% if my_tag_usage %}
+          <ul class="tag-usage-list">
+            {% for row in my_tag_usage %}
+              {% if row.tag__name %}
+              <li><span class="tag-name">{{ row.tag__name }}</span><span class="tag-count">{{ row.c }}</span></li>
+              {% endif %}
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p>No tags applied yet.</p>
+        {% endif %}
+      </div>
     </div>
+    {% else %}
+      <div class="stats-section"><p>Please log in to see your statistics.</p></div>
+    {% endif %}
+  </section>
+
+  <!-- My Tagging Activity Tab -->
+  <section class="tab-section" data-section="activity" style="display:none;">
+    {% if user.is_authenticated %}
+        <h2>My Tagging Activity</h2>
+        {% if my_activity_beatmaps %}
+          {% for beatmap in my_activity_beatmaps %}
+            {% include 'partials/tag_card.html' with beatmap=beatmap %}
+          {% endfor %}
+          <div class="pagination">
+            <span class="step-links">
+              {% if my_activity_page > 1 %}
+                <a href="?tab=activity&my_page=1">&laquo; first</a>
+                <a href="?tab=activity&my_page={{ my_activity_page|add:'-1' }}">previous</a>
+              {% endif %}
+              <span class="current">Page {{ my_activity_page }} of {{ my_activity_total_pages }}.</span>
+              {% if my_activity_page < my_activity_total_pages %}
+                <a href="?tab=activity&my_page={{ my_activity_page|add:'1' }}">next</a>
+                <a href="?tab=activity&my_page={{ my_activity_total_pages }}">last &raquo;</a>
+              {% endif %}
+            </span>
+          </div>
+        {% else %}
+          <p>No recent tagging activity.</p>
+        {% endif %}
+    {% else %}
+      <div class="stats-section"><p>Please log in to see your activity.</p></div>
+    {% endif %}
+  </section>
+
+  <!-- My Search History Tab -->
+  <section class="tab-section" data-section="history" style="display:none;">
+    {% if user.is_authenticated %}
+      <div class="stats-section">
+        {% csrf_token %}
+        <h2>My Search History</h2>
+        <div class="my-saved-searches" style="margin-bottom: 12px;">
+          <h3>Saved Searches</h3>
+          {% if my_saved_searches %}
+          <ul class="tag-usage-list" id="savedSearchList">
+            {% for s in my_saved_searches %}
+              <li class="saved-row" data-saved-id="{{ s.id }}" data-href="/search_results/?{{ s.qs }}">
+                <span class="saved-title-display">
+                  {% if s.title and s.title != 'Search' and s.title != s.query %}{{ s.title }}{% else %}Saved query{% endif %}
+                </span>
+                <button type="button" class="saved-edit-btn mapper-edit-btn" title="Edit title">✎</button>
+                <input type="text" class="saved-title-input" value="{% if s.title and s.title != 'Search' and s.title != s.query %}{{ s.title }}{% else %}Saved query{% endif %}" style="display:none; width:220px; margin-left:6px;">
+                <button type="button" class="saved-save-btn mapper-save-btn" style="display:none;">Save</button>
+                <span class="saved-query-display" style="margin-left:auto; opacity:0.8;">{{ s.query|default:'(no query)' }}</span>
+                <button type="button" class="saved-remove-btn" title="Remove">×</button>
+              </li>
+            {% endfor %}
+          </ul>
+          {% else %}
+            <p>No saved searches yet. Use the star on a recent search below to save it.</p>
+          {% endif %}
+        </div>
+        <div class="my-search-history">
+          <h3>Recent Searches</h3>
+          {% if my_search_history %}
+            <ul class="tag-usage-list" id="historyList">
+              {% for h in my_search_history %}
+                <li class="history-row" data-href="/search_results/?{{ h.qs }}">
+                  <span class="tag-name">{{ h.query|default:'(no query)' }}</span>
+                  <button type="button" class="fav-btn{% if h.saved %} is-starred{% endif %}" data-id="{{ h.id }}">{% if h.saved %}★{% else %}☆{% endif %}</button>
+                </li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <p>No searches yet.</p>
+          {% endif %}
+        </div>
+      </div>
+    {% else %}
+      <div class="stats-section"><p>Please log in to see your search history.</p></div>
+    {% endif %}
   </section>
 
 </div>
@@ -93,43 +238,161 @@
   {{ mapper_click_queries|default:'[]'|json_script:'mapperClickQueries' }}
   {{ player_labels|default:'[]'|json_script:'playerLabels' }}
   {{ player_counts|default:'[]'|json_script:'playerCounts' }}
+  {{ my_star_hist_labels|default:'[]'|json_script:'myStarLabels' }}
+  {{ my_star_hist_counts|default:'[]'|json_script:'myStarCounts' }}
   <script>
     (function(){
+      var cfg = { mapper: { labels: [], data: [], clickQueries: [] }, player: { labels: [], data: [] } };
       try {
-        var mapperLabels = JSON.parse(document.getElementById('mapperLabels').textContent);
-        var mapperCounts = JSON.parse(document.getElementById('mapperCounts').textContent);
-        var mapperClickQueries = JSON.parse(document.getElementById('mapperClickQueries').textContent);
-        var playerLabels = JSON.parse(document.getElementById('playerLabels').textContent);
-        var playerCounts = JSON.parse(document.getElementById('playerCounts').textContent);
-        window.initStatistics && window.initStatistics({
-          mapper: { labels: mapperLabels, data: mapperCounts, clickQueries: mapperClickQueries },
-          player: { labels: playerLabels, data: playerCounts }
-        });
-        // Wire preset button to match current source
-        (function(){
-          var btn = document.getElementById('playerPresetBtn');
-          if (!btn) return;
-          btn.addEventListener('click', function(){
-            var select = document.getElementById('playerSource');
-            var src = select ? select.value : 'top';
-            var url = new URL(window.location.origin + (src === 'fav' ? '/search/preset/new-favorites/' : '/search/preset/farm/'));
-            // pass through selected mode if present on stats page
-            var modeParam = new URLSearchParams(window.location.search).get('mode');
-            if (modeParam) url.searchParams.set('mode', modeParam);
-            // pass resolved user if available or input
-            var userInput = document.querySelector('.stats-form input[name="user"]');
-            var userVal = (userInput && userInput.value) ? userInput.value : (document.querySelector('.resolved') ? ('{{ resolved_username|default:"" }}' || '{{ resolved_user_id|default:"" }}') : '');
-            if (userVal) url.searchParams.set('user', userVal);
-            // preserve include_predicted/status toggles if present in URL
-            var params = new URLSearchParams(window.location.search);
-            ['include_predicted','status_ranked','status_loved','status_unranked','star_min','star_max','sort'].forEach(function(k){
-              var v = params.get(k);
-              if (v) url.searchParams.set(k, v);
-            });
-            window.location.href = url.toString();
+        var el;
+        el = document.getElementById('mapperLabels'); if (el) cfg.mapper.labels = JSON.parse(el.textContent);
+        el = document.getElementById('mapperCounts'); if (el) cfg.mapper.data = JSON.parse(el.textContent);
+        el = document.getElementById('mapperClickQueries'); if (el) cfg.mapper.clickQueries = JSON.parse(el.textContent);
+        el = document.getElementById('playerLabels'); if (el) cfg.player.labels = JSON.parse(el.textContent);
+        el = document.getElementById('playerCounts'); if (el) cfg.player.data = JSON.parse(el.textContent);
+        el = document.getElementById('myStarLabels'); var msl = el ? JSON.parse(el.textContent) : [];
+        el = document.getElementById('myStarCounts'); var msc = el ? JSON.parse(el.textContent) : [];
+        cfg.mine = { starLabels: msl, starCounts: msc };
+      } catch (e) { /* defaults remain */ }
+
+      // Always init tabs, even if JSON parse fails
+      if (window.initStatisticsTabs) {
+        window.initStatisticsTabs(cfg);
+      }
+
+      // Wire preset button to match current source
+      (function(){
+        var btn = document.getElementById('playerPresetBtn');
+        if (!btn) return;
+        btn.addEventListener('click', function(){
+          var select = document.getElementById('playerSource');
+          var src = select ? select.value : 'top';
+          var url = new URL(window.location.origin + (src === 'fav' ? '/search/preset/new-favorites/' : '/search/preset/farm/'));
+          // pass through selected mode if present on stats page
+          var modeParam = new URLSearchParams(window.location.search).get('mode');
+          if (modeParam) url.searchParams.set('mode', modeParam);
+          // pass resolved user if available or input
+          var userInput = document.querySelector('.stats-form input[name="user"]');
+          var userVal = (userInput && userInput.value) ? userInput.value : (document.querySelector('.resolved') ? ('{{ resolved_username|default:"" }}' || '{{ resolved_user_id|default:"" }}') : '');
+          if (userVal) url.searchParams.set('user', userVal);
+          // preserve include_predicted/status toggles if present in URL
+          var params = new URLSearchParams(window.location.search);
+          ['include_predicted','status_ranked','status_loved','status_unranked','star_min','star_max','sort'].forEach(function(k){
+            var v = params.get(k);
+            if (v) url.searchParams.set(k, v);
           });
-        })();
-      } catch (e) {}
+          window.location.href = url.toString();
+        });
+      })();
+
+      // Activity pagination buttons
+      (function(){
+        function go(page){
+          var url = new URL(window.location.href);
+          url.searchParams.set('my_page', String(page));
+          url.searchParams.set('tab', 'activity');
+          window.location.href = url.toString();
+        }
+        var prev = document.getElementById('myActivityPrev');
+        var next = document.getElementById('myActivityNext');
+        if (prev) prev.addEventListener('click', function(){ var p = this.getAttribute('data-go'); if (p) go(p); });
+        if (next) next.addEventListener('click', function(){ var p = this.getAttribute('data-go'); if (p) go(p); });
+      })();
+
+      // Search history actions (DB-backed saved searches) + row navigation
+      (function(){
+        function getCsrf(){
+          var el = document.querySelector('[data-section="history"] input[name="csrfmiddlewaretoken"]');
+          return el ? el.value : '';
+        }
+        document.addEventListener('click', function(e){
+          var t = e.target;
+          if (!t) return;
+          // Ignore clicks on inline inputs in saved rows
+          if (t.tagName === 'INPUT' && t.classList && t.classList.contains('saved-title-input')) { return; }
+          // Handle star toggle first
+          if (t.classList && t.classList.contains('fav-btn')){
+            var id = t.getAttribute('data-id'); if (!id) return;
+            fetch('/search/saved/toggle/', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'history_id=' + encodeURIComponent(id) + '&csrfmiddlewaretoken=' + encodeURIComponent(getCsrf()) })
+              .then(function(r){ return r.json(); })
+              .then(function(payload){
+                if (!payload) return;
+                // Toggle star
+                t.textContent = (payload.saved ? '★' : '☆');
+                if (payload.saved) { t.classList.add('is-starred'); } else { t.classList.remove('is-starred'); }
+                // If saved, append to saved list quickly
+                if (payload.saved && payload.saved_id) {
+                  var list = document.getElementById('savedSearchList');
+                  if (list){
+                    var srcLi = t.closest && t.closest('li');
+                    var item = document.createElement('li');
+                    item.className = 'saved-row';
+                    item.setAttribute('data-saved-id', String(payload.saved_id));
+                    item.setAttribute('data-href', srcLi ? srcLi.getAttribute('data-href') : '/search_results/');
+                    var title = payload.title || 'Saved query';
+                    item.innerHTML = '<span class="saved-title-display">' + title + '</span>'+
+                                     '<button type="button" class="saved-edit-btn mapper-edit-btn" title="Edit title">✎</button>'+
+                                     '<input type="text" class="saved-title-input" value="' + (title || 'Saved query') + '" style="display:none; width:220px; margin-left:6px;">'+
+                                     '<button type="button" class="saved-save-btn mapper-save-btn" style="display:none;">Save</button>'+
+                                     '<span class="saved-query-display" style="margin-left:auto; opacity:0.8;">' + (srcLi ? (srcLi.querySelector('.tag-name')?.textContent || '') : '') + '</span>'+
+                                     '<button type="button" class="saved-remove-btn" title="Remove">×</button>';
+                    list.insertBefore(item, list.firstChild);
+                  }
+                }
+                // If unsaved, remove matching saved item by href
+                if (payload.saved === false) {
+                  try {
+                    var src = t.closest && t.closest('li');
+                    var href = src ? src.getAttribute('data-href') : null;
+                    if (href) {
+                      var toRemove = document.querySelector('#savedSearchList li.saved-row[data-href="' + href.replace(/"/g, '\\"') + '"]');
+                      if (toRemove && toRemove.parentNode) { toRemove.parentNode.removeChild(toRemove); }
+                    }
+                  } catch (e) {}
+                }
+              });
+            return;
+          }
+          // Handle saved search title edit toggle
+          if (t.classList && t.classList.contains('saved-edit-btn')){
+            var li = t.closest('li'); if (!li) return;
+            li.querySelector('.saved-title-display').style.display = 'none';
+            li.querySelector('.saved-edit-btn').style.display = 'none';
+            li.querySelector('.saved-title-input').style.display = '';
+            li.querySelector('.saved-save-btn').style.display = '';
+            return;
+          }
+          // Handle saved search title save
+          if (t.classList && t.classList.contains('saved-save-btn')){
+            var li2 = t.closest('li'); if (!li2) return;
+            var sid = li2.getAttribute('data-saved-id'); if (!sid) return;
+            var val = li2.querySelector('.saved-title-input').value || 'Saved query';
+            fetch('/search/saved/update-title/', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'saved_id=' + encodeURIComponent(sid) + '&title=' + encodeURIComponent(val) + '&csrfmiddlewaretoken=' + encodeURIComponent(getCsrf()) })
+              .then(function(){
+                li2.querySelector('.saved-title-display').textContent = val;
+                li2.querySelector('.saved-title-display').style.display = '';
+                li2.querySelector('.saved-edit-btn').style.display = '';
+                li2.querySelector('.saved-title-input').style.display = 'none';
+                li2.querySelector('.saved-save-btn').style.display = 'none';
+              });
+            return;
+          }
+          // Remove saved search via X button
+          if (t.classList && t.classList.contains('saved-remove-btn')){
+            var li4 = t.closest('li'); if (!li4) return;
+            var sid2 = li4.getAttribute('data-saved-id'); if (!sid2) return;
+            fetch('/search/saved/delete/', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'saved_id=' + encodeURIComponent(sid2) + '&csrfmiddlewaretoken=' + encodeURIComponent(getCsrf()) })
+              .then(function(){ if (li4 && li4.parentNode) { li4.parentNode.removeChild(li4); } });
+            return;
+          }
+          // Row navigation for saved list and history list (after handling button clicks)
+          var li3 = t.closest && t.closest('li');
+          if (li3 && (li3.classList.contains('saved-row') || li3.classList.contains('history-row'))){
+            var href = li3.getAttribute('data-href');
+            if (href){ window.location.href = href; return; }
+          }
+        });
+      })();
     })();
   </script>
 {% endblock %}

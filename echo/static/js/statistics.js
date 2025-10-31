@@ -166,6 +166,8 @@ function initMyCharts(mineCfg) {
   try {
     var labels = (mineCfg && mineCfg.starLabels) || [];
     var data = (mineCfg && mineCfg.starCounts) || [];
+    var maxY = 0;
+    try { maxY = Math.max.apply(null, (data || []).map(function(v){ return Number(v) || 0; })); } catch (e) { maxY = 0; }
     var canvas = document.getElementById('myStarChart');
     if (!canvas || !labels.length) return;
     new Chart(canvas.getContext('2d'), {
@@ -184,8 +186,13 @@ function initMyCharts(mineCfg) {
         responsive: true,
         maintainAspectRatio: false,
         scales: {
-          y: { beginAtZero: true, ticks: { precision: 0 } },
-          x: { ticks: { autoSkip: true, maxTicksLimit: 20 } }
+          y: {
+            beginAtZero: true,
+            ticks: { precision: 0 },
+            suggestedMax: (maxY > 0) ? (maxY + Math.ceil(maxY * 0.1)) : undefined,
+            grace: '10%'
+          },
+          x: { ticks: { autoSkip: true } }
         }
       }
     });

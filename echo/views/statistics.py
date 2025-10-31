@@ -273,9 +273,17 @@ def statistics(request: HttpRequest):
 
             # Star histogram (0.25 bins) over distinct maps you've tagged
             # Cap at 15.0 and group anything >= 14.75 into the last ("14.75+") bin
-            stars = list(
-                Beatmap.objects.filter(tagapplication__user=request.user, tagapplication__true_negative=False)
+            # Important: count DISTINCT BEATMAPS, not distinct star values.
+            # First get distinct beatmap ids you've tagged, then fetch their stars.
+            id_list = list(
+                TagApplication.objects
+                .filter(user=request.user, true_negative=False)
+                .values_list('beatmap_id', flat=True)
                 .distinct()
+            )
+            stars = list(
+                Beatmap.objects
+                .filter(id__in=id_list)
                 .values_list('difficulty_rating', flat=True)
             )
             stars = [float(s) for s in stars if s is not None]

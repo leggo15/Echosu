@@ -102,10 +102,13 @@
   var myChartsInitialized = false;
   var globalChartsInitialized = false;
   var latestPollTimer = null;
+  var latestPollBusy = false;
 
   function startLatestPoll() {
     if (latestPollTimer) return;
     function tick(){
+      if (latestPollBusy) return;
+      latestPollBusy = true;
       try {
         var sec = document.querySelector('.tab-section.is-active');
         if (!sec || sec.getAttribute('data-section') !== 'latest') return;
@@ -115,6 +118,7 @@
             if (!payload || !payload.html) return;
             var list = document.getElementById('latestMapsList');
             if (!list) return;
+            if (window.TagManager && typeof window.TagManager.clearTagCache === 'function') { try { window.TagManager.clearTagCache(); } catch(e) {} }
             // Preserve heading
             var head = list.querySelector('h2');
             list.innerHTML = '';
@@ -124,11 +128,11 @@
             while (wrapper.firstChild) { list.appendChild(wrapper.firstChild); }
             if (window.initAudioDefaults) { window.initAudioDefaults(list); }
             if (window.initTaggingFor) { window.initTaggingFor(list); }
-          });
-      } catch (e) {}
+          })
+          .finally(function(){ latestPollBusy = false; });
+      } catch (e) { latestPollBusy = false; }
     }
-    // Initial fetch quickly, then interval
-    tick();
+    // Start after a short delay to avoid racing initial page render
     latestPollTimer = setInterval(function(){ if (!document.hidden) tick(); }, 30000);
   }
 

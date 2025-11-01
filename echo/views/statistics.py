@@ -276,26 +276,27 @@ def statistics(request: HttpRequest):
                 return [], []
             bin_w = 0.25
             upper_cap = 15.0
-            last_bin_start = upper_cap - bin_w
+            last_bin_start = upper_cap - bin_w  # 14.75
             s_min = min(stars_list)
             start_val = bin_w * math.floor(max(0.0, s_min) / bin_w)
-            num_bins = int(round((last_bin_start - start_val) / bin_w)) + 1
-            if num_bins < 1:
-                num_bins = 1
+            # Bins up to and including 14.75, plus an overflow bin for 15.00+
+            num_base = int(round((last_bin_start - start_val) / bin_w)) + 1
+            if num_base < 1:
+                num_base = 1
                 start_val = last_bin_start
-            bins = [0] * num_bins
+            bins = [0] * (num_base + 1)  # extra overflow at the end
             for s in stars_list:
-                if s >= last_bin_start:
-                    idx = num_bins - 1
+                if s >= upper_cap:
+                    idx = num_base  # overflow bin (15.00+)
                 else:
                     idx = int(math.floor((s - start_val) / bin_w))
                     if idx < 0:
                         idx = 0
-                    if idx >= num_bins:
-                        idx = num_bins - 1
+                    if idx >= num_base:
+                        idx = num_base - 1
                 bins[idx] += 1
-            labels = [f"{(start_val + i * bin_w):.2f}" for i in range(num_bins)]
-            labels[-1] = f"{last_bin_start:.2f}+"
+            labels = [f"{(start_val + i * bin_w):.2f}" for i in range(num_base)]
+            labels.append(f"{upper_cap:.2f}+")
             return labels, bins
 
         # Global star distribution over ALL maps in DB (not only tagged)
@@ -420,25 +421,24 @@ def statistics(request: HttpRequest):
                 s_min = min(stars)
                 start_val = bin_w * math.floor(max(0.0, s_min) / bin_w)
                 # Number of bins from start_val up to and including [14.75, 15.0]
-                num_bins = int(round((last_bin_start - start_val) / bin_w)) + 1
-                if num_bins < 1:
-                    # If all data are >= 14.75, show a single aggregated bin
-                    num_bins = 1
+                num_base = int(round((last_bin_start - start_val) / bin_w)) + 1
+                if num_base < 1:
+                    # If all data are >= 14.75, show that base bin plus overflow
+                    num_base = 1
                     start_val = last_bin_start
-                bins = [0] * num_bins
+                bins = [0] * (num_base + 1)  # extra overflow bin for 15.00+
                 for s in stars:
-                    if s >= last_bin_start:
-                        idx = num_bins - 1
+                    if s >= upper_cap:
+                        idx = num_base  # overflow
                     else:
                         idx = int(math.floor((s - start_val) / bin_w))
                         if idx < 0:
                             idx = 0
-                        if idx >= num_bins:
-                            idx = num_bins - 1
+                        if idx >= num_base:
+                            idx = num_base - 1
                     bins[idx] += 1
-                labels = [f"{(start_val + i * bin_w):.2f}" for i in range(num_bins)]
-                # Replace final label with 14.75+
-                labels[-1] = f"{last_bin_start:.2f}+"
+                labels = [f"{(start_val + i * bin_w):.2f}" for i in range(num_base)]
+                labels.append(f"{upper_cap:.2f}+")
                 my_star_hist_counts = bins
                 my_star_hist_labels = labels
 

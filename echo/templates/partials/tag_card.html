@@ -213,7 +213,22 @@
               <span>Log in to apply or create tags.</span>
             {% endif %}
           </div>
-          <div class="applied-tags" role="list" aria-label="Applied tags">Tags:</div>
+          <div class="applied-tags" role="list" aria-label="Applied tags">
+            Tags:
+            {% if beatmap.tags_with_counts %}
+              {% for tag_info in beatmap.tags_with_counts %}
+                <span class="tag {% if tag_info.is_applied_by_user %}tag-applied{% else %}tag-unapplied{% endif %}"
+                  data-tag-name="{{ tag_info.tag.name }}"
+                  data-applied-by-user="{{ tag_info.is_applied_by_user }}"
+                  data-beatmap-id="{{ beatmap.beatmap_id }}"
+                  {% if tag_info.tag.category %}data-category="{{ tag_info.tag.category }}"{% endif %}
+                  {% if tag_info.tag.description %}data-description="{{ tag_info.tag.description|escapejs }}" data-description-author="{{ tag_info.tag.description_author|default_if_none:''|escapejs }}"{% endif %}
+                >
+                  {{ tag_info.tag.name }}{% if tag_info.apply_count %} ({{ tag_info.apply_count }}){% endif %}
+                </span>
+              {% endfor %}
+            {% endif %}
+          </div>
         </div>
         {% if request.path == '/' or request.path == '/search_results/' %}
           {% if sort == 'tag_weight' %}

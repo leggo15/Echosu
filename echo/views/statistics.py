@@ -471,7 +471,14 @@ def statistics(request: HttpRequest):
             my_activity_total_pages = max(1, int(math.ceil(total_groups / float(page_size))))
             offset = (my_activity_page - 1) * page_size
             ids = list(activity_qs.values_list('beatmap_id', flat=True)[offset:offset + page_size])
-            bm_by_id = {bm.id: bm for bm in Beatmap.objects.filter(id__in=ids)}
+            # Pre-annotate with tags so server-side fallback in tag_card can render immediately
+            bm_qs = Beatmap.objects.filter(id__in=ids)
+            try:
+                from .search import annotate_search_results_with_tags
+                annotate_search_results_with_tags(bm_qs, request.user, include_predicted_toggle=True)
+            except Exception:
+                pass
+            bm_by_id = {bm.id: bm for bm in bm_qs}
             my_activity_beatmaps = [bm_by_id[i] for i in ids if i in bm_by_id]
             # Light-weight display extras only (avoid PP compute for responsiveness)
             for bm in my_activity_beatmaps:
@@ -565,13 +572,18 @@ def statistics(request: HttpRequest):
 
     # Latest maps (default tab): newest entries by DB insert order
     # Skip maps with no tags (predicted or user-applied) and avoid heavy PP computation here
-    latest_maps = list(
+    latest_maps = (
         Beatmap.objects
         .filter(tagapplication__true_negative=False)
+        .prefetch_related('genres')
         .order_by('-id')
         .distinct()[:10]
-        .prefetch_related('genres')
     )
+    try:
+        from .search import annotate_search_results_with_tags
+        annotate_search_results_with_tags(latest_maps, request.user, include_predicted_toggle=True)
+    except Exception:
+        pass
 
     # Render template
     return render(
@@ -659,13 +671,18 @@ def statistics_player_data(request: HttpRequest):
 def statistics_latest_maps(request: HttpRequest):
     """AJAX endpoint: return the 10 latest maps (with any positive tags) as HTML cards."""
     try:
-        latest_maps = list(
+        latest_maps = (
             Beatmap.objects
             .filter(tagapplication__true_negative=False)
+            .prefetch_related('genres')
             .order_by('-id')
             .distinct()[:10]
-            .prefetch_related('genres')
         )
+        try:
+            from .search import annotate_search_results_with_tags
+            annotate_search_results_with_tags(latest_maps, request.user, include_predicted_toggle=True)
+        except Exception:
+            pass
         html_parts: list[str] = []
         for bm in latest_maps:
             try:

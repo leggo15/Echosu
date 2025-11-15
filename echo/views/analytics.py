@@ -37,6 +37,9 @@ def log_search_event(request: HttpRequest):
 
 	client_id = _get_client_id(request)
 	query = (payload.get('query') or '')[:1000]
+	# Ignore empty-query searches entirely for analytics (no log, no graphs)
+	if not (query or '').strip():
+		return JsonResponse({'ok': False})
 	tags = payload.get('tags')
 	if tags is not None and not isinstance(tags, (list, dict)):
 		try:

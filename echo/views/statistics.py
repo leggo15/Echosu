@@ -723,7 +723,12 @@ def statistics_latest_searches(request: HttpRequest):
     try:
         if not getattr(request.user, 'is_staff', False):
             return JsonResponse({ 'html': '' }, status=403)
-        events = AnalyticsSearchEvent.objects.order_by('-created_at')[:15]
+        events = (
+            AnalyticsSearchEvent.objects
+            .exclude(query__isnull=True)
+            .exclude(query__exact='')
+            .order_by('-created_at')[:15]
+        )
         html = render_to_string('partials/admin_search_log.html', {'events': events}, request=request)
         return JsonResponse({ 'html': html })
     except Exception:
@@ -754,7 +759,13 @@ def statistics_admin_data(request: HttpRequest):
             hour_labels.append(start.strftime('%H:%M'))
             # Searches
             try:
-                c = AnalyticsSearchEvent.objects.filter(created_at__gte=start, created_at__lt=end).count()
+                c = (
+                    AnalyticsSearchEvent.objects
+                    .filter(created_at__gte=start, created_at__lt=end)
+                    .exclude(query__isnull=True)
+                    .exclude(query__exact='')
+                    .count()
+                )
             except Exception:
                 c = 0
             hour_search_counts.append(int(c))
@@ -786,7 +797,13 @@ def statistics_admin_data(request: HttpRequest):
             end = start + timezone.timedelta(days=1)
             day_labels.append(start.strftime('%Y-%m-%d'))
             try:
-                c = AnalyticsSearchEvent.objects.filter(created_at__gte=start, created_at__lt=end).count()
+                c = (
+                    AnalyticsSearchEvent.objects
+                    .filter(created_at__gte=start, created_at__lt=end)
+                    .exclude(query__isnull=True)
+                    .exclude(query__exact='')
+                    .count()
+                )
             except Exception:
                 c = 0
             day_search_counts.append(int(c))

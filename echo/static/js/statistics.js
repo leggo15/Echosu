@@ -164,6 +164,17 @@
             div.innerHTML = payload.html;
           })
           .finally(function(){ adminLatestBusy = false; });
+
+        // Button events log (independent; do not gate busy flag on this)
+        fetch('/statistics/latest-clicks/', { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+          .then(function(r){ return r.json(); })
+          .then(function(payload){
+            if (!payload || !payload.html) return;
+            var div2 = document.getElementById('adminLatestClicks');
+            if (!div2) return;
+            div2.innerHTML = payload.html;
+          })
+          .catch(function(){ /* ignore */ });
       } catch (e) { adminLatestBusy = false; }
     }
     adminLatestTimer = setInterval(function(){ if (!document.hidden) tick(); }, 30000);
@@ -213,22 +224,36 @@
         adminCharts.uniques.data.datasets[0].data = u.counts || [];
         adminCharts.uniques.update();
       }
-      // Average clicks per action per day (tiles styled like global stats)
+      // Per-button tiles: last used + total uses in last 30 days
       var container = document.getElementById('adminAvgClicksOverview');
       if (container) {
         container.innerHTML = '';
-        var stats = adminDataCache.avg_clicks_per_action_per_day || {};
-        var actions = Object.keys(stats).sort();
+        var counts = adminDataCache.click_counts_30d || {};
+        var lastUsed = adminDataCache.last_used_per_action || {};
+        var keysMap = {};
+        Object.keys(counts || {}).forEach(function(k){ keysMap[k] = true; });
+        Object.keys(lastUsed || {}).forEach(function(k){ keysMap[k] = true; });
+        var actions = Object.keys(keysMap).sort();
         if (!actions.length) {
           var empty = document.createElement('p');
           empty.textContent = 'No data.';
           container.appendChild(empty);
         } else {
           actions.forEach(function(a){
-            var val = Math.round((stats[a] || 0) * 100) / 100;
+            var total = counts[a] || 0;
+            var raw = lastUsed[a];
+            var display = '-';
+            if (raw) {
+              try { display = new Date(raw).toLocaleDateString(); } catch (e) { display = raw; }
+            }
             var tile = document.createElement('div');
             tile.className = 'stat-item';
-            tile.innerHTML = '<span class="label">' + a + '</span><span class="value">' + val + '</span>';
+            tile.innerHTML =
+              '<span class="label">' + a + '</span>' +
+              '<span class="value">' +
+                '<span class="usage-count">' + total + '</span>' +
+                '<span class="usage-date" style="margin-left:8px; font-size:0.8em; opacity:0.75;">' + display + '</span>' +
+              '</span>';
             container.appendChild(tile);
           });
         }

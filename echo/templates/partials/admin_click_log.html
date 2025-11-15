@@ -1,0 +1,14 @@
+<ul class="tag-usage-list admin-click-log">
+  {% for e in events %}
+    <li class="admin-click-row">
+      <span class="tag-name">{{ e.action|default:"(unknown action)" }}</span>
+      <span class="tag-count" title="{{ e.created_at|date:'Y-m-d H:i' }}">
+        {{ e.created_at|date:"Y-m-d H:i" }}
+      </span>
+    </li>
+  {% empty %}
+    <li>No button events yet.</li>
+  {% endfor %}
+</ul>
+
+

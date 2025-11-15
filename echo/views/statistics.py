@@ -735,6 +735,21 @@ def statistics_latest_searches(request: HttpRequest):
         return JsonResponse({ 'html': '' })
 
 
+def statistics_latest_clicks(request: HttpRequest):
+    """AJAX endpoint: return the latest 15 click events as HTML (staff only)."""
+    try:
+        if not getattr(request.user, 'is_staff', False):
+            return JsonResponse({ 'html': '' }, status=403)
+        events = (
+            AnalyticsClickEvent.objects
+            .order_by('-created_at')[:15]
+        )
+        html = render_to_string('partials/admin_click_log.html', {'events': events}, request=request)
+        return JsonResponse({ 'html': html })
+    except Exception:
+        return JsonResponse({ 'html': '' })
+
+
 def _hour_floor(dt):
     return dt.replace(minute=0, second=0, microsecond=0, tzinfo=dt.tzinfo)
 
@@ -834,10 +849,29 @@ def statistics_admin_data(request: HttpRequest):
             .annotate(c=Count('id'))
         )
         avg_clicks = {}
+        click_counts_30d = {}
         for r in rows:
             a = r.get('action') or ''
             cnt = int(r.get('c') or 0)
             avg_clicks[a] = float(cnt) / 30.0
+            click_counts_30d[a] = cnt
+
+        # Last used timestamp per action (all time)
+        click_last_rows = (
+            AnalyticsClickEvent.objects
+            .values('action')
+            .annotate(last_ts=Max('created_at'))
+        )
+        last_used_per_action = {}
+        for r in click_last_rows:
+            a = r.get('action') or ''
+            ts = r.get('last_ts')
+            if not a or not ts:
+                continue
+            try:
+                last_used_per_action[a] = ts.isoformat()
+            except Exception:
+                continue
 
         # Top 25 searched tags (last 90 days for performance)
         tags_since = now - timezone.timedelta(days=90)
@@ -868,6 +902,8 @@ def statistics_admin_data(request: HttpRequest):
                 'day': { 'labels': day_labels, 'counts': day_unique_counts },
             },
             'avg_clicks_per_action_per_day': avg_clicks,
+            'click_counts_30d': click_counts_30d,
+            'last_used_per_action': last_used_per_action,
             'top_tags': top_tags,
         })
     except Exception:

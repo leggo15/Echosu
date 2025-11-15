@@ -118,6 +118,20 @@
     initBulkDownloadTracking();
     initPaginationTracking();
     initUserMenuTracking();
+    // Preset search buttons on search_results page
+    try {
+      var presets = document.querySelectorAll('.preset-button');
+      presets.forEach(function(btn){
+        btn.addEventListener('click', function(){
+          var label = (btn.textContent || '').trim().toLowerCase();
+          var action = null;
+          if (label.indexOf('farm') !== -1) action = 'preset_farm_maps';
+          else if (label.indexOf('favorites') !== -1) action = 'preset_favorites';
+          if (!action) return;
+          postClick(action, null, null);
+        });
+      });
+    } catch (e) {}
   }
 
   if (document.readyState === 'loading') {

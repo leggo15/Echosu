@@ -84,6 +84,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'echo.middleware.APILoggingMiddleware',
+    'echo.middleware.AnonymousAnalyticsMiddleware',
 ]
 
 AUTHENTICATION_BACKENDS = [

@@ -17,6 +17,9 @@
     <button class="tab-button" type="button" data-tab="mine">My Statistics</button>
     <button class="tab-button" type="button" data-tab="activity">My Tagging Activity</button>
     <button class="tab-button" type="button" data-tab="history">My Search History</button>
+    {% if user.is_staff %}
+    <button class="tab-button" type="button" data-tab="admin">Admin</button>
+    {% endif %}
   </div>
 
   <!-- Global Statistics Tab -->
@@ -259,6 +262,73 @@
       <div class="stats-section"><p>Please log in to see your search history.</p></div>
     {% endif %}
   </section>
+
+  {% if user.is_staff %}
+  <!-- Admin Analytics Tab -->
+  <section class="tab-section" data-section="admin" style="display:none;">
+    <div class="stats-section">
+      <h2>Admin Analytics</h2>
+      <div class="admin-charts">
+        <div class="chart-block">
+          <div class="section-header" style="display:flex; align-items:center; gap:12px;">
+            <h3 style="margin:0;">Searches</h3>
+            <label for="adminSearchPeriod">Period:</label>
+            <select id="adminSearchPeriod">
+              <option value="hour" selected>Last 24h (hourly)</option>
+              <option value="day">Last 30d (daily)</option>
+            </select>
+          </div>
+          <div class="chart-container"><canvas id="adminSearchesChart"></canvas></div>
+        </div>
+        <div class="chart-block" style="margin-top:16px;">
+          <div class="section-header" style="display:flex; align-items:center; gap:12px;">
+            <h3 style="margin:0;">Unique Users</h3>
+            <label for="adminUniquesPeriod">Period:</label>
+            <select id="adminUniquesPeriod">
+              <option value="hour" selected>Last 24h (hourly)</option>
+              <option value="day">Last 30d (daily)</option>
+            </select>
+          </div>
+          <div class="chart-container"><canvas id="adminUniquesChart"></canvas></div>
+        </div>
+      </div>
+      <div class="admin-stats" style="margin-top:16px;">
+        <h3>Average clicks per action per day (last 30 days)</h3>
+        <div class="my-stats-overview" id="adminAvgClicksOverview">
+          <!-- Filled dynamically by statistics.js -->
+        </div>
+      </div>
+    </div>
+    <div class="stats-section" style="margin-top:16px;">
+      <h3>Latest 15 searches</h3>
+      <div id="adminLatestSearches">
+        <p>Loading…</p>
+      </div>
+    </div>
+    <div class="stats-section" style="margin-top:16px;">
+      <h3>Top 25 searched tags (last 90 days)</h3>
+      <div class="my-stats-overview" id="adminTopTags"></div>
+    </div>
+    <div class="stats-section" style="margin-top:16px;">
+      <h3>Tag usage details</h3>
+      <form id="adminTagForm" class="stats-form" style="margin-bottom:12px;">
+        <div class="search-row">
+          <input type="text" id="adminTagInput" placeholder="Enter tag name..." aria-label="Tag name">
+          <button type="submit">Load Tag</button>
+        </div>
+      </form>
+      <div class="chart-block" style="margin-bottom:8px;">
+        <label for="adminTagPeriod">Period:</label>
+        <select id="adminTagPeriod">
+          <option value="hour" selected>Last 24h (hourly)</option>
+          <option value="day">Last 30d (daily)</option>
+        </select>
+      </div>
+      <div class="chart-container"><canvas id="adminTagChart"></canvas></div>
+      <div class="my-stats-overview" id="adminTagStats" style="margin-top:12px;"></div>
+    </div>
+  </section>
+  {% endif %}
 
 </div>
 {% endblock %}

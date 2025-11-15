@@ -1,6 +1,7 @@
 from django.db import models
 from django.conf import settings
 from django.db.models import Count
+import uuid
 
 class Genre(models.Model):
     name = models.CharField(max_length=255, unique=True)
@@ -421,3 +422,56 @@ class SavedSearch(models.Model):
             return f"SavedSearch({self.user.username}): {self.title}"
         except Exception:
             return "SavedSearch"
+
+
+# ----------------------------- Anonymous Analytics ----------------------------- #
+class AnalyticsSearchEvent(models.Model):
+    """
+    Anonymous search event used for usage analytics.
+    - Does NOT store user id or username.
+    - Links events by a random client_id cookie that is not associated with accounts.
+    """
+    event_id = models.UUIDField(default=uuid.uuid4, editable=False, db_index=True)
+    client_id = models.CharField(max_length=64, null=True, blank=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    query = models.TextField(blank=True, default='')
+    tags = models.JSONField(null=True, blank=True)
+    results_count = models.IntegerField(null=True, blank=True)
+    sort = models.CharField(max_length=32, blank=True, default='', db_index=True)
+    predicted_mode = models.CharField(max_length=16, blank=True, default='', db_index=True)
+    flags = models.JSONField(null=True, blank=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['created_at']),
+            models.Index(fields=['client_id', 'created_at']),
+            models.Index(fields=['sort', 'created_at']),
+            models.Index(fields=['predicted_mode', 'created_at']),
+        ]
+
+    def __str__(self):
+        return f"SearchEvent {self.event_id} ({self.created_at.isoformat()})"
+
+
+class AnalyticsClickEvent(models.Model):
+    """
+    Anonymous UI interaction within search results.
+    - Does NOT store user id or username.
+    - Optionally references a prior AnalyticsSearchEvent via its UUID (event_id).
+    """
+    client_id = models.CharField(max_length=64, null=True, blank=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    action = models.CharField(max_length=64, db_index=True)
+    beatmap_id = models.CharField(max_length=64, null=True, blank=True, db_index=True)
+    search_event_id = models.UUIDField(null=True, blank=True, db_index=True)
+    meta = models.JSONField(null=True, blank=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['created_at']),
+            models.Index(fields=['client_id', 'created_at']),
+            models.Index(fields=['action', 'created_at']),
+        ]
+
+    def __str__(self):
+        return f"Click({self.action}) at {self.created_at.isoformat()}"

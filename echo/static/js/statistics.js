@@ -103,6 +103,13 @@
   var globalChartsInitialized = false;
   var latestPollTimer = null;
   var latestPollBusy = false;
+  var adminChartsInitialized = false;
+  var adminLatestTimer = null;
+  var adminLatestBusy = false;
+  var adminHourlyTimer = null;
+  var adminCharts = { searches: null, uniques: null };
+  var adminDataCache = null;
+  var adminTagCache = null;
 
   function startLatestPoll() {
     if (latestPollTimer) return;
@@ -138,6 +145,218 @@
 
   function stopLatestPoll() {
     if (latestPollTimer) { clearInterval(latestPollTimer); latestPollTimer = null; }
+  }
+
+  function startAdminLatestPoll() {
+    if (adminLatestTimer) return;
+    function tick(){
+      if (adminLatestBusy) return;
+      adminLatestBusy = true;
+      try {
+        var sec = document.querySelector('.tab-section.is-active');
+        if (!sec || sec.getAttribute('data-section') !== 'admin') return;
+        fetch('/statistics/latest-searches/', { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+          .then(function(r){ return r.json(); })
+          .then(function(payload){
+            if (!payload || !payload.html) return;
+            var div = document.getElementById('adminLatestSearches');
+            if (!div) return;
+            div.innerHTML = payload.html;
+          })
+          .finally(function(){ adminLatestBusy = false; });
+      } catch (e) { adminLatestBusy = false; }
+    }
+    adminLatestTimer = setInterval(function(){ if (!document.hidden) tick(); }, 30000);
+    // Initial tick
+    setTimeout(function(){ if (!document.hidden) tick(); }, 100);
+  }
+
+  function stopAdminLatestPoll() {
+    if (adminLatestTimer) { clearInterval(adminLatestTimer); adminLatestTimer = null; }
+  }
+
+  function fetchAdminData(){
+    return fetch('/statistics/admin-data/', { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+      .then(function(r){ return r.json(); })
+      .catch(function(){ return null; });
+  }
+
+  function renderBar(canvasId, labels, data, label, color){
+    var canvas = document.getElementById(canvasId);
+    if (!canvas) return null;
+    var ctx = canvas.getContext('2d');
+    return new Chart(ctx, {
+      type: 'bar',
+      data: { labels: labels, datasets: [{ label: label || '', data: data || [], backgroundColor: color || 'rgba(99, 132, 255, 0.5)', borderColor: color ? color.replace('0.5','1') : 'rgba(99, 132, 255, 1)', borderWidth: 1 }] },
+      options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
+    });
+  }
+
+  function updateAdminCharts(){
+    if (!adminDataCache) return;
+    try {
+      var periodSearch = (document.getElementById('adminSearchPeriod') || {}).value || 'hour';
+      var periodUniques = (document.getElementById('adminUniquesPeriod') || {}).value || 'hour';
+      var s = (adminDataCache.searches && adminDataCache.searches[periodSearch]) || { labels: [], counts: [] };
+      var u = (adminDataCache.uniques && adminDataCache.uniques[periodUniques]) || { labels: [], counts: [] };
+      if (!adminCharts.searches) {
+        adminCharts.searches = renderBar('adminSearchesChart', s.labels, s.counts, 'Searches', 'rgba(54, 162, 235, 0.5)');
+      } else {
+        adminCharts.searches.data.labels = s.labels || [];
+        adminCharts.searches.data.datasets[0].data = s.counts || [];
+        adminCharts.searches.update();
+      }
+      if (!adminCharts.uniques) {
+        adminCharts.uniques = renderBar('adminUniquesChart', u.labels, u.counts, 'Unique users', 'rgba(255, 159, 64, 0.5)');
+      } else {
+        adminCharts.uniques.data.labels = u.labels || [];
+        adminCharts.uniques.data.datasets[0].data = u.counts || [];
+        adminCharts.uniques.update();
+      }
+      // Average clicks per action per day (tiles styled like global stats)
+      var container = document.getElementById('adminAvgClicksOverview');
+      if (container) {
+        container.innerHTML = '';
+        var stats = adminDataCache.avg_clicks_per_action_per_day || {};
+        var actions = Object.keys(stats).sort();
+        if (!actions.length) {
+          var empty = document.createElement('p');
+          empty.textContent = 'No data.';
+          container.appendChild(empty);
+        } else {
+          actions.forEach(function(a){
+            var val = Math.round((stats[a] || 0) * 100) / 100;
+            var tile = document.createElement('div');
+            tile.className = 'stat-item';
+            tile.innerHTML = '<span class="label">' + a + '</span><span class="value">' + val + '</span>';
+            container.appendChild(tile);
+          });
+        }
+      }
+
+      // Top 25 searched tags
+      var topTagsContainer = document.getElementById('adminTopTags');
+      if (topTagsContainer) {
+        topTagsContainer.innerHTML = '';
+        var topTags = adminDataCache.top_tags || [];
+        if (!topTags.length) {
+          var msg = document.createElement('p');
+          msg.textContent = 'No data.';
+          topTagsContainer.appendChild(msg);
+        } else {
+          topTags.forEach(function(row){
+            var tile = document.createElement('div');
+            tile.className = 'stat-item';
+            tile.innerHTML = '<span class="label">' + row.name + '</span><span class="value">' + row.count + '</span>';
+            topTagsContainer.appendChild(tile);
+          });
+        }
+      }
+    } catch (e) {}
+  }
+
+  function fetchAdminTagData(tag){
+    var url = new URL(window.location.origin + '/statistics/admin-tag/');
+    url.searchParams.set('tag', tag || '');
+    return fetch(url.toString(), { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+      .then(function(r){ return r.json(); })
+      .catch(function(){ return null; });
+  }
+
+  var adminTagChart = null;
+
+  function updateAdminTagView(){
+    if (!adminTagCache) return;
+    try {
+      var period = (document.getElementById('adminTagPeriod') || {}).value || 'hour';
+      var s = (adminTagCache.searches && adminTagCache.searches[period]) || { labels: [], counts: [] };
+      var labels = s.labels || [];
+      var data = s.counts || [];
+
+      var canvas = document.getElementById('adminTagChart');
+      if (canvas) {
+        if (!adminTagChart) {
+          adminTagChart = renderBar('adminTagChart', labels, data, 'Tag searches', 'rgba(153, 102, 255, 0.5)');
+        } else {
+          adminTagChart.data.labels = labels;
+          adminTagChart.data.datasets[0].data = data;
+          adminTagChart.update();
+        }
+      }
+
+      var statsContainer = document.getElementById('adminTagStats');
+      if (statsContainer) {
+        statsContainer.innerHTML = '';
+        var totals = adminTagCache.totals || {};
+        var ct = adminTagCache.click_through || {};
+        var tiles = [
+          { label: 'Searches (all time)', value: totals.searches_all_time },
+          { label: 'Searches (last 30d)', value: totals.searches_last_30d },
+          { label: 'Avg searches/day (30d)', value: (Math.round((totals.avg_searches_per_day_30d || 0) * 100) / 100) },
+          { label: 'Unique users (all time)', value: totals.unique_users_all_time },
+          { label: 'Unique users (last 30d)', value: totals.unique_users_last_30d },
+          { label: 'Avg unique/day (30d)', value: (Math.round((totals.avg_unique_users_per_day_30d || 0) * 100) / 100) },
+          { label: 'Searches with Direct/View (all time)', value: ct.searches_with_direct_or_view_all_time },
+          { label: '% with Direct/View (all time)', value: (Math.round((ct.percent_with_direct_or_view_all_time || 0) * 10) / 10) + '%' }
+        ];
+        var any = false;
+        tiles.forEach(function(t){
+          if (t.value === undefined || t.value === null) return;
+          any = true;
+          var tile = document.createElement('div');
+          tile.className = 'stat-item';
+          tile.innerHTML = '<span class="label">' + t.label + '</span><span class="value">' + t.value + '</span>';
+          statsContainer.appendChild(tile);
+        });
+        if (!any) {
+          var msg = document.createElement('p');
+          msg.textContent = 'No data for this tag.';
+          statsContainer.appendChild(msg);
+        }
+      }
+    } catch (e) {}
+  }
+
+  function initAdmin(){
+    if (adminChartsInitialized) return;
+    adminChartsInitialized = true;
+    fetchAdminData().then(function(data){
+      if (!data) return;
+      adminDataCache = data;
+      updateAdminCharts();
+    });
+    // Bind period toggles
+    var sp = document.getElementById('adminSearchPeriod');
+    var up = document.getElementById('adminUniquesPeriod');
+    if (sp) sp.addEventListener('change', updateAdminCharts);
+    if (up) up.addEventListener('change', updateAdminCharts);
+    // Auto-refresh charts hourly
+    adminHourlyTimer = setInterval(function(){
+      if (document.hidden) return;
+      fetchAdminData().then(function(data){ if (data) { adminDataCache = data; updateAdminCharts(); } });
+    }, 60 * 60 * 1000);
+    // Start latest searches log poll
+    startAdminLatestPoll();
+
+    // Tag detail form
+    var form = document.getElementById('adminTagForm');
+    if (form) {
+      form.addEventListener('submit', function(e){
+        e.preventDefault();
+        var input = document.getElementById('adminTagInput');
+        var val = (input && input.value) ? input.value.trim() : '';
+        if (!val) return;
+        fetchAdminTagData(val).then(function(payload){
+          if (!payload) return;
+          adminTagCache = payload;
+          updateAdminTagView();
+        });
+      });
+    }
+    var periodSel = document.getElementById('adminTagPeriod');
+    if (periodSel) {
+      periodSel.addEventListener('change', updateAdminTagView);
+    }
   }
 
   function setActiveTab(tabName) {
@@ -179,6 +398,9 @@
         myChartsInitialized = true;
         try { initMyCharts(cfg && cfg.mine ? cfg.mine : {}); } catch (e) {}
       }
+      if (initial === 'admin' && !adminChartsInitialized) {
+        try { initAdmin(); } catch (e) {}
+      }
 
       var buttons = document.querySelectorAll('.tab-button');
       buttons.forEach(function(btn){
@@ -186,6 +408,7 @@
           var target = btn.getAttribute('data-tab') || 'latest';
           setActiveTab(target);
           if (target === 'latest') { startLatestPoll(); } else { stopLatestPoll(); }
+          if (target === 'admin') { initAdmin(); startAdminLatestPoll(); } else { stopAdminLatestPoll(); }
           // Persist tab in URL without reloading
           try {
             var u = new URL(window.location.href);

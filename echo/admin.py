@@ -12,7 +12,7 @@ from django.core.cache import cache
 from django.utils import timezone
 
 from .models import Beatmap, UserProfile, Tag, TagApplication, TagDescriptionHistory, TagRelation
-from .models import APIRequestLog
+from .models import APIRequestLog, AnalyticsSearchEvent, AnalyticsClickEvent
 from .views.beatmap import update_beatmap_info
 from .views.api import admin_flush_all_predictions
 
@@ -190,3 +190,29 @@ class APIRequestLogAdmin(admin.ModelAdmin):
     search_fields = ('user__username', 'path')
     list_filter = ('method', 'timestamp')
     readonly_fields = ('user', 'method', 'path', 'timestamp')
+
+
+@admin.register(AnalyticsSearchEvent)
+class AnalyticsSearchEventAdmin(admin.ModelAdmin):
+    list_display = ('created_at', 'client_id', 'short_query', 'results_count', 'sort', 'predicted_mode')
+    search_fields = ('client_id', 'query')
+    list_filter = ('sort', 'predicted_mode', 'created_at')
+    date_hierarchy = 'created_at'
+    readonly_fields = ('event_id', 'client_id', 'created_at', 'query', 'tags', 'results_count', 'sort', 'predicted_mode', 'flags')
+
+    def short_query(self, obj):
+        try:
+            q = obj.query or ''
+            return (q[:60] + '…') if len(q) > 60 else q
+        except Exception:
+            return ''
+    short_query.short_description = 'Query'
+
+
+@admin.register(AnalyticsClickEvent)
+class AnalyticsClickEventAdmin(admin.ModelAdmin):
+    list_display = ('created_at', 'client_id', 'action', 'beatmap_id', 'search_event_id')
+    search_fields = ('client_id', 'beatmap_id', 'search_event_id', 'action')
+    list_filter = ('action', 'created_at')
+    date_hierarchy = 'created_at'
+    readonly_fields = ('client_id', 'created_at', 'action', 'beatmap_id', 'search_event_id', 'meta')

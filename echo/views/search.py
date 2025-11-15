@@ -530,6 +530,23 @@ def search_results(request):
     except Exception:
         pass
 
+    # Build analytics context for client-side logging (no PII)
+    try:
+        analytics_context = {
+            'query': query,
+            'tags': include_like_tags,
+            'results_count': paginator.count,
+            'sort': sort,
+            'predicted_mode': predicted_mode,
+            'flags': {
+                'status_ranked': bool(status_ranked),
+                'status_loved': bool(status_loved),
+                'status_unranked': bool(status_unranked),
+            },
+        }
+    except Exception:
+        analytics_context = {}
+
     return render(
         request,
         'search_results.html',
@@ -544,6 +561,10 @@ def search_results(request):
             'status_unranked': status_unranked,
             'include_predicted': predicted_mode,
             'pp_calc_params': pp_calc_params,
+            # Analytics context
+            'include_like_tags': include_like_tags,
+            'results_total': paginator.count,
+            'analytics_context': analytics_context,
         },
     )
 
@@ -667,10 +688,11 @@ def preset_search_farm(request):
         if not scores:
             return []
 
-        mod_families = ['HD', 'HR', 'DT', 'HT', 'EZ', 'FL']  # count only actual mods here
+        # Count meaningful mod families individually and track NM explicitly
+        mod_families = ['HD', 'HR', 'DT', 'HT', 'EZ', 'FL']
         family_counts = {k: 0 for k in mod_families}
+        nm_count = 0
         n = 0
-        with_mods_count = 0
         top_pp_val = None
         for s in scores:
             try:
@@ -687,22 +709,22 @@ def preset_search_farm(request):
 
                 mods_val = getattr(s, 'mods', None)
                 families_for_score = set()
-                found_meaningful_mod = False
                 if mods_val:
                     if Mod.HD in mods_val:
-                        families_for_score.add('HD'); found_meaningful_mod = True
+                        families_for_score.add('HD')
                     if Mod.HR in mods_val:
-                        families_for_score.add('HR'); found_meaningful_mod = True
+                        families_for_score.add('HR')
                     if (Mod.DT in mods_val) or (Mod.NC in mods_val):
-                        families_for_score.add('DT'); found_meaningful_mod = True
+                        families_for_score.add('DT')
                     if Mod.HT in mods_val:
-                        families_for_score.add('HT'); found_meaningful_mod = True
+                        families_for_score.add('HT')
                     if Mod.EZ in mods_val:
-                        families_for_score.add('EZ'); found_meaningful_mod = True
+                        families_for_score.add('EZ')
                     if Mod.FL in mods_val:
-                        families_for_score.add('FL'); found_meaningful_mod = True
-                if found_meaningful_mod:
-                    with_mods_count += 1
+                        families_for_score.add('FL')
+                # If no meaningful families detected, treat as NM
+                if not families_for_score:
+                    nm_count += 1
                 for fam in families_for_score:
                     if fam in family_counts:
                         family_counts[fam] += 1
@@ -712,31 +734,60 @@ def preset_search_farm(request):
         if n == 0 or top_pp_val is None:
             return []
 
-        # If less than 50% of scores have mods, use NM as the attribute
-        threshold = max(1, int(n * 0.5))
-        majority_family = None
-        use_nm_due_to_low_mod_coverage = with_mods_count < threshold
-        if not use_nm_due_to_low_mod_coverage:
-            # Determine majority mod family (>= 50% of scores)
-            max_fam = max(family_counts.items(), key=lambda kv: kv[1]) if family_counts else (None, 0)
-            if max_fam[0] and max_fam[1] >= threshold:
-                majority_family = max_fam[0]
+        # Priority rules (top 10 window):
+        # 1) DT >= 4 -> DT
+        # 2) (EZ + FL + HT) >= 4 -> pick the most frequent among EZ/FL/HT
+        # 3) HR >= 4 (and DT < 4 by rule order) -> HR
+        # 4) HD >= 4 -> HD
+        # 5) NM >= 7 -> NM
+        # 6) Fallback: pick most frequent by count with precedence DT > (EZ/FL/HT) > HR > HD > NM; else generic PP.
+        dt_count = family_counts.get('DT', 0)
+        hr_count = family_counts.get('HR', 0)
+        hd_count = family_counts.get('HD', 0)
+        ht_count = family_counts.get('HT', 0)
+        ez_count = family_counts.get('EZ', 0)
+        fl_count = family_counts.get('FL', 0)
+
+        chosen_attr = None
+        if dt_count >= 4:
+            chosen_attr = 'DT'
+        else:
+            low_speed_total = ez_count + fl_count + ht_count
+            if low_speed_total >= 4:
+                # Choose the most common among EZ/FL/HT (tie-breaker EZ > FL > HT for stability)
+                low_speed_counts = [('EZ', ez_count), ('FL', fl_count), ('HT', ht_count)]
+                low_speed_counts.sort(key=lambda kv: (-kv[1], ['EZ', 'FL', 'HT'].index(kv[0])))
+                if low_speed_counts[0][1] > 0:
+                    chosen_attr = low_speed_counts[0][0]
+            elif hr_count >= 4:
+                chosen_attr = 'HR'
+            elif hd_count >= 4:
+                chosen_attr = 'HD'
+            elif nm_count >= 7:
+                chosen_attr = 'NM'
+            else:
+                # Fallback by max count with precedence
+                precedence = {'DT': 5, 'EZ': 4, 'FL': 4, 'HT': 4, 'HR': 3, 'HD': 2, 'NM': 1}
+                all_counts = {
+                    'DT': dt_count,
+                    'EZ': ez_count,
+                    'FL': fl_count,
+                    'HT': ht_count,
+                    'HR': hr_count,
+                    'HD': hd_count,
+                    'NM': nm_count,
+                }
+                # Pick the family with highest count; break ties by precedence
+                best = sorted(all_counts.items(), key=lambda kv: (-kv[1], -precedence.get(kv[0], 0)))
+                if best and best[0][1] > 0:
+                    chosen_attr = best[0][0]
 
         lower = max(0.0, top_pp_val * 0.95)
         upper = top_pp_val * 1.3
 
-        # Build tokens per rule:
-        # - If <50% scores have mods -> force NM
-        # - Else if some mod family has >=50% -> use that family
-        # - Else -> fall back to generic PP
-        if use_nm_due_to_low_mod_coverage:
-            attr = 'NM'
-        elif majority_family:
-            attr = majority_family
-        else:
-            # No majority -> fallback to generic PP
-            attr = 'PP'
-        tokens = [f"{attr}>={lower:.0f}", f"{attr}<={upper:.0f}"]
+        # Build tokens using chosen attribute or generic PP if none chosen
+        attr = chosen_attr if chosen_attr else 'PP'
+        tokens = [f'{attr}>={lower:.0f}', f'{attr}<={upper:.0f}']
         return tokens
 
     pp_tokens = _derive_farm_pp_tokens(int(osu_id), selected_mode)

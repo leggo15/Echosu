@@ -2,6 +2,8 @@ from django.utils.deprecation import MiddlewareMixin
 from django.contrib.auth.models import AnonymousUser
 from rest_framework.authtoken.models import Token as DRFToken
 from .models import APIRequestLog, CustomToken
+from django.conf import settings
+import uuid
 import hashlib
 
 class APILoggingMiddleware(MiddlewareMixin):
@@ -46,6 +48,33 @@ class APILoggingMiddleware(MiddlewareMixin):
                         path=getattr(request, 'path', ''),
                         status_code=getattr(response, 'status_code', None),
                     )
+        except Exception:
+            pass
+        return response
+
+
+class AnonymousAnalyticsMiddleware(MiddlewareMixin):
+    """
+    Ensures a pseudonymous analytics cookie is present for anonymous usage tracking.
+    - Cookie value is a random UUID not linked to any account.
+    - Used only to estimate unique users; no PII stored.
+    """
+    COOKIE_NAME = 'analytics_id'
+    MAX_AGE_SECONDS = 60 * 60 * 24 * 30  # 30 days
+
+    def process_response(self, request, response):
+        try:
+            if self.COOKIE_NAME not in request.COOKIES:
+                cid = str(uuid.uuid4())
+                secure = not getattr(settings, 'DEBUG', False)
+                response.set_cookie(
+                    self.COOKIE_NAME,
+                    cid,
+                    max_age=self.MAX_AGE_SECONDS,
+                    samesite='Lax',
+                    secure=secure,
+                    httponly=False,
+                )
         except Exception:
             pass
         return response

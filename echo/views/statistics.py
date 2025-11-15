@@ -14,13 +14,16 @@ from ossapi.enums import ScoreType, GameMode, UserBeatmapType, UserLookupKey
 
 # Django
 from django.db.models import Q, Count, F, Value, IntegerField, Subquery, OuterRef, Exists, Max
-from django.db.models.functions import Coalesce
+from django.db.models.functions import Coalesce, TruncHour, TruncDate
 from django.http import HttpRequest, JsonResponse
 from django.shortcuts import render
 from django.template.loader import render_to_string
+from django.utils import timezone
 
 # Local
 from ..models import Beatmap, Tag, TagApplication, SavedSearch
+from ..models import AnalyticsSearchEvent, AnalyticsClickEvent
+from collections import Counter
 from .auth import api
 from .shared import format_length_hms
 from ..helpers.rosu_utils import get_or_compute_pp
@@ -558,17 +561,38 @@ def statistics(request: HttpRequest):
             mapper_least = annotated.order_by('tag_weight').first()
 
         # Attach PP/length and tags_with_counts for mapper cards
+        ids_to_annotate = [bm.id for bm in [mapper_most, mapper_least] if bm]
         for bm in [mapper_most, mapper_least]:
             if bm:
                 _attach_display_extras([bm])
-                try:
-                    from .search import annotate_search_results_with_tags
-                    annotate_search_results_with_tags(Beatmap.objects.filter(id__in=[bm.id]), request.user, include_predicted_toggle=True)
-                except Exception:
-                    pass
+        if ids_to_annotate:
+            try:
+                from .search import annotate_search_results_with_tags
+                annotated_qs = annotate_search_results_with_tags(Beatmap.objects.filter(id__in=ids_to_annotate), request.user, include_predicted_toggle=True)
+                id_to_bm = {b.id: b for b in annotated_qs}
+                if mapper_most and mapper_most.id in id_to_bm:
+                    try: mapper_most.tags_with_counts = id_to_bm[mapper_most.id].tags_with_counts
+                    except Exception: pass
+                if mapper_least and mapper_least.id in id_to_bm:
+                    try: mapper_least.tags_with_counts = id_to_bm[mapper_least.id].tags_with_counts
+                    except Exception: pass
+            except Exception:
+                pass
 
         # -------------------- Player Statistics --------------------
         player_labels, player_counts, most_related = _compute_player_stats(osu_id, source)
+        # Attach tags for initial render of Most Related card (AJAX updates will handle later)
+        if most_related:
+            try:
+                from .search import annotate_search_results_with_tags
+                annotated_qs = annotate_search_results_with_tags(Beatmap.objects.filter(id__in=[most_related.id]), request.user, include_predicted_toggle=True)
+                for b in annotated_qs:
+                    if b.id == most_related.id:
+                        try: most_related.tags_with_counts = b.tags_with_counts
+                        except Exception: pass
+                        break
+            except Exception:
+                pass
 
     # Latest maps (default tab): newest entries by DB insert order
     # Skip maps with no tags (predicted or user-applied) and avoid heavy PP computation here
@@ -692,4 +716,280 @@ def statistics_latest_maps(request: HttpRequest):
         return JsonResponse({ 'html': ''.join(html_parts) })
     except Exception:
         return JsonResponse({ 'html': '' })
+
+
+def statistics_latest_searches(request: HttpRequest):
+    """AJAX endpoint: return the latest 15 search events as HTML (staff only)."""
+    try:
+        if not getattr(request.user, 'is_staff', False):
+            return JsonResponse({ 'html': '' }, status=403)
+        events = AnalyticsSearchEvent.objects.order_by('-created_at')[:15]
+        html = render_to_string('partials/admin_search_log.html', {'events': events}, request=request)
+        return JsonResponse({ 'html': html })
+    except Exception:
+        return JsonResponse({ 'html': '' })
+
+
+def _hour_floor(dt):
+    return dt.replace(minute=0, second=0, microsecond=0, tzinfo=dt.tzinfo)
+
+
+def _day_floor(dt):
+    return dt.replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=dt.tzinfo)
+
+
+def statistics_admin_data(request: HttpRequest):
+    """AJAX endpoint returning admin analytics (staff only)."""
+    if not getattr(request.user, 'is_staff', False):
+        return JsonResponse({}, status=403)
+    try:
+        now = timezone.now()
+        # Hourly (last 24 hours)
+        hour_labels: list[str] = []
+        hour_search_counts: list[int] = []
+        hour_unique_counts: list[int] = []
+        for i in range(24):
+            start = _hour_floor(now - timezone.timedelta(hours=(23 - i)))
+            end = start + timezone.timedelta(hours=1)
+            hour_labels.append(start.strftime('%H:%M'))
+            # Searches
+            try:
+                c = AnalyticsSearchEvent.objects.filter(created_at__gte=start, created_at__lt=end).count()
+            except Exception:
+                c = 0
+            hour_search_counts.append(int(c))
+            # Unique users across search + click
+            try:
+                s_ids = set(
+                    AnalyticsSearchEvent.objects
+                    .filter(created_at__gte=start, created_at__lt=end)
+                    .values_list('client_id', flat=True)
+                    .distinct()
+                )
+                c_ids = set(
+                    AnalyticsClickEvent.objects
+                    .filter(created_at__gte=start, created_at__lt=end)
+                    .values_list('client_id', flat=True)
+                    .distinct()
+                )
+                uniq = len({i for i in (s_ids | c_ids) if i})
+            except Exception:
+                uniq = 0
+            hour_unique_counts.append(int(uniq))
+
+        # Daily (last 30 days)
+        day_labels: list[str] = []
+        day_search_counts: list[int] = []
+        day_unique_counts: list[int] = []
+        for i in range(30):
+            start = _day_floor(now - timezone.timedelta(days=(29 - i)))
+            end = start + timezone.timedelta(days=1)
+            day_labels.append(start.strftime('%Y-%m-%d'))
+            try:
+                c = AnalyticsSearchEvent.objects.filter(created_at__gte=start, created_at__lt=end).count()
+            except Exception:
+                c = 0
+            day_search_counts.append(int(c))
+            try:
+                s_ids = set(
+                    AnalyticsSearchEvent.objects
+                    .filter(created_at__gte=start, created_at__lt=end)
+                    .values_list('client_id', flat=True)
+                    .distinct()
+                )
+                c_ids = set(
+                    AnalyticsClickEvent.objects
+                    .filter(created_at__gte=start, created_at__lt=end)
+                    .values_list('client_id', flat=True)
+                    .distinct()
+                )
+                uniq = len({i for i in (s_ids | c_ids) if i})
+            except Exception:
+                uniq = 0
+            day_unique_counts.append(int(uniq))
+
+        # Average clicks per action per day (last 30 days)
+        clicks_since = _day_floor(now) - timezone.timedelta(days=29)
+        rows = (
+            AnalyticsClickEvent.objects
+            .filter(created_at__gte=clicks_since)
+            .values('action')
+            .annotate(c=Count('id'))
+        )
+        avg_clicks = {}
+        for r in rows:
+            a = r.get('action') or ''
+            cnt = int(r.get('c') or 0)
+            avg_clicks[a] = float(cnt) / 30.0
+
+        # Top 25 searched tags (last 90 days for performance)
+        tags_since = now - timezone.timedelta(days=90)
+        tag_counter: Counter[str] = Counter()
+        try:
+            qs_tags = AnalyticsSearchEvent.objects.filter(created_at__gte=tags_since).values_list('tags', flat=True)
+            for arr in qs_tags:
+                if not arr:
+                    continue
+                try:
+                    for t in arr:
+                        name = str(t or '').strip().lower()
+                        if name:
+                            tag_counter[name] += 1
+                except Exception:
+                    continue
+        except Exception:
+            tag_counter = Counter()
+        top_tags = [{'name': name, 'count': int(cnt)} for name, cnt in tag_counter.most_common(25)]
+
+        return JsonResponse({
+            'searches': {
+                'hour': { 'labels': hour_labels, 'counts': hour_search_counts },
+                'day': { 'labels': day_labels, 'counts': day_search_counts },
+            },
+            'uniques': {
+                'hour': { 'labels': hour_labels, 'counts': hour_unique_counts },
+                'day': { 'labels': day_labels, 'counts': day_unique_counts },
+            },
+            'avg_clicks_per_action_per_day': avg_clicks,
+            'top_tags': top_tags,
+        })
+    except Exception:
+        return JsonResponse({})
+
+
+def statistics_admin_tag(request: HttpRequest):
+    """AJAX endpoint: per-tag usage and click-through stats (staff only)."""
+    if not getattr(request.user, 'is_staff', False):
+        return JsonResponse({}, status=403)
+    tag_raw = (request.GET.get('tag') or '').strip()
+    tag = tag_raw.lower()
+    if not tag:
+        return JsonResponse({'tag': '', 'searches': {}, 'totals': {}, 'click_through': {}})
+    try:
+        now = timezone.now()
+        # Define 24h and 30d windows
+        start_24h = _hour_floor(now - timezone.timedelta(hours=23))
+        start_30d = _day_floor(now - timezone.timedelta(days=29))
+
+        # Prepare bins
+        hour_labels: list[str] = []
+        for i in range(24):
+            h = _hour_floor(start_24h + timezone.timedelta(hours=i))
+            hour_labels.append(h.strftime('%H:%M'))
+        hour_counts = [0] * 24
+
+        day_labels: list[str] = []
+        for i in range(30):
+            d = _day_floor(start_30d + timezone.timedelta(days=i))
+            day_labels.append(d.strftime('%Y-%m-%d'))
+        day_counts = [0] * 30
+
+        # Helper to normalize tag arrays
+        def _has_tag(arr):
+            if not arr:
+                return False
+            try:
+                for t in arr:
+                    if str(t or '').strip().lower() == tag:
+                        return True
+            except Exception:
+                return False
+            return False
+
+        # Fetch events for last 24h and 30d in one go
+        events_30d = list(
+            AnalyticsSearchEvent.objects
+            .filter(created_at__gte=start_30d)
+            .values('event_id', 'client_id', 'created_at', 'tags')
+        )
+
+        total_30d_searches = 0
+        unique_30d_clients: set[str] = set()
+
+        for e in events_30d:
+            tags = e.get('tags') or []
+            if not _has_tag(tags):
+                continue
+            created = e.get('created_at') or now
+            # 30d daily bucket
+            delta_days = int((created - start_30d).total_seconds() // (24 * 3600))
+            if 0 <= delta_days < 30:
+                day_counts[delta_days] += 1
+                total_30d_searches += 1
+                cid = e.get('client_id') or None
+                if cid:
+                    unique_30d_clients.add(str(cid))
+            # 24h hourly bucket (subset)
+            if created >= start_24h:
+                delta_hours = int((created - start_24h).total_seconds() // 3600)
+                if 0 <= delta_hours < 24:
+                    hour_counts[delta_hours] += 1
+
+        # All-time totals and click-through (direct/view_on_osu)
+        all_events = list(
+            AnalyticsSearchEvent.objects
+            .filter(tags__isnull=False)
+            .values('event_id', 'client_id', 'tags')
+        )
+        event_id_to_client: dict[str, str] = {}
+        tag_event_ids: set[str] = set()
+        unique_all_clients: set[str] = set()
+        for e in all_events:
+            tags = e.get('tags') or []
+            if not _has_tag(tags):
+                continue
+            eid = str(e.get('event_id'))
+            cid = e.get('client_id') or None
+            tag_event_ids.add(eid)
+            if cid:
+                cid_str = str(cid)
+                unique_all_clients.add(cid_str)
+                event_id_to_client[eid] = cid_str
+
+        total_all_searches = len(tag_event_ids)
+
+        # Click-through: same client direct or view_on_osu
+        clicks_with_followup: set[str] = set()
+        if tag_event_ids:
+            click_qs = AnalyticsClickEvent.objects.filter(
+                action__in=['direct', 'view_on_osu'],
+                search_event_id__in=list(tag_event_ids),
+            ).values('search_event_id', 'client_id')
+            for c in click_qs:
+                sid = c.get('search_event_id') or ''
+                cid = c.get('client_id') or None
+                if not sid or not cid:
+                    continue
+                sid_str = str(sid)
+                cid_str = str(cid)
+                if event_id_to_client.get(sid_str) == cid_str:
+                    clicks_with_followup.add(sid_str)
+
+        num_followup = len(clicks_with_followup)
+        pct_followup = float(num_followup) / float(total_all_searches) * 100.0 if total_all_searches else 0.0
+
+        avg_searches_per_day_30d = float(total_30d_searches) / 30.0
+        avg_unique_per_day_30d = float(len(unique_30d_clients)) / 30.0
+
+        return JsonResponse({
+            'tag': tag_raw,
+            'searches': {
+                'hour': { 'labels': hour_labels, 'counts': hour_counts },
+                'day': { 'labels': day_labels, 'counts': day_counts },
+            },
+            'totals': {
+                'searches_all_time': total_all_searches,
+                'searches_last_30d': total_30d_searches,
+                'avg_searches_per_day_30d': avg_searches_per_day_30d,
+                'unique_users_all_time': len(unique_all_clients),
+                'unique_users_last_30d': len(unique_30d_clients),
+                'avg_unique_users_per_day_30d': avg_unique_per_day_30d,
+            },
+            'click_through': {
+                'searches_with_direct_or_view_all_time': num_followup,
+                'percent_with_direct_or_view_all_time': pct_followup,
+            },
+        })
+    except Exception:
+        return JsonResponse({})
 

@@ -229,6 +229,11 @@
   {% endif %}
   <script src="{% static 'js/tagging.js' %}"></script>
   <script src="{% static 'js/collapsible_descriptions.js' %}"></script>
+  {{ analytics_context|json_script:"analytics-context" }}
+  <script src="{% static 'js/analytics.js' %}"></script>
+  <script>
+    if (window.initSearchAnalytics) { try { window.initSearchAnalytics(); } catch (e) {} }
+  </script>
   <script>
     (function() {
       var sortSelect = document.getElementById('sort');

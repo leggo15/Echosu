@@ -21,6 +21,8 @@ from echo.views.userSettings  import (
 )
 from echo.views.pages      import error_page_view, custom_404_view
 from echo.views.statistics import statistics, statistics_player_data, statistics_latest_maps
+from echo.views.statistics import statistics_latest_searches, statistics_admin_data, statistics_admin_tag
+from echo.views.analytics import log_search_event, log_click_event
 
 # DRF viewsets
 from echo.views.api import (
@@ -59,6 +61,9 @@ urlpatterns = [
     path('statistics/', statistics, name='statistics'),
     path('statistics/player-data/', statistics_player_data, name='statistics_player_data'),
     path('statistics/latest-maps/', statistics_latest_maps, name='statistics_latest_maps'),
+    path('statistics/latest-searches/', statistics_latest_searches, name='statistics_latest_searches'),
+    path('statistics/admin-data/', statistics_admin_data, name='statistics_admin_data'),
+    path('statistics/admin-tag/', statistics_admin_tag, name='statistics_admin_tag'),
     path('search/saved/toggle/', toggle_saved_search, name='toggle_saved_search'),
     path('search/saved/update-title/', update_saved_search_title, name='update_saved_search_title'),
     path('search/saved/delete/', delete_saved_search, name='delete_saved_search'),
@@ -70,6 +75,9 @@ urlpatterns = [
     path('update_beatmap_info/', update_beatmap_info, name='update_beatmap_info'),
     path('add_beatmap/', quick_add_beatmap, name='quick_add_beatmap'),
     path('tag_library/', tag_library, name='tag_library'),
+    # Anonymous analytics endpoints
+    path('analytics/log/search/', log_search_event, name='analytics_log_search'),
+    path('analytics/log/click/', log_click_event, name='analytics_log_click'),
     
 
 

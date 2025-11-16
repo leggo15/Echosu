@@ -29,6 +29,31 @@ from .shared import format_length_hms
 from ..helpers.rosu_utils import get_or_compute_pp
 
 
+def _tokenize_query_terms(raw_query: str) -> set[str]:
+    terms: set[str] = set()
+    if not raw_query:
+        return terms
+    pattern = r'[-.]?"[^"]+"|[-.]?[^"\s]+'
+    for match in re.findall(pattern, raw_query):
+        token = match.strip()
+        if not token:
+            continue
+        if token[0] in '.-':
+            token = token[1:]
+        token = token.strip('"').strip("'").strip()
+        if token:
+            terms.add(token.lower())
+    return terms
+
+
+def _query_contains_phrase(raw_query: str, phrase_lower: str) -> bool:
+    if not (raw_query and phrase_lower):
+        return False
+    raw = raw_query.lower()
+    pattern = r'(^|[\s,.;:\-])' + re.escape(phrase_lower) + r'($|[\s,.;:\-])'
+    return re.search(pattern, raw) is not None
+
+
 def _resolve_osu_user(user_query: str) -> Tuple[int | None, str | None, str | None]:
     """Return (user_id, username, error_message). Accepts id or username."""
     if not user_query:
@@ -876,18 +901,32 @@ def statistics_admin_data(request: HttpRequest):
         # Top 25 searched tags (last 90 days for performance)
         tags_since = now - timezone.timedelta(days=90)
         tag_counter: Counter[str] = Counter()
+        valid_tags = {
+            (tag_name or '').strip().lower(): tag_name
+            for tag_name in Tag.objects.values_list('name', flat=True)
+        }
         try:
-            qs_tags = AnalyticsSearchEvent.objects.filter(created_at__gte=tags_since).values_list('tags', flat=True)
-            for arr in qs_tags:
-                if not arr:
-                    continue
-                try:
-                    for t in arr:
-                        name = str(t or '').strip().lower()
-                        if name:
-                            tag_counter[name] += 1
-                except Exception:
-                    continue
+            qs_tags = (
+                AnalyticsSearchEvent.objects
+                .filter(created_at__gte=tags_since)
+                .exclude(query__isnull=True)
+                .exclude(query__exact='')
+                .values('tags', 'query')
+            )
+            for event in qs_tags:
+                raw_query = event.get('query') or ''
+                tokens = _tokenize_query_terms(raw_query)
+                tags = event.get('tags') or []
+                seen = set()
+                for t in tags:
+                    tag_lower = (str(t or '').strip().lower())
+                    canonical = valid_tags.get(tag_lower)
+                    if not canonical or tag_lower in seen:
+                        continue
+                    if (tag_lower not in tokens) and (not _query_contains_phrase(raw_query, tag_lower)):
+                        continue
+                    tag_counter[canonical] += 1
+                    seen.add(tag_lower)
         except Exception:
             tag_counter = Counter()
         top_tags = [{'name': name, 'count': int(cnt)} for name, cnt in tag_counter.most_common(25)]
@@ -915,9 +954,11 @@ def statistics_admin_tag(request: HttpRequest):
     if not getattr(request.user, 'is_staff', False):
         return JsonResponse({}, status=403)
     tag_raw = (request.GET.get('tag') or '').strip()
-    tag = tag_raw.lower()
-    if not tag:
+    if not tag_raw:
         return JsonResponse({'tag': '', 'searches': {}, 'totals': {}, 'click_through': {}})
+    canonical = Tag.objects.filter(name__iexact=tag_raw).values_list('name', flat=True).first()
+    tag_name = canonical or tag_raw
+    tag_lower = tag_name.lower()
     try:
         now = timezone.now()
         # Define 24h and 30d windows
@@ -937,31 +978,22 @@ def statistics_admin_tag(request: HttpRequest):
             day_labels.append(d.strftime('%Y-%m-%d'))
         day_counts = [0] * 30
 
-        # Helper to normalize tag arrays
-        def _has_tag(arr):
-            if not arr:
-                return False
-            try:
-                for t in arr:
-                    if str(t or '').strip().lower() == tag:
-                        return True
-            except Exception:
-                return False
-            return False
-
         # Fetch events for last 24h and 30d in one go
         events_30d = list(
             AnalyticsSearchEvent.objects
             .filter(created_at__gte=start_30d)
-            .values('event_id', 'client_id', 'created_at', 'tags')
+            .exclude(query__isnull=True)
+            .exclude(query__exact='')
+            .values('event_id', 'client_id', 'created_at', 'query')
         )
 
         total_30d_searches = 0
         unique_30d_clients: set[str] = set()
 
         for e in events_30d:
-            tags = e.get('tags') or []
-            if not _has_tag(tags):
+            raw_query = e.get('query') or ''
+            tokens = _tokenize_query_terms(raw_query)
+            if (tag_lower not in tokens) and (not _query_contains_phrase(raw_query, tag_lower)):
                 continue
             created = e.get('created_at') or now
             # 30d daily bucket
@@ -981,15 +1013,17 @@ def statistics_admin_tag(request: HttpRequest):
         # All-time totals and click-through (direct/view_on_osu)
         all_events = list(
             AnalyticsSearchEvent.objects
-            .filter(tags__isnull=False)
-            .values('event_id', 'client_id', 'tags')
+            .exclude(query__isnull=True)
+            .exclude(query__exact='')
+            .values('event_id', 'client_id', 'query')
         )
         event_id_to_client: dict[str, str] = {}
         tag_event_ids: set[str] = set()
         unique_all_clients: set[str] = set()
         for e in all_events:
-            tags = e.get('tags') or []
-            if not _has_tag(tags):
+            raw_query = e.get('query') or ''
+            tokens = _tokenize_query_terms(raw_query)
+            if (tag_lower not in tokens) and (not _query_contains_phrase(raw_query, tag_lower)):
                 continue
             eid = str(e.get('event_id'))
             cid = e.get('client_id') or None
@@ -1025,7 +1059,7 @@ def statistics_admin_tag(request: HttpRequest):
         avg_unique_per_day_30d = float(len(unique_30d_clients)) / 30.0
 
         return JsonResponse({
-            'tag': tag_raw,
+            'tag': tag_name,
             'searches': {
                 'hour': { 'labels': hour_labels, 'counts': hour_counts },
                 'day': { 'labels': day_labels, 'counts': day_counts },

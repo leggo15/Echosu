@@ -547,6 +547,12 @@ def search_results(request):
     except Exception:
         analytics_context = {}
 
+    analytics_tags = sorted(exact_tags)
+    try:
+        analytics_context['tags'] = analytics_tags
+    except Exception:
+        analytics_context = {'tags': analytics_tags}
+
     return render(
         request,
         'search_results.html',
@@ -564,7 +570,7 @@ def search_results(request):
             # Analytics context
             'include_like_tags': include_like_tags,
             'results_total': paginator.count,
-            'analytics_context': analytics_context,
+            'analytics_context': analytics_context | {'tags': analytics_tags},
         },
     )
 

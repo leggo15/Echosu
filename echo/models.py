@@ -98,7 +98,7 @@ def get_default_author():
     return User.objects.get_or_create(username='default_author')[0]
 
 class Tag(models.Model):
-    name = models.CharField(max_length=100, null=False, unique=True)
+    name = models.CharField(max_length=100, null=False, unique=False, db_index=True)
     description = models.CharField(max_length=255, unique=False, null=False, blank=True)
     description_author = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='tag_descriptions', default=get_default_author)
     beatmaps = models.ManyToManyField(Beatmap, related_name='tags', blank=True, through='TagApplication')
@@ -118,6 +118,17 @@ class Tag(models.Model):
         (CATEGORY_OTHER, 'Other'),
     ]
     category = models.CharField(max_length=32, choices=CATEGORY_CHOICES, default=CATEGORY_OTHER, db_index=True)
+    MODE_STD = 'std'
+    MODE_TAIKO = 'taiko'
+    MODE_CATCH = 'catch'
+    MODE_MANIA = 'mania'
+    MODE_CHOICES = [
+        (MODE_STD, 'Standard'),
+        (MODE_TAIKO, 'Taiko'),
+        (MODE_CATCH, 'Catch'),
+        (MODE_MANIA, 'Mania'),
+    ]
+    mode = models.CharField(max_length=16, choices=MODE_CHOICES, default=MODE_STD, db_index=True)
     # Directed hierarchy: a tag can have multiple parent tags; children are derived via related_name
     parents = models.ManyToManyField(
         'self',
@@ -137,6 +148,10 @@ class Tag(models.Model):
             # Text search optimization
             models.Index(fields=['name', 'is_recommended']),
             models.Index(fields=['category']),
+            models.Index(fields=['mode']),
+        ]
+        constraints = [
+            models.UniqueConstraint(fields=['name', 'mode'], name='unique_tag_name_mode'),
         ]
 
     def vote_score(self):
@@ -167,6 +182,32 @@ class Tag(models.Model):
 
     def __str__(self):
         return self.name
+    
+    @classmethod
+    def normalize_mode(cls, mode_value: str | None) -> str:
+        mapping = {
+            'osu': cls.MODE_STD,
+            'std': cls.MODE_STD,
+            'standard': cls.MODE_STD,
+            'taiko': cls.MODE_TAIKO,
+            'drum': cls.MODE_TAIKO,
+            'catch': cls.MODE_CATCH,
+            'ctb': cls.MODE_CATCH,
+            'fruits': cls.MODE_CATCH,
+            'mania': cls.MODE_MANIA,
+        }
+        if not mode_value:
+            return cls.MODE_STD
+        return mapping.get(str(mode_value).lower(), cls.MODE_STD)
+
+    @classmethod
+    def get_or_create_for_mode(cls, name: str, beatmap_mode: str | None):
+        normalized = cls.normalize_mode(beatmap_mode)
+        cleaned = (name or '').strip().lower()
+        if not cleaned:
+            raise ValueError('Tag name is required.')
+        tag, created = cls.objects.get_or_create(name=cleaned, mode=normalized)
+        return tag, created
     
 class TagDescriptionHistory(models.Model):
     tag = models.ForeignKey(Tag, on_delete=models.CASCADE, related_name='description_histories')

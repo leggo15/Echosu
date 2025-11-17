@@ -53,7 +53,12 @@ def log_search_event(request: HttpRequest):
 		results_count = None
 	sort = (payload.get('sort') or '')[:32]
 	predicted_mode = (payload.get('predicted_mode') or '')[:16]
+	search_mode = (payload.get('mode') or '').strip().lower()
 	flags = payload.get('flags') if isinstance(payload.get('flags'), (dict, list)) else None
+	if search_mode:
+		if not isinstance(flags, dict):
+			flags = {}
+		flags['mode'] = search_mode
 
 	se = AnalyticsSearchEvent.objects.create(
 		client_id=client_id,

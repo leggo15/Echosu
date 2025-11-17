@@ -24,7 +24,7 @@ class TagSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Tag
-        fields = ['id', 'name', 'category', 'parents']
+        fields = ['id', 'name', 'category', 'mode', 'parents']
 
 class BeatmapSerializer(serializers.ModelSerializer):
     tags = TagSerializer(many=True, read_only=True)
@@ -124,7 +124,11 @@ class TagApplicationToggleSerializer(serializers.Serializer):
             
             for tag_name in tags:
                 try:
-                    tag, _ = Tag.objects.get_or_create(name=tag_name)
+                    try:
+                        tag, _ = Tag.get_or_create_for_mode(tag_name, beatmap.mode)
+                    except ValueError as exc:
+                        results.append({"tag": tag_name, "action": "error", "message": str(exc)})
+                        continue
                     
                     if tag_name in existing_tag_names:
                         # Tag exists, remove it

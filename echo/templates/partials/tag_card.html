@@ -1,6 +1,6 @@
 {% load static %}
 <!-- partials/tag_card.html -->
-<div class="beatmap-card-wrapper" id="beatmap-card-{{ beatmap.beatmap_id }}" data-beatmap-id="{{ beatmap.beatmap_id }}">
+<div class="beatmap-card-wrapper" id="beatmap-card-{{ beatmap.beatmap_id }}" data-beatmap-id="{{ beatmap.beatmap_id }}" data-beatmap-mode="{{ beatmap.mode }}">
   <div class="chrome-actions">
     {% if request.path == '/' or request.path == '/search_results/' %}
       <label class="bulk-select-label">
@@ -23,7 +23,7 @@
     {% endif %}
   </div>
 
-  <div class="tag-card beatmap-display" id="beatmap-{{ beatmap.beatmap_id }}" data-beatmap-id="{{ beatmap.beatmap_id }}">
+  <div class="tag-card beatmap-display" id="beatmap-{{ beatmap.beatmap_id }}" data-beatmap-id="{{ beatmap.beatmap_id }}" data-beatmap-mode="{{ beatmap.mode }}">
       <div class="beatmap-cover-container">
         <a href="{% url 'beatmap_detail' beatmap_id=beatmap.beatmap_id %}">
           <img

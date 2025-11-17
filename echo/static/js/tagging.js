@@ -30,6 +30,19 @@
     var csrf = $wrapper.find('input[name=csrfmiddlewaretoken]').val() || $('input[name=csrfmiddlewaretoken]').val();
     var isAuthenticated = Boolean(csrf);
     var refreshDebounceTimer = null;
+    var beatmapModeRaw = ($card.attr('data-beatmap-mode') || '').toString().toLowerCase();
+    var modeMap = {
+      'osu': 'std',
+      'std': 'std',
+      'standard': 'std',
+      'taiko': 'taiko',
+      'drum': 'taiko',
+      'catch': 'catch',
+      'fruits': 'catch',
+      'ctb': 'catch',
+      'mania': 'mania'
+    };
+    var beatmapMode = modeMap[beatmapModeRaw] || 'std';
 
     // -----------------------------
     // Dropdown portal helpers
@@ -68,7 +81,7 @@
 
     function searchTags(query) {
       if (!query) { $list.empty(); closePortal(); return; }
-      $.ajax({ url: '/search_tags/', data: { q: query } })
+      $.ajax({ url: '/search_tags/', data: { q: query, mode: beatmapMode } })
         .done(function(data) {
           $list.empty();
           data.forEach(function(tag) {
@@ -473,10 +486,10 @@
       var $existing = $('#configure-tag-modal');
       if ($existing.length) { $existing.remove(); }
       var categories = [
+        { value: 'other', label: 'Other' },
         { value: 'mapping_genre', label: 'Mapping Genre' },
         { value: 'pattern_type', label: 'Pattern Type' },
-        { value: 'metadata', label: 'Metadata' },
-        { value: 'other', label: 'Other' }
+        { value: 'metadata', label: 'Metadata' }
       ];
       var $modal = $('<div id="configure-tag-modal" class="configure-tag-modal" role="dialog" aria-modal="true"></div>');
       var $box = $('<div class="configure-tag-box"></div>').appendTo($modal);
@@ -492,6 +505,7 @@
       $('<label>Category</label>').appendTo($catRow);
       var $sel = $('<select class="configure-tag-category"></select>').appendTo($catRow);
       categories.forEach(function(c){ $('<option></option>').val(c.value).text(c.label).appendTo($sel); });
+      $sel.val('other');
       // Parents input
       var $parRow = $('<div class="row"></div>').appendTo($body);
       $('<label>Associations</label>').appendTo($parRow);
@@ -594,6 +608,9 @@
             showConfigureTagModal(resp);
           }
         } catch(e) { /* ignore */ }
+      }).fail(function(err){
+        var message = (err && err.responseJSON && err.responseJSON.message) || 'Failed to modify tag.';
+        alert(message);
       }).always(function(){
         pendingTagWrites = Math.max(0, pendingTagWrites - 1);
       });

@@ -368,6 +368,7 @@ def search_results(request):
         'mania': GameMode.MANIA,
     }
     mapped_mode = MODE_MAPPING.get(selected_mode, 'osu')
+    normalized_mode = Tag.normalize_mode(mapped_mode)
 
     beatmaps = Beatmap.objects.filter(mode__iexact=mapped_mode)
     beatmaps = beatmaps.filter(difficulty_rating__gte=star_min)
@@ -538,10 +539,12 @@ def search_results(request):
             'results_count': paginator.count,
             'sort': sort,
             'predicted_mode': predicted_mode,
+            'mode': normalized_mode,
             'flags': {
                 'status_ranked': bool(status_ranked),
                 'status_loved': bool(status_loved),
                 'status_unranked': bool(status_unranked),
+                'mode': normalized_mode,
             },
         }
     except Exception:
@@ -928,17 +931,20 @@ def annotate_search_results_with_tags(beatmaps, user, include_predicted_toggle=F
         elif include_predicted_toggle:
             # Track predicted tag names for later merge
             if getattr(app, 'tag', None):
-                beatmap_predicted_names[app.beatmap_id].add(app.tag.name)
+                beatmap_predicted_names[app.beatmap_id].add((app.tag.name, Tag.normalize_mode(app.tag.mode)))
 
     # If we will include predicted tags, fetch all involved Tag objects in one query
-    predicted_name_to_tag = {}
+    predicted_name_to_tag = defaultdict(dict)
     if include_predicted_toggle and beatmap_predicted_names:
-        all_predicted_names = set()
+        all_predicted_pairs = set()
         for names in beatmap_predicted_names.values():
-            all_predicted_names.update(names)
-        if all_predicted_names:
-            for tag in Tag.objects.filter(name__in=all_predicted_names).only('id', 'name'):
-                predicted_name_to_tag[tag.name] = tag
+            all_predicted_pairs.update(names)
+        if all_predicted_pairs:
+            names = {name for name, _ in all_predicted_pairs}
+            modes = {mode for _, mode in all_predicted_pairs}
+            for tag in Tag.objects.filter(name__in=names, mode__in=modes).only('id', 'name', 'mode'):
+                normalized = Tag.normalize_mode(tag.mode)
+                predicted_name_to_tag[normalized][tag.name] = tag
 
     for bm in beatmaps:
         tags_counts = [
@@ -952,12 +958,13 @@ def annotate_search_results_with_tags(beatmaps, user, include_predicted_toggle=F
 
         # Merge in predicted-only tags without extra queries
         if include_predicted_toggle:
-            existing_names = set(t['tag'].name for t in tags_counts)
-            add_names = beatmap_predicted_names.get(bm.id, set()) - existing_names
+            existing_ids = set(t['tag'].id for t in tags_counts)
+            add_names = beatmap_predicted_names.get(bm.id, set())
             if add_names:
-                for name in add_names:
-                    tag_obj = predicted_name_to_tag.get(name)
-                    if tag_obj:
+                normalized_mode_bm = Tag.normalize_mode(bm.mode)
+                for name, mode in add_names:
+                    tag_obj = predicted_name_to_tag.get(mode, {}).get(name)
+                    if tag_obj and tag_obj.id not in existing_ids and mode == normalized_mode_bm:
                         tags_counts.append({
                             'tag': tag_obj,
                             'apply_count': 0,

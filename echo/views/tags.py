@@ -166,8 +166,12 @@ def get_tags(request):
 def search_tags(request):
     '''Search for tags based on a query.'''
     search_query = request.GET.get('q', '')
+    mode_param = (request.GET.get('mode') or '').strip().lower()
+    qs = Tag.objects.all()
+    if mode_param:
+        qs = qs.filter(mode=Tag.normalize_mode(mode_param))
     tags = (
-        Tag.objects
+        qs
         .filter(name__icontains=search_query)
         .annotate(beatmap_count=Count('beatmaps'))
         .values('name', 'beatmap_count')
@@ -433,6 +437,12 @@ def sanitize_tag(tag: str) -> str:
     return tag
 
 
+def _tag_mode_for_beatmap(beatmap: Beatmap | None) -> str:
+    if not beatmap:
+        return Tag.MODE_STD
+    return Tag.normalize_mode(getattr(beatmap, 'mode', None))
+
+
 @login_required
 def modify_tag(request):
     '''Apply or remove a tag for a beatmap by the current user.'''
@@ -462,8 +472,21 @@ def modify_tag(request):
 
     try:
         with transaction.atomic():
-            tag, created_tag = Tag.objects.get_or_create(name=processed_tag)
             beatmap = get_object_or_404(Beatmap, beatmap_id=beatmap_id)
+            try:
+                tag, created_tag = Tag.get_or_create_for_mode(processed_tag, beatmap.mode)
+            except ValueError as exc:
+                existing_app = TagApplication.objects.filter(
+                    tag__name=processed_tag,
+                    beatmap=beatmap,
+                    user=user,
+                    true_negative=True if want_true_negative else False,
+                ).first()
+                if existing_app:
+                    tag = existing_app.tag
+                    created_tag = False
+                else:
+                    return JsonResponse({'status': 'error', 'message': str(exc)}, status=400)
 
             tag_application, created = TagApplication.objects.get_or_create(
                 tag=tag,
@@ -555,7 +578,10 @@ def configure_tag(request):
         pname_clean = pname.lower()
         if pname_clean == tag.name:
             continue  # skip self
-        parent_tag, _ = Tag.objects.get_or_create(name=pname_clean)
+        try:
+            parent_tag, _ = Tag.get_or_create_for_mode(pname_clean, tag.mode)
+        except ValueError:
+            parent_tag, _ = Tag.get_or_create_for_mode(pname_clean, None)
         parent_ids.append(parent_tag.id)
         try:
             TagRelation.objects.get_or_create(parent=parent_tag, child=tag)

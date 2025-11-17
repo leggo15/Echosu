@@ -272,7 +272,8 @@
           topTags.forEach(function(row){
             var tile = document.createElement('div');
             tile.className = 'stat-item';
-            tile.innerHTML = '<span class="label">' + row.name + '</span><span class="value">' + row.count + '</span>';
+            var modeLabel = row.mode ? (' (' + row.mode.toUpperCase() + ')') : '';
+            tile.innerHTML = '<span class="label">' + row.name + modeLabel + '</span><span class="value">' + row.count + '</span>';
             topTagsContainer.appendChild(tile);
           });
         }
@@ -280,9 +281,10 @@
     } catch (e) {}
   }
 
-  function fetchAdminTagData(tag){
+  function fetchAdminTagData(tag, mode){
     var url = new URL(window.location.origin + '/statistics/admin-tag/');
     url.searchParams.set('tag', tag || '');
+    if (mode) { url.searchParams.set('mode', mode); }
     return fetch(url.toString(), { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
       .then(function(r){ return r.json(); })
       .catch(function(){ return null; });
@@ -315,6 +317,7 @@
         var totals = adminTagCache.totals || {};
         var ct = adminTagCache.click_through || {};
         var tiles = [
+          { label: 'Mode', value: String((adminTagCache.mode || 'std')).toUpperCase() },
           { label: 'Searches (all time)', value: totals.searches_all_time },
           { label: 'Searches (last 30d)', value: totals.searches_last_30d },
           { label: 'Avg searches/day (30d)', value: (Math.round((totals.avg_searches_per_day_30d || 0) * 100) / 100) },
@@ -365,15 +368,20 @@
 
     // Tag detail form
     var form = document.getElementById('adminTagForm');
+    var modeSel = document.getElementById('adminTagMode');
     if (form) {
       form.addEventListener('submit', function(e){
         e.preventDefault();
         var input = document.getElementById('adminTagInput');
         var val = (input && input.value) ? input.value.trim() : '';
         if (!val) return;
-        fetchAdminTagData(val).then(function(payload){
+        var modeVal = modeSel ? modeSel.value : 'std';
+        fetchAdminTagData(val, modeVal).then(function(payload){
           if (!payload) return;
           adminTagCache = payload;
+          if (modeSel && payload.mode) {
+            try { modeSel.value = payload.mode; } catch (e) {}
+          }
           updateAdminTagView();
         });
       });

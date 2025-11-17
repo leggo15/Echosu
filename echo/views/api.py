@@ -446,7 +446,12 @@ def admin_upload_predictions(request):
                         continue
                     if not tag_name:
                         continue
-                    tag, _ = Tag.objects.get_or_create(name=tag_name)
+                    try:
+                        tag, _ = Tag.get_or_create_for_mode(tag_name, beatmap.mode)
+                    except ValueError as exc:
+                        skipped += 1
+                        errors.append(str(exc))
+                        continue
                     # If a true negative exists for this beatmap+tag, ensure no predictions are kept
                     if TagApplication.objects.filter(tag=tag, beatmap=beatmap, true_negative=True).exists():
                         TagApplication.objects.filter(tag=tag, beatmap=beatmap, user__isnull=True, is_prediction=True).delete()
@@ -477,7 +482,12 @@ def admin_upload_predictions(request):
                 continue
 
             beatmap = _ensure_beatmap(beatmap_id)
-            tag, _ = Tag.objects.get_or_create(name=tag_name)
+            try:
+                tag, _ = Tag.get_or_create_for_mode(tag_name, beatmap.mode)
+            except ValueError as exc:
+                skipped += 1
+                errors.append(str(exc))
+                continue
             # Skip and delete predicted if a true negative exists
             if TagApplication.objects.filter(tag=tag, beatmap=beatmap, true_negative=True).exists():
                 TagApplication.objects.filter(tag=tag, beatmap=beatmap, user__isnull=True, is_prediction=True).delete()
@@ -617,7 +627,12 @@ def admin_upload_tag_applications(request):
                 continue
 
             beatmap, _ = Beatmap.objects.get_or_create(beatmap_id=str(beatmap_id))
-            tag, _ = Tag.objects.get_or_create(name=tag_name)
+            try:
+                tag, _ = Tag.get_or_create_for_mode(tag_name, beatmap.mode)
+            except ValueError as exc:
+                skipped += 1
+                errors.append(str(exc))
+                continue
 
             obj, created_row = TagApplication.objects.get_or_create(
                 tag=tag, beatmap=beatmap, user=resolved_user,

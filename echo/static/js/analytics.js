@@ -69,6 +69,7 @@
       results_count: typeof ctx.results_count === 'number' ? ctx.results_count : (ctx.results_total || null),
       sort: ctx.sort || '',
       predicted_mode: ctx.predicted_mode || '',
+      mode: ctx.mode || '',
       flags: ctx.flags || null
     });
     if (!searchResp || !searchResp.ok) return;

@@ -902,8 +902,8 @@ def statistics_admin_data(request: HttpRequest):
         tags_since = now - timezone.timedelta(days=90)
         tag_counter: Counter[str] = Counter()
         valid_tags = {
-            (tag_name or '').strip().lower(): tag_name
-            for tag_name in Tag.objects.values_list('name', flat=True)
+            ((tag_name or '').strip().lower(), mode or Tag.MODE_STD): (tag_name, mode)
+            for tag_name, mode in Tag.objects.values_list('name', 'mode')
         }
         try:
             qs_tags = (
@@ -911,25 +911,32 @@ def statistics_admin_data(request: HttpRequest):
                 .filter(created_at__gte=tags_since)
                 .exclude(query__isnull=True)
                 .exclude(query__exact='')
-                .values('tags', 'query')
+                .values('tags', 'query', 'flags')
             )
             for event in qs_tags:
                 raw_query = event.get('query') or ''
+                flags = event.get('flags') or {}
+                search_mode = Tag.normalize_mode(flags.get('mode')) if isinstance(flags, dict) else Tag.MODE_STD
                 tokens = _tokenize_query_terms(raw_query)
                 tags = event.get('tags') or []
                 seen = set()
                 for t in tags:
                     tag_lower = (str(t or '').strip().lower())
-                    canonical = valid_tags.get(tag_lower)
-                    if not canonical or tag_lower in seen:
+                    key = (tag_lower, search_mode)
+                    canonical_tuple = valid_tags.get(key)
+                    if not canonical_tuple or tag_lower in seen:
                         continue
                     if (tag_lower not in tokens) and (not _query_contains_phrase(raw_query, tag_lower)):
                         continue
-                    tag_counter[canonical] += 1
+                    display_name, mode = canonical_tuple
+                    tag_counter[(display_name, mode)] += 1
                     seen.add(tag_lower)
         except Exception:
             tag_counter = Counter()
-        top_tags = [{'name': name, 'count': int(cnt)} for name, cnt in tag_counter.most_common(25)]
+        top_tags = [
+            {'name': name, 'mode': mode, 'count': int(cnt)}
+            for (name, mode), cnt in tag_counter.most_common(25)
+        ]
 
         return JsonResponse({
             'searches': {
@@ -954,10 +961,17 @@ def statistics_admin_tag(request: HttpRequest):
     if not getattr(request.user, 'is_staff', False):
         return JsonResponse({}, status=403)
     tag_raw = (request.GET.get('tag') or '').strip()
+    requested_mode = Tag.normalize_mode(request.GET.get('mode'))
     if not tag_raw:
         return JsonResponse({'tag': '', 'searches': {}, 'totals': {}, 'click_through': {}})
-    canonical = Tag.objects.filter(name__iexact=tag_raw).values_list('name', flat=True).first()
-    tag_name = canonical or tag_raw
+    tag_obj = Tag.objects.filter(name__iexact=tag_raw, mode=requested_mode).first()
+    if not tag_obj:
+        tag_obj = Tag.objects.filter(name__iexact=tag_raw).first()
+        if tag_obj:
+            requested_mode = tag_obj.mode
+    if not tag_obj:
+        return JsonResponse({'tag': '', 'searches': {}, 'totals': {}, 'click_through': {}})
+    tag_name = tag_obj.name
     tag_lower = tag_name.lower()
     try:
         now = timezone.now()
@@ -984,13 +998,17 @@ def statistics_admin_tag(request: HttpRequest):
             .filter(created_at__gte=start_30d)
             .exclude(query__isnull=True)
             .exclude(query__exact='')
-            .values('event_id', 'client_id', 'created_at', 'query')
+            .values('event_id', 'client_id', 'created_at', 'query', 'flags')
         )
 
         total_30d_searches = 0
         unique_30d_clients: set[str] = set()
 
         for e in events_30d:
+            flags = e.get('flags') or {}
+            search_mode = Tag.normalize_mode(flags.get('mode'))
+            if search_mode != requested_mode:
+                continue
             raw_query = e.get('query') or ''
             tokens = _tokenize_query_terms(raw_query)
             if (tag_lower not in tokens) and (not _query_contains_phrase(raw_query, tag_lower)):
@@ -1015,12 +1033,16 @@ def statistics_admin_tag(request: HttpRequest):
             AnalyticsSearchEvent.objects
             .exclude(query__isnull=True)
             .exclude(query__exact='')
-            .values('event_id', 'client_id', 'query')
+            .values('event_id', 'client_id', 'query', 'flags')
         )
         event_id_to_client: dict[str, str] = {}
         tag_event_ids: set[str] = set()
         unique_all_clients: set[str] = set()
         for e in all_events:
+            flags = e.get('flags') or {}
+            search_mode = Tag.normalize_mode(flags.get('mode'))
+            if search_mode != requested_mode:
+                continue
             raw_query = e.get('query') or ''
             tokens = _tokenize_query_terms(raw_query)
             if (tag_lower not in tokens) and (not _query_contains_phrase(raw_query, tag_lower)):
@@ -1060,6 +1082,7 @@ def statistics_admin_tag(request: HttpRequest):
 
         return JsonResponse({
             'tag': tag_name,
+            'mode': requested_mode,
             'searches': {
                 'hour': { 'labels': hour_labels, 'counts': hour_counts },
                 'day': { 'labels': day_labels, 'counts': day_counts },

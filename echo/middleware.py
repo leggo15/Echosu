@@ -74,7 +74,7 @@ class AnonymousAnalyticsMiddleware(MiddlewareMixin):
                     samesite='Lax',
                     secure=secure,
                     httponly=False,
-                )
+                    )
         except Exception:
             pass
         return response

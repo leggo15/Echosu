@@ -36,11 +36,20 @@
     }
   }
 
+  function addPassiveListener(el, type, handler){
+    if (!el) return;
+    try {
+      el.addEventListener(type, handler, { passive: true });
+    } catch (e) {
+      el.addEventListener(type, handler);
+    }
+  }
+
   function initNavbarTracking(){
     try {
       var links = document.querySelectorAll('.nav-links .generic-nav-btn');
       links.forEach(function(link){
-        link.addEventListener('click', function(){
+        addPassiveListener(link, 'click', function(){
           var label = (link.textContent || '').trim().toLowerCase();
           var action = null;
           if (label === 'search') action = 'nav_search';
@@ -48,7 +57,9 @@
           else if (label === 'tag library') action = 'nav_tag_library';
           else if (label === 'statistics') action = 'nav_statistics';
           if (!action) return;
-          postClick(action, null, { href: link.getAttribute('href') || null });
+          setTimeout(function(){
+            postClick(action, null, { href: link.getAttribute('href') || null });
+          }, 0);
         });
       });
     } catch (e) {}
@@ -59,13 +70,13 @@
       var directBtn = document.getElementById('bulkDirectAllBtn');
       var selectAllBtn = document.getElementById('bulkSelectAllBtn');
       if (directBtn) {
-        directBtn.addEventListener('click', function(){
-          postClick('bulk_direct_all', null, null);
+        addPassiveListener(directBtn, 'click', function(){
+          setTimeout(function(){ postClick('bulk_direct_all', null, null); }, 0);
         });
       }
       if (selectAllBtn) {
-        selectAllBtn.addEventListener('click', function(){
-          postClick('bulk_select_all', null, null);
+        addPassiveListener(selectAllBtn, 'click', function(){
+          setTimeout(function(){ postClick('bulk_select_all', null, null); }, 0);
         });
       }
     } catch (e) {}
@@ -73,13 +84,13 @@
 
   function initPaginationTracking(){
     try {
-      document.addEventListener('click', function(e){
+      addPassiveListener(document, 'click', function(e){
         var t = e.target;
         if (!t) return;
         var a = t.closest && t.closest('.pagination a');
         if (!a) return;
         var href = a.getAttribute('href') || null;
-        postClick('pagination', null, { href: href });
+        setTimeout(function(){ postClick('pagination', null, { href: href }); }, 0);
       });
     } catch (e) {}
   }
@@ -88,7 +99,7 @@
     try {
       var dropdown = document.getElementById('profileDropdown');
       if (!dropdown) return;
-      dropdown.addEventListener('click', function(e){
+      addPassiveListener(dropdown, 'click', function(e){
         var t = e.target;
         if (!t) return;
         var a = t.closest && t.closest('a');
@@ -99,14 +110,14 @@
           if (label === 'settings') action = 'nav_settings';
           else if (label === 'edit tags') action = 'nav_edit_tags';
           if (action) {
-            postClick(action, null, { href: href });
+            setTimeout(function(){ postClick(action, null, { href: href }); }, 0);
           }
         }
         var btn = t.closest && t.closest('button');
         if (btn) {
           var bl = (btn.textContent || '').trim().toLowerCase();
           if (bl === 'logout') {
-            postClick('nav_logout', null, null);
+            setTimeout(function(){ postClick('nav_logout', null, null); }, 0);
           }
         }
       });
@@ -122,13 +133,13 @@
     try {
       var presets = document.querySelectorAll('.preset-button');
       presets.forEach(function(btn){
-        btn.addEventListener('click', function(){
+        addPassiveListener(btn, 'click', function(){
           var label = (btn.textContent || '').trim().toLowerCase();
           var action = null;
           if (label.indexOf('farm') !== -1) action = 'preset_farm_maps';
           else if (label.indexOf('favorites') !== -1) action = 'preset_favorites';
           if (!action) return;
-          postClick(action, null, null);
+          setTimeout(function(){ postClick(action, null, null); }, 0);
         });
       });
     } catch (e) {}

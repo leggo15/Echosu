@@ -805,12 +805,12 @@ def statistics_latest_events(request: HttpRequest):
 
         palette = ['#ff9f43', '#1e90ff', '#2ecc71', '#e74c3c', '#9b59b6', '#f1c40f', '#e67e22', '#16a085']
         color_map = {}
-        color_index = 0
+        palette_index = 0
         for ev in combined:
             cid = ev['client_id']
             if cid not in color_map:
-                color_map[cid] = palette[color_index % len(palette)]
-                color_index += 1
+                color_map[cid] = palette[palette_index % len(palette)]
+                palette_index += 1
             ev['color'] = color_map[cid]
             ev['text_color'] = color_map[cid] + 'cc'
 

@@ -86,8 +86,7 @@
         var action = detectAction(btn);
         if (!action) return;
         var beatmapId = getBeatmapIdFromEl(btn);
-        // Fire-and-forget
-        postJson('/analytics/log/click/', {
+        var payload = {
           action: action,
           beatmap_id: beatmapId,
           search_event_id: searchEventId,
@@ -95,9 +94,11 @@
             tag_name: btn.dataset && (btn.dataset.tagName || null),
             href: btn.getAttribute && btn.getAttribute('href') || null
           }
-        });
+        };
+        // Defer logging to avoid interfering with default link behavior
+        setTimeout(function(){ postJson('/analytics/log/click/', payload); }, 0);
       } catch (err) {}
-    });
+    }, { passive: true });
 
     // Bulk checkbox changes
     container.addEventListener('change', function(e){

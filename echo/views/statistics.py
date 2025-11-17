@@ -760,16 +760,61 @@ def statistics_latest_searches(request: HttpRequest):
         return JsonResponse({ 'html': '' })
 
 
-def statistics_latest_clicks(request: HttpRequest):
-    """AJAX endpoint: return the latest 15 click events as HTML (staff only)."""
+def statistics_latest_events(request: HttpRequest):
+    """AJAX: return merged search + button logs (latest 30)."""
     try:
         if not getattr(request.user, 'is_staff', False):
             return JsonResponse({ 'html': '' }, status=403)
-        events = (
-            AnalyticsClickEvent.objects
-            .order_by('-created_at')[:15]
-        )
-        html = render_to_string('partials/admin_click_log.html', {'events': events}, request=request)
+
+        search_events = []
+        for e in (
+            AnalyticsSearchEvent.objects
+            .exclude(query__isnull=True)
+            .exclude(query__exact='')
+            .order_by('-created_at')[:30]
+        ):
+            results = e.results_count
+            if results is None:
+                try:
+                    flags = e.flags or {}
+                    results = flags.get('results_count')
+                except Exception:
+                    results = None
+            search_events.append({
+                'type': 'search',
+                'client_id': e.client_id or 'anonymous',
+                'created_at': e.created_at,
+                'label': (e.query or '(no query)')[:80],
+                'results': results if results is not None else '?',
+            })
+
+        click_events = [
+            {
+                'type': 'click',
+                'client_id': e.client_id or 'anonymous',
+                'created_at': e.created_at,
+                'label': e.action or 'click',
+                'meta': e.meta or {},
+            }
+            for e in AnalyticsClickEvent.objects.order_by('-created_at')[:30]
+        ]
+
+        combined = search_events + click_events
+        combined.sort(key=lambda ev: ev['created_at'], reverse=True)
+        combined = combined[:30]
+
+        palette = ['#ff9f43', '#1e90ff', '#2ecc71', '#e74c3c', '#9b59b6', '#f1c40f', '#e67e22', '#16a085']
+        color_map = {}
+        color_index = 0
+        for ev in combined:
+            cid = ev['client_id']
+            if cid not in color_map:
+                color_map[cid] = palette[color_index % len(palette)]
+                color_index += 1
+            ev['color'] = color_map[cid]
+            ev['text_color'] = color_map[cid] + 'cc'
+
+        html = render_to_string('partials/admin_event_log.html', {'events': combined}, request=request)
         return JsonResponse({ 'html': html })
     except Exception:
         return JsonResponse({ 'html': '' })

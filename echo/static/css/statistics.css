@@ -216,4 +216,37 @@
 [data-theme="dark"] .fav-btn:hover { color: #d3dbe6; }
 [data-theme="dark"] .fav-btn.is-starred { color: #ffd36a; }
 
+/* Admin event log */
+.admin-event-row {
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(0,0,0,0.08);
+}
+.admin-event-row .event-content {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.admin-event-row .event-label {
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+}
+.admin-event-row .event-detail {
+  font-weight: 600;
+}
+.admin-event-row .event-meta {
+  font-size: 12px;
+  opacity: 0.8;
+}
+.admin-event-row .event-time {
+  margin-left: auto;
+  font-size: 12px;
+  opacity: 0.7;
+}
+[data-theme="dark"] .admin-event-row {
+  border-color: rgba(255,255,255,0.08);
+}
+
 

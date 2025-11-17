@@ -21,7 +21,7 @@ from echo.views.userSettings  import (
 )
 from echo.views.pages      import error_page_view, custom_404_view
 from echo.views.statistics import statistics, statistics_player_data, statistics_latest_maps
-from echo.views.statistics import statistics_latest_searches, statistics_latest_clicks, statistics_admin_data, statistics_admin_tag
+from echo.views.statistics import statistics_latest_searches, statistics_latest_events, statistics_admin_data, statistics_admin_tag
 from echo.views.analytics import log_search_event, log_click_event
 
 # DRF viewsets
@@ -62,7 +62,7 @@ urlpatterns = [
     path('statistics/player-data/', statistics_player_data, name='statistics_player_data'),
     path('statistics/latest-maps/', statistics_latest_maps, name='statistics_latest_maps'),
     path('statistics/latest-searches/', statistics_latest_searches, name='statistics_latest_searches'),
-    path('statistics/latest-clicks/', statistics_latest_clicks, name='statistics_latest_clicks'),
+    path('statistics/latest-events/', statistics_latest_events, name='statistics_latest_events'),
     path('statistics/admin-data/', statistics_admin_data, name='statistics_admin_data'),
     path('statistics/admin-tag/', statistics_admin_tag, name='statistics_admin_tag'),
     path('search/saved/toggle/', toggle_saved_search, name='toggle_saved_search'),

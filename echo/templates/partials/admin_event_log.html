@@ -1,0 +1,18 @@
+{% for e in events %}
+  <div class="admin-event-row" style="border-left: 4px solid {{ e.color }};">
+    <div class="event-content" style="color: {{ e.text_color }};">
+      {% if e.type == 'search' %}
+        <span class="event-label">Search</span>
+        <span class="event-detail">{{ e.label }}</span>
+        <span class="event-meta">({{ e.results|default:"?" }} results)</span>
+      {% else %}
+        <span class="event-label">Button</span>
+        <span class="event-detail">{{ e.label }}</span>
+      {% endif %}
+      <span class="event-time">{{ e.created_at|date:"Y-m-d H:i" }}</span>
+    </div>
+  </div>
+{% empty %}
+  <div class="admin-event-row"><span>No events.</span></div>
+{% endfor %}
+

@@ -155,26 +155,15 @@
       try {
         var sec = document.querySelector('.tab-section.is-active');
         if (!sec || sec.getAttribute('data-section') !== 'admin') return;
-        fetch('/statistics/latest-searches/', { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        fetch('/statistics/latest-events/', { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
           .then(function(r){ return r.json(); })
           .then(function(payload){
             if (!payload || !payload.html) return;
-            var div = document.getElementById('adminLatestSearches');
+            var div = document.getElementById('adminLatestEvents');
             if (!div) return;
             div.innerHTML = payload.html;
           })
           .finally(function(){ adminLatestBusy = false; });
-
-        // Button events log (independent; do not gate busy flag on this)
-        fetch('/statistics/latest-clicks/', { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
-          .then(function(r){ return r.json(); })
-          .then(function(payload){
-            if (!payload || !payload.html) return;
-            var div2 = document.getElementById('adminLatestClicks');
-            if (!div2) return;
-            div2.innerHTML = payload.html;
-          })
-          .catch(function(){ /* ignore */ });
       } catch (e) { adminLatestBusy = false; }
     }
     adminLatestTimer = setInterval(function(){ if (!document.hidden) tick(); }, 30000);

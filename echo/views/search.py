@@ -499,6 +499,8 @@ def search_results(request):
     annotate_search_results_with_tags(page_obj.object_list, request.user, predicted_mode in ['include', 'only'])
 
     # Attach derived, lightweight display fields only
+    seen_high_confidence = False
+    threshold_set = False
     for bm in page_obj.object_list:
         try:
             # Import lazily to avoid circular on module import
@@ -506,6 +508,18 @@ def search_results(request):
             bm.length_formatted = format_length_hms(bm.total_length)
         except Exception:
             bm.length_formatted = None
+
+        weight = getattr(bm, 'tag_weight', None)
+        if weight is not None:
+            if weight >= 1.0:
+                seen_high_confidence = True
+            if not threshold_set and seen_high_confidence and weight < 1.0:
+                bm.tag_weight_threshold_marker = True
+                threshold_set = True
+            else:
+                bm.tag_weight_threshold_marker = False
+        else:
+            bm.tag_weight_threshold_marker = False
 
     # Record search history in session for authenticated users (simple, per-browser)
     # Ignore empty queries

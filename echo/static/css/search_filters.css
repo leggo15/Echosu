@@ -277,3 +277,31 @@
   .preset-slider .preset-button { position: absolute; width: 50%; }
 }
 
+.tag-weight-threshold {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 24px 0;
+}
+.tag-weight-line {
+  flex: 1;
+  height: 2px;
+  background: linear-gradient(90deg, rgba(231,76,60,0.5), rgba(231,76,60,0.95), rgba(231,76,60,0.5));
+  border-radius: 2px;
+}
+.tag-weight-label {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 4px 10px;
+  border-radius: 999px 0 0 999px;
+  background: rgba(231,76,60,0.12);
+  color: #c0392b;
+  white-space: nowrap;
+  font-weight: 600;
+}
+[data-theme="dark"] .tag-weight-label {
+  background: rgba(231,76,60,0.25);
+  color: #ffb3a1;
+}
+

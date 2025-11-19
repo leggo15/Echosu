@@ -192,6 +192,12 @@
 
         <div class="search-results">
           {% for beatmap in beatmaps %}
+            {% if beatmap.tag_weight_threshold_marker %}
+            <div class="tag-weight-threshold">
+              <span class="tag-weight-line"></span>
+              <span class="tag-weight-label">Unlikely to be accurate below this point</span>
+            </div>
+            {% endif %}
             {% include 'partials/tag_card.html' with beatmap=beatmap %}
           {% empty %}
             <p>No results found.</p>
@@ -220,6 +226,7 @@
 {% endblock %}
 
 {% block foot_js %}
+  <script src="{% static 'js/jquery.ui.touch-punch.min.js' %}"></script>
   <script src="{% static 'js/search_filters.js' %}"></script>
   {% if pp_calc_params %}
   {{ pp_calc_params|json_script:"pp-calc-params" }}

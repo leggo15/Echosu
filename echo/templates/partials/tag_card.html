@@ -174,7 +174,7 @@
       {% endwith %}
 
       <div class="beatmap-stats">
-        {% if show_star_rating %}<span class="focus-stat">★{{ beatmap.difficulty_rating }}</span>{% endif %}
+        {% if show_star_rating %}<span class="focus-stat">★{{ beatmap.difficulty_rating|floatformat:"2" }}</span>{% endif %}
         {% if show_status %}
           {% if beatmap.status == 'Ranked' or beatmap.status == 'Approved' %}
             <span class="focus-stat status-pill status--ranked">{{ beatmap.status }}</span>

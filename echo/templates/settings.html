@@ -31,6 +31,34 @@
                 </ul>
             {% endif %}
 
+            <!-- Game Mode Preferences -->
+            <div class="preferences-section">
+              <h2>Game Mode Settings</h2>
+              <div class="settings-group">
+                <label for="default_mode">Default mode</label>
+                {% with mode=default_mode|default:'osu' %}
+                <select id="default_mode" name="default_mode" data-autosave="select">
+                  <option value="osu" {% if mode == 'osu' %}selected{% endif %}>osu!</option>
+                  <option value="taiko" {% if mode == 'taiko' %}selected{% endif %}>Taiko</option>
+                  <option value="catch" {% if mode == 'catch' %}selected{% endif %}>Catch the Beat</option>
+                  <option value="mania" {% if mode == 'mania' %}selected{% endif %}>osu!mania</option>
+                </select>
+                {% endwith %}
+                <p class="settings-hint">Used as the starting mode on the Search results page.</p>
+
+                <label for="default_mania_keys" style="margin-top:12px;">Default keys (mania)</label>
+                {% with pref=default_mania_keys|default:'any' %}
+                <select id="default_mania_keys" name="default_mania_keys" data-autosave="select">
+                  <option value="any" {% if pref == 'any' %}selected{% endif %}>Any</option>
+                  {% for opt in mania_key_options %}
+                    <option value="{{ opt.value }}" {% if pref == opt.value %}selected{% endif %}>{{ opt.label }}</option>
+                  {% endfor %}
+                </select>
+                {% endwith %}
+                <p class="settings-hint">Mania key preference is used whenever a search defaults to osu!mania.</p>
+              </div>
+            </div>
+
             <!-- Tag Display Preferences -->
             <div class="preferences-section">
               <h2>Layout Settings</h2>

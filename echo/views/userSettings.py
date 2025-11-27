@@ -19,13 +19,18 @@ from django.http import JsonResponse
 # ---------------------------------------------------------------------------
 # Local application imports
 # ---------------------------------------------------------------------------
-from ..models import CustomToken, TagApplication, UserSettings
+from ..models import CustomToken, TagApplication, UserSettings, ManiaKeyOption
 
 
 # ----------------------------- Settings Views ----------------------------- #
 
 @login_required
 def settings(request):
+    mania_key_queryset = list(ManiaKeyOption.objects.order_by('value'))
+    mania_key_options = [{'value': opt.value_string, 'label': opt.label} for opt in mania_key_queryset]
+    valid_mania_keys = {opt['value'] for opt in mania_key_options}
+    valid_mania_keys.add('any')
+
     if request.method == 'POST':
         # AJAX auto-save of preferences (JSON or form-encoded)
         if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.headers.get('content-type', '').startswith('application/json'):
@@ -42,7 +47,8 @@ def settings(request):
                 'show_bpm','show_length','show_year','show_playcount','show_favourites',
                 'show_genres','show_pp_nm','show_pp_hd','show_pp_hr','show_pp_dt','show_pp_ht','show_pp_ez','show_pp_fl','show_pp_calculator'
             }
-            allowed_select_fields = {'tag_category_display'}
+            allowed_select_fields = {'tag_category_display', 'default_mode', 'default_mania_keys'}
+            valid_modes = {'osu', 'taiko', 'catch', 'mania'}
             for key, val in payload.items():
                 if key in allowed_bool_fields:
                     new_val = str(val).lower() in ['1','true','on','yes']
@@ -50,9 +56,18 @@ def settings(request):
                         setattr(us, key, new_val)
                         changed.append(key)
                 elif key in allowed_select_fields:
-                    new_pref = (val or 'none').strip().lower()
-                    if new_pref not in ['none','color','lists']:
-                        new_pref = 'none'
+                    if key == 'default_mode':
+                        new_pref = (val or 'osu').strip().lower()
+                        if new_pref not in valid_modes:
+                            new_pref = 'osu'
+                    elif key == 'default_mania_keys':
+                        new_pref = (val or 'any').strip()
+                        if new_pref not in valid_mania_keys:
+                            new_pref = 'any'
+                    else:
+                        new_pref = (val or 'none').strip().lower()
+                        if new_pref not in ['none','color','lists']:
+                            new_pref = 'none'
                     if getattr(us, key, None) != new_pref:
                         setattr(us, key, new_pref)
                         changed.append(key)
@@ -66,6 +81,7 @@ def settings(request):
             return render(request, 'settings.html', {'full_key': raw_key, 'user': request.user})
         # Save preferences
         if request.POST.get('update_preferences') == '1':
+            valid_modes = {'osu', 'taiko', 'catch', 'mania'}
             pref = (request.POST.get('tag_category_display') or 'none').strip().lower()
             if pref not in ['none', 'color', 'lists']:
                 pref = 'none'
@@ -74,6 +90,18 @@ def settings(request):
             if getattr(us, 'tag_category_display', None) != pref:
                 us.tag_category_display = pref
                 changed.append('tag_category_display')
+            mode_pref = (request.POST.get('default_mode') or 'osu').strip().lower()
+            if mode_pref not in valid_modes:
+                mode_pref = 'osu'
+            if getattr(us, 'default_mode', None) != mode_pref:
+                us.default_mode = mode_pref
+                changed.append('default_mode')
+            mania_pref = (request.POST.get('default_mania_keys') or 'any').strip()
+            if mania_pref not in valid_mania_keys:
+                mania_pref = 'any'
+            if getattr(us, 'default_mania_keys', None) != mania_pref:
+                us.default_mania_keys = mania_pref
+                changed.append('default_mania_keys')
             # Booleans (in case form posts non-AJAX)
             bool_fields = [
                 'group_related_tags','show_star_rating','show_status','show_cs','show_hp','show_od','show_ar',
@@ -92,15 +120,30 @@ def settings(request):
                 'user': request.user,
                 'tag_category_display': us.tag_category_display,
                 'group_related_tags': us.group_related_tags,
+                'default_mode': getattr(us, 'default_mode', 'osu'),
+                'default_mania_keys': getattr(us, 'default_mania_keys', 'any'),
+                'mania_key_options': mania_key_options,
             })
     # GET
     try:
-        tag_pref = request.user.settings.tag_category_display
-        group_related = bool(getattr(request.user.settings, 'group_related_tags', False))
+        user_settings = request.user.settings
+        tag_pref = user_settings.tag_category_display
+        group_related = bool(getattr(user_settings, 'group_related_tags', False))
+        default_mode = getattr(user_settings, 'default_mode', 'osu')
+        default_mania_keys = getattr(user_settings, 'default_mania_keys', 'any')
     except Exception:
         tag_pref = 'none'
         group_related = False
-    return render(request, 'settings.html', {'user': request.user, 'tag_category_display': tag_pref, 'group_related_tags': group_related})
+        default_mode = 'osu'
+        default_mania_keys = 'any'
+    return render(request, 'settings.html', {
+        'user': request.user,
+        'tag_category_display': tag_pref,
+        'group_related_tags': group_related,
+        'default_mode': default_mode,
+        'default_mania_keys': default_mania_keys,
+        'mania_key_options': mania_key_options,
+    })
 
 
 @login_required

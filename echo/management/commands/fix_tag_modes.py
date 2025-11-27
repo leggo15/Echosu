@@ -63,3 +63,5 @@ class Command(BaseCommand):
             f'reassigned={reassigned}, deleted={deleted_apps}, created_tags={created_tags}'
         ))
 
+
+

@@ -187,7 +187,13 @@
           {% endif %}
         {% endif %}
         {% if show_cs or show_hp or show_od or show_ar %}<span>|</span>{% endif %}
-        {% if show_cs %}<span>CS: {{ beatmap.cs }}</span>{% endif %}
+        {% if show_cs %}
+          {% if beatmap.mode == 'mania' %}
+            <span>Keys: {{ beatmap.cs|floatformat:"0" }}K</span>
+          {% else %}
+            <span>CS: {{ beatmap.cs }}</span>
+          {% endif %}
+        {% endif %}
         {% if show_hp %}<span>HP: {{ beatmap.drain }}</span>{% endif %}
         {% if show_od %}<span>OD: {{ beatmap.accuracy }}</span>{% endif %}
         {% if show_ar %}<span>AR: {{ beatmap.ar }}</span>{% endif %}

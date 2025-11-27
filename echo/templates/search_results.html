@@ -85,7 +85,7 @@
         
         
         <!-- Search form with additional filters -->
-        <form action="{% url 'search_results' %}" method="get" class="beatmap-form filters-card">
+        <form action="{% url 'search_results' %}" method="get" class="beatmap-form filters-card" id="search-filters-form">
             <div class="filters-grid filters-grid--tight">
 
                 <!-- Star Rating Slider (slightly narrower) -->
@@ -96,9 +96,9 @@
                         <span id="star-rating-min">0</span>
                         <span id="star-rating-max">10+</span>
                     </div>
-                    <input type="hidden" name="star_min" id="star_min" value="{{ request.GET.star_min|default:0 }}">
-                    <input type="hidden" name="star_max" id="star_max" value="{{ request.GET.star_max|default:10 }}">
-                    <input type="hidden" name="sort" id="main-sort" value="{{ request.GET.sort }}">
+                    <input type="hidden" name="star_min" id="star_min" value="{{ star_min_value|default:0 }}">
+                    <input type="hidden" name="star_max" id="star_max" value="{{ star_max_value|default:10 }}">
+                    <input type="hidden" name="sort" id="main-sort" value="{{ sort }}">
                 </div>
 
                 <!-- Add status filter toggle buttons -->
@@ -146,16 +146,27 @@
                 <div class="filter-mode">
                     <label for="mode">Game Mode:</label>
                     <select name="mode" id="mode">
-                        <option value="osu" {% if not request.GET.mode or request.GET.mode == "osu" %}selected{% endif %}>osu!</option>
-                        <option value="taiko" {% if request.GET.mode == "taiko" %}selected{% endif %}>Taiko</option>
-                        <option value="catch" {% if request.GET.mode == "catch" %}selected{% endif %}>Catch the Beat</option>
-                        <option value="mania" {% if request.GET.mode == "mania" %}selected{% endif %}>osu!mania</option>
+                        <option value="osu" {% if active_mode == "osu" %}selected{% endif %}>osu!</option>
+                        <option value="taiko" {% if active_mode == "taiko" %}selected{% endif %}>Taiko</option>
+                        <option value="catch" {% if active_mode == "catch" %}selected{% endif %}>Catch the Beat</option>
+                        <option value="mania" {% if active_mode == "mania" %}selected{% endif %}>osu!mania</option>
                     </select>
                 </div>
 
             </div>
             <div class="search-row">
-                <input type="text" class="search-input" name="query" id="tag-input" placeholder="Search by Tags, song genre, name, mapper, artist and more..." value="{{ request.GET.query }}">
+                <div class="search-input-wrapper">
+                    <input type="text" class="search-input" name="query" id="tag-input" placeholder="Search by Tags, song genre, name, mapper, artist and more..." value="{{ query }}">
+                    {% if user.is_authenticated %}
+                    <button type="button"
+                            id="save-search-btn"
+                            class="search-save-btn{% if current_saved_search_id %} is-saved{% endif %}"
+                            data-saved="{{ current_saved_search_id|yesno:'true,false' }}"
+                            data-saved-id="{{ current_saved_search_id|default:'' }}"
+                            data-params-json="{{ current_search_params_json|default:'' }}"
+                            title="{% if current_saved_search_id %}Remove saved search{% else %}Save this search{% endif %}">{% if current_saved_search_id %}★{% else %}☆{% endif %}</button>
+                    {% endif %}
+                </div>
                 <button type="submit" class="search-btn">Search</button>
                 <div class="preset-slider">
                     <button type="submit" class="search-btn preset-button preset-button--farm" formaction="{% url 'search_preset_farm' %}">Find Farm Maps</button>
@@ -167,11 +178,12 @@
         <form method="get" action="{% url 'search_results' %}" class="sorting-form">
             <!-- Preserve existing GET parameters -->
             <input type="hidden" name="query" value="{{ query }}">
-            <input type="hidden" name="mode" value="{{ request.GET.mode }}">
+            <input type="hidden" name="mode" value="{{ active_mode }}">
             <input type="hidden" name="star_min" value="{{ star_min }}">
             <input type="hidden" name="star_max" value="{{ star_max }}">
             <input type="hidden" name="include_predicted" value="{{ include_predicted }}">
             <input type="hidden" name="exclude_player" value="{{ request.GET.exclude_player }}">
+            <input type="hidden" name="keys" value="{{ selected_keys }}">
             {% if status_ranked %}
                 <input type="hidden" name="status_ranked" value="ranked">
             {% endif %}
@@ -181,12 +193,37 @@
             {% if status_unranked %}
                 <input type="hidden" name="status_unranked" value="unranked">
             {% endif %}
-            
-            <label for="sort">Sort by:</label>
-            <select name="sort" id="sort" onchange="document.getElementById('main-sort').value=this.value; document.querySelector('form.beatmap-form').submit();">
-                <option value="tag_weight" {% if sort == 'tag_weight' %}selected{% endif %}>Tag Weight</option>
-                <option value="popularity" {% if sort == 'popularity' %}selected{% endif %}>Popularity</option>
-            </select>
+            <div class="sorting-row">
+                <div class="sorting-field">
+                    <label for="sort">Sort by:</label>
+                    <select name="sort" id="sort" onchange="document.getElementById('main-sort').value=this.value; document.querySelector('form.beatmap-form').submit();">
+                        <option value="tag_weight" {% if sort == 'tag_weight' %}selected{% endif %}>Tag Weight</option>
+                        <option value="popularity" {% if sort == 'popularity' %}selected{% endif %}>Popularity</option>
+                    </select>
+                </div>
+                {% if mania_key_options %}
+                <div class="sorting-field keys-field">
+                    <label for="keys-select">Keys:</label>
+                    <select name="keys" id="keys-select" form="search-filters-form" onchange="document.querySelector('form.beatmap-form').submit();">
+                        <option value="any" {% if selected_keys == 'any' %}selected{% endif %}>Any</option>
+                        {% for opt in mania_key_options %}
+                        <option value="{{ opt.value }}" {% if selected_keys == opt.value %}selected{% endif %}>{{ opt.label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {% endif %}
+                {% if user.is_authenticated %}
+                <div class="saved-search-container" {% if not saved_searches %}style="display:none;"{% endif %}>
+                    <label for="saved-search-select">Saved Search Queries:</label>
+                    <select id="saved-search-select">
+                        <option value="" data-placeholder="true" {% if not current_saved_search_id %}selected{% endif %}>Select a saved search</option>
+                        {% for saved in saved_searches %}
+                        <option value="{{ saved.id }}" data-url="{% url 'search_results' %}?{{ saved.qs }}" {% if current_saved_search_id == saved.id %}selected{% endif %}>{{ saved.label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {% endif %}
+            </div>
         </form>
 
 
@@ -208,8 +245,8 @@
     <div class="pagination">
         <span class="step-links">
             {% if beatmaps.has_previous %}
-                <a href="?query={{ query|urlencode }}&mode={{ request.GET.mode }}&star_min={{ star_min }}&star_max={{ star_max }}&sort={{ sort }}{% if status_ranked %}&status_ranked=ranked{% endif %}{% if status_loved %}&status_loved=loved{% endif %}{% if status_unranked %}&status_unranked=unranked{% endif %}&include_predicted={{ request.GET.include_predicted }}&exclude_player={{ request.GET.exclude_player }}&page=1">&laquo; first</a>
-                <a href="?query={{ query|urlencode }}&mode={{ request.GET.mode }}&star_min={{ star_min }}&star_max={{ star_max }}&sort={{ sort }}{% if status_ranked %}&status_ranked=ranked{% endif %}{% if status_loved %}&status_loved=loved{% endif %}{% if status_unranked %}&status_unranked=unranked{% endif %}&include_predicted={{ request.GET.include_predicted }}&exclude_player={{ request.GET.exclude_player }}&page={{ beatmaps.previous_page_number }}">previous</a>
+                <a href="?query={{ query|urlencode }}&mode={{ active_mode }}&star_min={{ star_min }}&star_max={{ star_max }}&sort={{ sort }}{% if status_ranked %}&status_ranked=ranked{% endif %}{% if status_loved %}&status_loved=loved{% endif %}{% if status_unranked %}&status_unranked=unranked{% endif %}&include_predicted={{ request.GET.include_predicted }}&exclude_player={{ request.GET.exclude_player }}{% if selected_keys and selected_keys != 'any' %}&keys={{ selected_keys }}{% endif %}&page=1">&laquo; first</a>
+                <a href="?query={{ query|urlencode }}&mode={{ active_mode }}&star_min={{ star_min }}&star_max={{ star_max }}&sort={{ sort }}{% if status_ranked %}&status_ranked=ranked{% endif %}{% if status_loved %}&status_loved=loved{% endif %}{% if status_unranked %}&status_unranked=unranked{% endif %}&include_predicted={{ request.GET.include_predicted }}&exclude_player={{ request.GET.exclude_player }}{% if selected_keys and selected_keys != 'any' %}&keys={{ selected_keys }}{% endif %}&page={{ beatmaps.previous_page_number }}">previous</a>
             {% endif %}
 
             <span class="current">
@@ -217,8 +254,8 @@
             </span>
 
             {% if beatmaps.has_next %}
-                <a href="?query={{ query|urlencode }}&mode={{ request.GET.mode }}&star_min={{ star_min }}&star_max={{ star_max }}&sort={{ sort }}{% if status_ranked %}&status_ranked=ranked{% endif %}{% if status_loved %}&status_loved=loved{% endif %}{% if status_unranked %}&status_unranked=unranked{% endif %}&include_predicted={{ request.GET.include_predicted }}&exclude_player={{ request.GET.exclude_player }}&page={{ beatmaps.next_page_number }}">next</a>
-                <a href="?query={{ query|urlencode }}&mode={{ request.GET.mode }}&star_min={{ star_min }}&star_max={{ star_max }}&sort={{ sort }}{% if status_ranked %}&status_ranked=ranked{% endif %}{% if status_loved %}&status_loved=loved{% endif %}{% if status_unranked %}&status_unranked=unranked{% endif %}&include_predicted={{ request.GET.include_predicted }}&exclude_player={{ request.GET.exclude_player }}&page={{ beatmaps.paginator.num_pages }}">last &raquo;</a>
+                <a href="?query={{ query|urlencode }}&mode={{ active_mode }}&star_min={{ star_min }}&star_max={{ star_max }}&sort={{ sort }}{% if status_ranked %}&status_ranked=ranked{% endif %}{% if status_loved %}&status_loved=loved{% endif %}{% if status_unranked %}&status_unranked=unranked{% endif %}&include_predicted={{ request.GET.include_predicted }}&exclude_player={{ request.GET.exclude_player }}{% if selected_keys and selected_keys != 'any' %}&keys={{ selected_keys }}{% endif %}&page={{ beatmaps.next_page_number }}">next</a>
+                <a href="?query={{ query|urlencode }}&mode={{ active_mode }}&star_min={{ star_min }}&star_max={{ star_max }}&sort={{ sort }}{% if status_ranked %}&status_ranked=ranked{% endif %}{% if status_loved %}&status_loved=loved{% endif %}{% if status_unranked %}&status_unranked=unranked{% endif %}&include_predicted={{ request.GET.include_predicted }}&exclude_player={{ request.GET.exclude_player }}{% if selected_keys and selected_keys != 'any' %}&keys={{ selected_keys }}{% endif %}&page={{ beatmaps.paginator.num_pages }}">last &raquo;</a>
             {% endif %}
         </span>
     </div>
@@ -271,7 +308,8 @@
   <script>
     (function() {
       // Determine if user has osu_id in session (required for player-based features)
-      var canUsePlayerFilters = {{ request.user.is_authenticated|yesno:'true,false' }};
+      var isAuthed = {{ request.user.is_authenticated|yesno:'true,false' }};
+      var canUsePlayerFilters = isAuthed;
 
       // Message helper (same logic as edit_tags page)
       function showMessage(message, type) {
@@ -317,6 +355,221 @@
             showMessage('You need to login to use this feature.', 'error');
             excludeSel.value = 'none';
           }
+        });
+      }
+
+      // Saved search star + picker
+      var saveBtn = document.getElementById('save-search-btn');
+      var savedSelect = document.getElementById('saved-search-select');
+      var savedContainer = document.querySelector('.saved-search-container');
+      var searchForm = document.querySelector('form.beatmap-form');
+      var queryInput = document.getElementById('tag-input');
+
+      function getCsrfToken(){
+        var meta = document.querySelector('meta[name="csrf-token"]');
+        return meta ? meta.getAttribute('content') : '';
+      }
+
+      function collectCurrentFilters(){
+        var snapshot = {};
+        var queryVal = (queryInput && queryInput.value) ? queryInput.value.trim() : '';
+        snapshot.query = queryVal;
+        var modeSel = document.getElementById('mode');
+        snapshot.mode = (modeSel && modeSel.value) ? modeSel.value : '{{ active_mode }}';
+        var starMinInput = document.getElementById('star_min');
+        if (starMinInput) { snapshot.star_min = starMinInput.value || ''; }
+        var starMaxInput = document.getElementById('star_max');
+        if (starMaxInput) { snapshot.star_max = starMaxInput.value || ''; }
+        var sortSel = document.getElementById('sort');
+        if (sortSel) { snapshot.sort = sortSel.value || ''; }
+        var includePredSel = document.getElementById('include_predicted');
+        if (includePredSel) { snapshot.include_predicted = includePredSel.value || 'include'; }
+        var excludeSel = document.getElementById('exclude_player');
+        if (excludeSel) { snapshot.exclude_player = excludeSel.value || 'none'; }
+        var statusRanked = document.querySelector('input[name="status_ranked"]');
+        if (statusRanked && statusRanked.checked) { snapshot.status_ranked = statusRanked.value || 'ranked'; } else { delete snapshot.status_ranked; }
+        var statusLoved = document.querySelector('input[name="status_loved"]');
+        if (statusLoved && statusLoved.checked) { snapshot.status_loved = statusLoved.value || 'loved'; } else { delete snapshot.status_loved; }
+        var statusUnranked = document.querySelector('input[name="status_unranked"]');
+        if (statusUnranked && statusUnranked.checked) { snapshot.status_unranked = statusUnranked.value || 'unranked'; } else { delete snapshot.status_unranked; }
+        var keysSelect = document.getElementById('keys-select');
+        if (keysSelect) {
+          var keyVal = keysSelect.value || 'any';
+          if (keyVal === 'any') {
+            delete snapshot.keys;
+          } else {
+            snapshot.keys = keyVal;
+          }
+        } else {
+          delete snapshot.keys;
+        }
+        return snapshot;
+      }
+
+      function snapshotToJson(obj){
+        var ordered = {};
+        Object.keys(obj || {}).sort().forEach(function(key){
+          ordered[key] = obj[key];
+        });
+        return JSON.stringify(ordered);
+      }
+
+      function buildQueryString(obj){
+        var params = new URLSearchParams();
+        Object.keys(obj || {}).forEach(function(key){
+          var val = obj[key];
+          if (val === undefined || val === null || val === '') { return; }
+          params.append(key, val);
+        });
+        return params.toString();
+      }
+
+      function getCanonicalParamsJson(){
+        if (saveBtn) {
+          var cached = saveBtn.getAttribute('data-params-json');
+          if (cached) { return cached; }
+        }
+        var snapshot = collectCurrentFilters();
+        if (!snapshot) { return ''; }
+        return snapshotToJson(snapshot);
+      }
+
+      function updateSaveButtonVisibility(){
+        if (!saveBtn) return;
+        var hasValue = queryInput && queryInput.value && queryInput.value.trim().length > 0;
+        if (hasValue) { saveBtn.classList.add('is-visible'); }
+        else { saveBtn.classList.remove('is-visible'); }
+      }
+
+      function setStarState(saved, id, paramsJson){
+        if (!saveBtn) return;
+        saveBtn.dataset.saved = saved ? 'true' : 'false';
+        if (saved) {
+          saveBtn.classList.add('is-saved');
+          saveBtn.textContent = '★';
+          if (id) { saveBtn.dataset.savedId = String(id); }
+        } else {
+          saveBtn.classList.remove('is-saved');
+          saveBtn.textContent = '☆';
+          saveBtn.dataset.savedId = '';
+        }
+        if (paramsJson !== undefined) {
+          saveBtn.dataset.paramsJson = paramsJson || '';
+        }
+      }
+
+      function ensureSavedContainerVisible(){
+        if (savedContainer) {
+          savedContainer.style.display = '';
+        }
+      }
+
+      function addSavedOption(id, paramsJson, labelTextOverride){
+        if (!savedSelect || !id) return;
+        var snapshot = {};
+        try { snapshot = JSON.parse(paramsJson || '{}'); } catch (e) { snapshot = {}; }
+        var qs = buildQueryString(snapshot);
+        var option = savedSelect.querySelector('option[value="' + id + '"]');
+        if (!option) {
+          option = document.createElement('option');
+          option.value = id;
+          var labelText = labelTextOverride || snapshot.query || '(no query)';
+          if (labelText.length > 25) {
+            labelText = labelText.slice(0, 22) + '...';
+          }
+          option.textContent = labelText;
+          savedSelect.appendChild(option);
+        }
+        option.setAttribute('data-url', '{% url "search_results" %}?' + qs);
+        savedSelect.value = id;
+        ensureSavedContainerVisible();
+      }
+
+      function removeSavedOption(id){
+        if (!savedSelect || !id) return;
+        var option = savedSelect.querySelector('option[value="' + id + '"]');
+        if (option) { option.remove(); }
+        var remaining = savedSelect.querySelectorAll('option[data-url]').length;
+        if (remaining === 0 && savedContainer) {
+          savedContainer.style.display = 'none';
+          var placeholder = savedSelect.querySelector('option[data-placeholder="true"]');
+          if (placeholder) { placeholder.selected = true; }
+        }
+      }
+
+      function handleFiltersChanged(event){
+        if (!saveBtn) return;
+        if (event && event.target === saveBtn) { return; }
+        saveBtn.dataset.paramsJson = '';
+        if (saveBtn.dataset.saved === 'true') {
+          setStarState(false, '', '');
+        }
+      }
+
+      if (saveBtn) {
+        updateSaveButtonVisibility();
+        if (searchForm) {
+          searchForm.addEventListener('input', function(evt){
+            if (evt && evt.target === queryInput) {
+              updateSaveButtonVisibility();
+            }
+            handleFiltersChanged(evt);
+          });
+          searchForm.addEventListener('change', handleFiltersChanged);
+        } else if (queryInput) {
+          queryInput.addEventListener('input', function(evt){
+            updateSaveButtonVisibility();
+            handleFiltersChanged(evt);
+          });
+        }
+        saveBtn.addEventListener('click', function(){
+          if (!isAuthed) {
+            showMessage('You need to login to save searches.', 'error');
+            return;
+          }
+          if (!queryInput || !queryInput.value.trim()) {
+            showMessage('Enter a search query first.', 'error');
+            return;
+          }
+          var currentQuery = queryInput.value.trim();
+          var paramsJson = getCanonicalParamsJson();
+          if (!paramsJson) {
+            var fallbackSnapshot = collectCurrentFilters();
+            fallbackSnapshot.query = currentQuery;
+            paramsJson = snapshotToJson(fallbackSnapshot);
+          }
+          var body = new URLSearchParams();
+          body.append('csrfmiddlewaretoken', getCsrfToken());
+          body.append('query', currentQuery);
+          body.append('params_json', paramsJson);
+          fetch('{% url "toggle_saved_search" %}', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: body.toString()
+          })
+          .then(function(resp){ return resp.json(); })
+          .then(function(payload){
+            if (!payload) { return; }
+            if (payload.saved) {
+              setStarState(true, payload.saved_id, payload.params_json || paramsJson);
+              addSavedOption(payload.saved_id, payload.params_json || paramsJson, payload.title);
+            } else {
+              removeSavedOption(saveBtn.dataset.savedId);
+              setStarState(false, '', payload.params_json || paramsJson);
+            }
+          })
+          .catch(function(){
+            showMessage('Could not update saved search.', 'error');
+          });
+        });
+      }
+
+      if (savedSelect) {
+        savedSelect.addEventListener('change', function(){
+          var opt = savedSelect.options[savedSelect.selectedIndex];
+          var url = opt && opt.getAttribute('data-url');
+          if (!url) { return; }
+          window.location.href = url;
         });
       }
     })();

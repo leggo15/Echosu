@@ -1,6 +1,7 @@
 from django.db import models
 from django.conf import settings
 from django.db.models import Count
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 import uuid
 
 class Genre(models.Model):
@@ -69,6 +70,40 @@ class Beatmap(models.Model):
 
     def __str__(self):
         return self.beatmap_id or "Unknown id"
+
+
+class ManiaKeyOption(models.Model):
+    value = models.DecimalField(max_digits=4, decimal_places=2, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ['value']
+
+    @staticmethod
+    def _normalize_decimal(raw_value):
+        try:
+            dec = Decimal(str(raw_value))
+        except (InvalidOperation, TypeError, ValueError):
+            return None
+        return dec.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+    @classmethod
+    def ensure_for_value(cls, value):
+        dec = cls._normalize_decimal(value)
+        if dec is None:
+            return
+        cls.objects.get_or_create(value=dec)
+
+    @property
+    def value_string(self):
+        text = format(self.value.normalize(), 'f')
+        if '.' in text:
+            text = text.rstrip('0').rstrip('.')
+        return text or '0'
+
+    @property
+    def label(self):
+        return f'{self.value_string}K'
 
 
 
@@ -397,6 +432,18 @@ class UserSettings(models.Model):
     tag_category_display = models.CharField(max_length=16, choices=DISPLAY_CHOICES, default=DISPLAY_NONE, db_index=True)
     # Feature flag: when enabled, tags are visually grouped by parent relations on cards
     group_related_tags = models.BooleanField(default=False, db_index=True)
+    MODE_OSU = 'osu'
+    MODE_TAIKO = 'taiko'
+    MODE_CATCH = 'catch'
+    MODE_MANIA = 'mania'
+    MODE_CHOICES = [
+        (MODE_OSU, 'osu!'),
+        (MODE_TAIKO, 'Taiko'),
+        (MODE_CATCH, 'Catch the Beat'),
+        (MODE_MANIA, 'osu!mania'),
+    ]
+    default_mode = models.CharField(max_length=16, choices=MODE_CHOICES, default=MODE_OSU, db_index=True)
+    default_mania_keys = models.CharField(max_length=16, default='any', db_index=True)
 
     # ---------------------- Tag Card Visibility Preferences ---------------------- #
     # Major stats
@@ -432,6 +479,8 @@ class UserSettings(models.Model):
         indexes = [
             models.Index(fields=['tag_category_display']),
             models.Index(fields=['user', 'tag_category_display']),
+            models.Index(fields=['default_mode']),
+            models.Index(fields=['default_mania_keys']),
         ]
 
     def __str__(self):

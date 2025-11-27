@@ -15,6 +15,20 @@ $(function() {
       fav.addEventListener('touchstart', function(){ slider.classList.add('hover-favorites'); slider.classList.remove('hover-farm'); }, {passive: true});
     }
   }
+  var filtersForm = document.querySelector('form.beatmap-form');
+  if (filtersForm) {
+    var modeSelect = filtersForm.querySelector('#mode');
+    if (modeSelect) {
+      modeSelect.addEventListener('change', function(){
+        if (filtersForm.requestSubmit) {
+          filtersForm.requestSubmit();
+        } else {
+          filtersForm.submit();
+        }
+      });
+    }
+  }
+
   var $slider = $("#star-rating-slider");
   if (!$slider.length) return;
   $slider.slider({

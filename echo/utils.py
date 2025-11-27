@@ -13,3 +13,4 @@ class QueryContext:
         self.exclude_tags = set()
         self.include_tag_names = set()
         self.exclude_tag_names = set()
+        self.metadata_phrases = []

@@ -100,7 +100,11 @@ def handle_quotes(context, search_terms):
     for term in search_terms:
         if re.match(r'^".+"$', term):
             cleaned = term.strip('"')
-            context.include_tags.add(cleaned)
+            matching_tags = Tag.objects.filter(name__iexact=cleaned)
+            if matching_tags.exists():
+                context.include_tags.update(tag.name for tag in matching_tags)
+            else:
+                context.metadata_phrases.append(cleaned)
         else:
             processed_terms.append(term)
     return processed_terms
@@ -186,6 +190,21 @@ def build_inclusion_q(term):
         Q(drain__icontains=term) |
         Q(accuracy__icontains=term) |
         Q(difficulty_rating__icontains=term)
+    )
+
+#----------#
+
+def build_phrase_q(phrase):
+    cleaned = re.sub(r'\s+', ' ', (phrase or '').strip('"').strip())  # normalize spacing
+    if not cleaned:
+        return Q()
+    return Q(
+        Q(title__icontains=cleaned) |
+        Q(version__icontains=cleaned) |
+        Q(artist__icontains=cleaned) |
+        Q(creator__icontains=cleaned) |
+        Q(original_creator__icontains=cleaned) |
+        Q(listed_owner__icontains=cleaned)
     )
 
 #----------#

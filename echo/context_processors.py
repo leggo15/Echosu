@@ -5,6 +5,7 @@ def add_user_profile_to_context(request):
     prefs = {
         'tag_category_display': 'none',
         'group_related_tags': False,
+        'default_mode': 'osu',
         # Visibility defaults: all shown by default
         'show_star_rating': True,
         'show_status': True,

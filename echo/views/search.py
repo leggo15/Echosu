@@ -50,7 +50,7 @@ from urllib.parse import urlencode
 # ---------------------------------------------------------------------------
 # Local application imports
 # ---------------------------------------------------------------------------
-from ..models import Beatmap, Tag, TagApplication, UserProfile, SavedSearch
+from ..models import Beatmap, Tag, TagApplication, UserProfile, SavedSearch, ManiaKeyOption
 from .auth import api
 from .shared import (
     compute_attribute_windows,
@@ -63,6 +63,7 @@ from ..operators import (
     handle_inclusion,
     handle_attribute_queries,
     handle_general_inclusion,
+    build_phrase_q,
 )
 from ..utils import QueryContext
 # -------------------------- Search History Actions -------------------------- #
@@ -94,11 +95,11 @@ def toggle_saved_search(request):
         existing = SavedSearch.objects.filter(user=request.user, query=q, params_json=params).first()
         if existing:
             existing.delete()
-            return JsonResponse({'saved': False})
+            return JsonResponse({'saved': False, 'params_json': params})
         # Default display name should not be the query; use a generic label
         title = 'Saved query'
         ss = SavedSearch.objects.create(user=request.user, title=title[:255], query=q, params_json=params)
-        return JsonResponse({'saved': True, 'saved_id': ss.id, 'title': ss.title})
+        return JsonResponse({'saved': True, 'saved_id': ss.id, 'title': ss.title, 'params_json': params, 'query': q})
     except Exception as exc:
         return JsonResponse({'error': str(exc)}, status=400)
 
@@ -153,6 +154,22 @@ def search_results(request):
     def stem_phrase(phrase: str) -> str:
         return ' '.join(stem_word(w) for w in phrase.split())
 
+    def format_slider_value(value: float | int | str) -> str:
+        try:
+            num = float(value)
+        except (TypeError, ValueError):
+            return str(value)
+        text = f'{num:.2f}'
+        if '.' in text:
+            text = text.rstrip('0').rstrip('.')
+        return text or '0'
+
+    def apply_toggle(snapshot: dict, key: str, active, value: str):
+        if active:
+            snapshot[key] = value
+        else:
+            snapshot.pop(key, None)
+
     def parse_query_with_quotes(raw_query: str):
         '''Split query, treating quoted substrings as single tokens.'''
         lexer = shlex.shlex(raw_query, posix=True)
@@ -189,6 +206,71 @@ def search_results(request):
             tag for tag in include_like_tags
             if (tag or '').strip('\"\'').strip().lower() in raw_terms
         }
+
+    def derive_simple_phrase(parsed_terms):
+        tokens = []
+        has_special = False
+        attribute_prefixes = ('ar', 'cs', 'od', 'hp', 'bpm', 'length', 'count', 'fav', 'pp', 'nm', 'hd', 'hr', 'dt', 'ht', 'ez', 'fl', 'year')
+        for raw_term, _ in parsed_terms:
+            cleaned = (raw_term or '').strip().strip('\'"')
+            if not cleaned:
+                continue
+            lower = cleaned.lower()
+            special = cleaned.startswith(('.', '-')) or any(ch in cleaned for ch in ['=', '>', '<', ':']) or any(lower.startswith(pref) for pref in attribute_prefixes)
+            if special:
+                has_special = True
+                continue
+            tokens.append(cleaned)
+        if has_special or len(tokens) < 2:
+            return ''
+        return ' '.join(tokens)
+
+    def extract_direct_ids(raw_query: str):
+        val = (raw_query or '').strip()
+        if not val:
+            return []
+        if val.isdigit():
+            return [val]
+        lowered = val.lower()
+        if lowered.startswith('http://') or lowered.startswith('https://'):
+            numbers = re.findall(r'(\d+)', val)
+            if not numbers:
+                return []
+            # Prefer tail (beatmap id) but include previous number (set id) if present.
+            ordered = []
+            for candidate in numbers[-2:]:
+                if candidate not in ordered:
+                    ordered.append(candidate)
+            return ordered
+        return []
+
+    def build_params_snapshot(query_dict, query_value, active_mode):
+        params_copy = query_dict.copy()
+        if 'page' in params_copy:
+            del params_copy['page']
+        snapshot = {}
+        for key, values in params_copy.lists():
+            if not values:
+                continue
+            snapshot[key] = values[-1]
+        snapshot['query'] = query_value
+        if active_mode:
+            snapshot.setdefault('mode', active_mode)
+        return snapshot
+
+    def saved_label_from(title, query_value, limit=25):
+        base_title = (title or '').strip()
+        # Handle query_value being a list (from QueryDict serialization)
+        if isinstance(query_value, list):
+            query_value = query_value[-1] if query_value else ''
+        normalized = (query_value or '').strip()
+        if base_title and base_title.lower() not in ['search', 'saved query'] and base_title != normalized:
+            return base_title
+        display = normalized or '(no query)'
+        if len(display) > limit:
+            truncated = max(limit - 3, 1)
+            return display[:truncated] + '...'
+        return display
 
     def annotate_and_order_beatmaps(qs, include_tags, exact_tags, sort, predicted_mode):
         # Use a single filtered relation for positive tag applications to reduce join cost
@@ -330,12 +412,24 @@ def search_results(request):
         else:
             parts = [p.strip() for p in query.split(',') if p.strip()]
             query = ' '.join(f'"{p}"' for p in parts)
-    selected_mode = request.GET.get('mode', 'osu').strip().lower()
-    star_min = request.GET.get('star_min', '0').strip()
-    star_max = request.GET.get('star_max', '10').strip()
+    user_default_mode = 'osu'
+    if request.user.is_authenticated:
+        try:
+            user_settings = getattr(request.user, 'settings', None)
+            if user_settings and getattr(user_settings, 'default_mode', None):
+                user_default_mode = user_settings.default_mode
+        except Exception:
+            user_default_mode = 'osu'
+    selected_mode = (request.GET.get('mode') or user_default_mode or 'osu').strip().lower()
+    star_min_raw = (request.GET.get('star_min', '0') or '0').strip()
+    star_max_raw = (request.GET.get('star_max', '10') or '10').strip()
+    star_min = star_min_raw
+    star_max = star_max_raw
     sort = request.GET.get('sort', '')
     exclude_player = (request.GET.get('exclude_player') or 'none').strip().lower()
     fetch_exclude_now = (request.GET.get('fetch_exclude_now') or '1').strip()
+    requested_keys = (request.GET.get('keys') or '').strip()
+    params_snapshot = build_params_snapshot(request.GET, query, selected_mode)
     # Predicted mode: 'include' (default), 'exclude', 'only'
     raw_pred = (request.GET.get('include_predicted') or '').strip().lower()
     if raw_pred in ['exclude', '0', 'false', 'off']:
@@ -350,15 +444,20 @@ def search_results(request):
     status_unranked = request.GET.get('status_unranked', False)
 
     try:
-        star_min = max(float(star_min), 0)
+        star_min = max(float(star_min_raw), 0)
     except ValueError:
         star_min = 0.0
+        star_min_raw = '0'
     try:
-        star_max = float(star_max)
+        star_max = float(star_max_raw)
         if star_max < star_min:
             star_max = 10.0
+            star_max_raw = '10'
     except ValueError:
         star_max = 10.0
+        star_max_raw = '10'
+    star_min_value_str = format_slider_value(star_min)
+    star_max_value_str = format_slider_value(star_max)
 
     MODE_MAPPING = {'osu': 'osu', 'taiko': 'taiko', 'catch': 'fruits', 'mania': 'mania'}
     GAME_MODE_ENUM = {
@@ -374,6 +473,40 @@ def search_results(request):
     beatmaps = beatmaps.filter(difficulty_rating__gte=star_min)
     if star_max < 15:
         beatmaps = beatmaps.filter(difficulty_rating__lte=star_max)
+    direct_id_values = extract_direct_ids(query)
+    direct_id_q = None
+    if direct_id_values:
+        direct_id_q = Q()
+        for val in direct_id_values:
+            direct_id_q |= Q(beatmap_id=str(val)) | Q(beatmapset_id=str(val))
+    if direct_id_q:
+        beatmaps = beatmaps.filter(direct_id_q)
+
+    mania_key_options = []
+    selected_keys = 'any'
+    if mapped_mode == 'mania':
+        mania_qs = list(ManiaKeyOption.objects.order_by('value'))
+        mania_key_options = [
+            {'value': opt.value_string, 'label': opt.label}
+            for opt in mania_qs
+        ]
+        mania_value_strings = [opt['value'] for opt in mania_key_options]
+        default_user_keys = 'any'
+        if request.user.is_authenticated:
+            try:
+                default_user_keys = getattr(request.user.settings, 'default_mania_keys', 'any') or 'any'
+            except Exception:
+                default_user_keys = 'any'
+        selected_keys = requested_keys or default_user_keys
+        if selected_keys not in mania_value_strings and selected_keys != 'any':
+            selected_keys = 'any'
+        if selected_keys != 'any':
+            try:
+                beatmaps = beatmaps.filter(cs=float(selected_keys))
+            except ValueError:
+                selected_keys = 'any'
+    else:
+        selected_keys = 'any'
 
     # Exclude user's Top plays or Favourites if requested
     if exclude_player in ['top50', 'top100', 'fav']:
@@ -438,7 +571,13 @@ def search_results(request):
         beatmaps = beatmaps.filter(status_q)
 
     parsed_terms = parse_query_with_quotes(query)
-    beatmaps, include_tags, required_tags, pp_calc_params = build_query_conditions(beatmaps, [t[0] for t in parsed_terms], predicted_mode)
+    search_term_values = [] if direct_id_q else [t[0] for t in parsed_terms]
+    phrase_terms = []
+    if not direct_id_q:
+        simple_phrase = derive_simple_phrase(parsed_terms)
+        if simple_phrase:
+            phrase_terms.append(simple_phrase)
+    beatmaps, include_tags, required_tags, pp_calc_params = build_query_conditions(beatmaps, search_term_values, predicted_mode, phrase_terms)
 
     stemmed_terms = process_search_terms(parsed_terms)
     # Combine include + required tags for weighting and exact-match purposes
@@ -452,6 +591,22 @@ def search_results(request):
         else:
             # Default depends on query presence: tag_weight when query present, else popularity
             sort = 'tag_weight' if include_like_tags else 'popularity'
+
+    params_snapshot['query'] = query
+    params_snapshot['mode'] = selected_mode
+    params_snapshot['star_min'] = star_min_value_str
+    params_snapshot['star_max'] = star_max_value_str
+    params_snapshot['exclude_player'] = exclude_player
+    params_snapshot['include_predicted'] = predicted_mode
+    params_snapshot['sort'] = sort
+    apply_toggle(params_snapshot, 'status_ranked', status_ranked, 'ranked')
+    apply_toggle(params_snapshot, 'status_loved', status_loved, 'loved')
+    apply_toggle(params_snapshot, 'status_unranked', status_unranked, 'unranked')
+    if mapped_mode == 'mania' and selected_keys and selected_keys != 'any':
+        params_snapshot['keys'] = selected_keys
+    else:
+        params_snapshot.pop('keys', None)
+    current_params_json = _json.dumps(params_snapshot, sort_keys=True)
 
     if include_like_tags:
         # Use exact token-matched tags for weighting to avoid substring expansions
@@ -525,15 +680,12 @@ def search_results(request):
     # Ignore empty queries
     try:
         if request.user.is_authenticated and (query or '').strip():
-            params = request.GET.copy()
-            if 'page' in params:
-                del params['page']
             history = request.session.get('search_history', [])
             import uuid, time as _time
             record = {
                 'id': str(uuid.uuid4()),
                 'query': query,
-                'params': dict(params),
+                'params': dict(params_snapshot),
                 'ts': int(_time.time()),
                 'favorite': False,
             }
@@ -570,14 +722,44 @@ def search_results(request):
     except Exception:
         analytics_context = {'tags': analytics_tags}
 
+    saved_search_options = []
+    current_saved_search_id = None
+    if request.user.is_authenticated:
+        saved_records = list(
+            SavedSearch.objects
+            .filter(user=request.user)
+            .order_by('-updated_at')
+            .only('id', 'title', 'query', 'params_json')
+        )
+        for record in saved_records:
+            try:
+                payload = _json.loads(record.params_json or '{}')
+                if not isinstance(payload, dict):
+                    payload = {}
+            except Exception:
+                payload = {}
+            payload.setdefault('query', record.query or '')
+            qs_string = urlencode(payload, doseq=True)
+            display_query = payload.get('query') or record.query or ''
+            saved_search_options.append({
+                'id': record.id,
+                'label': saved_label_from(record.title, display_query),
+                'qs': qs_string,
+            })
+            if current_saved_search_id is None and (record.params_json or '') == current_params_json:
+                current_saved_search_id = record.id
+
     return render(
         request,
         'search_results.html',
         {
             'beatmaps': page_obj,
             'query': query,
+            'active_mode': selected_mode,
             'star_min': star_min,
             'star_max': star_max,
+            'star_min_value': star_min_value_str,
+            'star_max_value': star_max_value_str,
             'sort': sort,
             'status_ranked': status_ranked,
             'status_loved': status_loved,
@@ -588,6 +770,11 @@ def search_results(request):
             'include_like_tags': include_like_tags,
             'results_total': paginator.count,
             'analytics_context': analytics_context | {'tags': analytics_tags},
+            'saved_searches': saved_search_options,
+            'current_saved_search_id': current_saved_search_id,
+            'current_search_params_json': current_params_json,
+            'mania_key_options': mania_key_options,
+            'selected_keys': selected_keys,
         },
     )
 
@@ -629,7 +816,7 @@ def _compute_player_top_tags_and_star_window(osu_id: int, source: str, selected_
             if ids:
                 beatmaps_for_player = Beatmap.objects.filter(beatmap_id__in=ids, mode__iexact=mapped_mode)
         else:  # 'fav'
-            fav_sets = api.user_beatmaps(int(osu_id), UserBeatmapType.FAVOURITE, limit=20)
+            fav_sets = api.user_beatmaps(int(osu_id), UserBeatmapType.FAVOURITE, limit=40)
             set_ids = [str(getattr(bs, 'id', '')) for bs in fav_sets]
             set_ids = [i for i in set_ids if i]
             if set_ids:
@@ -647,7 +834,7 @@ def _compute_player_top_tags_and_star_window(osu_id: int, source: str, selected_
             .annotate(c=Count('id'))
             .order_by('-c')[:15]
         )
-        top_tags = [r['tag__name'] for r in rows if r['tag__name']][:10]
+        top_tags = [r['tag__name'] for r in rows if r['tag__name']][:15]
 
     # Compute a reasonable star window around the median
     star_min_val = None
@@ -822,9 +1009,8 @@ def preset_search_farm(request):
     params['mode'] = selected_mode
     params['fetch_exclude_now'] = '1'
 
-    # Prefer existing sort; default to tag_weight if blank
-    if not (params.get('sort') or '').strip():
-        params['sort'] = 'tag_weight'
+    # Always start farm preset on tag_weight; user can switch afterward
+    params['sort'] = 'tag_weight'
 
     # Respect user's exclude selection; if none/absent, use top100
     exclude_player_val = (params.get('exclude_player') or 'none').strip().lower()
@@ -875,8 +1061,8 @@ def preset_search_new_favorites(request):
         return redirect('search_results')
 
     top_tags, star_min_val, star_max_val = _compute_player_top_tags_and_star_window(osu_id, 'fav', selected_mode)
-    # Limit to top 3 tags for favorites-based discovery
-    top_tags = (top_tags or [])[:3]
+    # Limit to top 15 tags for favorites-based discovery
+    top_tags = (top_tags or [])[:15]
     tags_query_string = ' '.join([f'"{t}"' if ' ' in t else t for t in top_tags])
 
     # Start from existing GET params to preserve user selections
@@ -886,9 +1072,8 @@ def preset_search_new_favorites(request):
     params['mode'] = selected_mode
     params['fetch_exclude_now'] = '1'
 
-    # Prefer existing sort; default to tag_weight if blank
-    if not (params.get('sort') or '').strip():
-        params['sort'] = 'tag_weight'
+    # Always start favorites preset on tag_weight; user can switch afterward
+    params['sort'] = 'tag_weight'
 
     # Respect user's exclude selection; if none/absent, use fav
     exclude_player_val = (params.get('exclude_player') or 'none').strip().lower()
@@ -1002,8 +1187,10 @@ def parse_search_terms(query: str):
     return re.findall(r'[-.]?"[^"]+"|[-.]?[^"\s]+', query)
 
 
-def build_query_conditions(beatmaps, search_terms, predicted_mode='include'):
+def build_query_conditions(beatmaps, search_terms, predicted_mode='include', phrase_terms=None):
     context = QueryContext(beatmaps)
+    if phrase_terms:
+        context.metadata_phrases.extend([p for p in phrase_terms if p])
     for op in (
         handle_attribute_queries,
         handle_quotes,
@@ -1054,5 +1241,10 @@ def build_query_conditions(beatmaps, search_terms, predicted_mode='include'):
         # Exclude only when a positive (non-negative) tag application exists
         context.beatmaps = context.beatmaps.annotate(ta_pos=FilteredRelation('tagapplication', condition=Q(tagapplication__true_negative=False)))
         context.beatmaps = context.beatmaps.exclude(ta_pos__tag__name__in=context.exclude_tags)
+    if context.metadata_phrases:
+        for phrase in context.metadata_phrases:
+            phrase_q = build_phrase_q(phrase)
+            if phrase_q:
+                context.include_q &= phrase_q
     # Return required tags so they can be included in weighting calculations
     return context.beatmaps, context.include_tag_names, context.required_tags, getattr(context, 'pp_calc_params', {})

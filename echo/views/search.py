@@ -96,8 +96,8 @@ def toggle_saved_search(request):
         if existing:
             existing.delete()
             return JsonResponse({'saved': False, 'params_json': params})
-        # Default display name should not be the query; use a generic label
-        title = 'Saved query'
+        cleaned_query = (q or '').strip()
+        title = cleaned_query[:25] if cleaned_query else 'Saved query'
         ss = SavedSearch.objects.create(user=request.user, title=title[:255], query=q, params_json=params)
         return JsonResponse({'saved': True, 'saved_id': ss.id, 'title': ss.title, 'params_json': params, 'query': q})
     except Exception as exc:

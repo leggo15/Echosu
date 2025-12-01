@@ -11,3 +11,4 @@ def ensure_mania_key_option(sender, instance, **kwargs):
         return
     ManiaKeyOption.ensure_for_value(instance.cs)
 
+

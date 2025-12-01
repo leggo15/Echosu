@@ -874,7 +874,7 @@ def preset_search_farm(request):
     if not osu_id:
         return redirect('search_results')
 
-    top_tags, star_min_val, star_max_val = _compute_player_top_tags_and_star_window(osu_id, 'top', selected_mode)
+    top_tags, _, _ = _compute_player_top_tags_and_star_window(osu_id, 'top', selected_mode)
     tags_query_string = ' '.join([
         ('.' if (t or '').strip().lower() == 'farm' else '') + (f'"{t}"' if ' ' in (t or '') else (t or ''))
         for t in top_tags
@@ -1017,11 +1017,6 @@ def preset_search_farm(request):
     if exclude_player_val in ['', 'none']:
         params['exclude_player'] = 'top100'
 
-    # Preserve star range if provided; otherwise use computed window
-    if not params.get('star_min') and star_min_val is not None:
-        params['star_min'] = f"{star_min_val:.2f}"
-    if not params.get('star_max') and star_max_val is not None:
-        params['star_max'] = f"{star_max_val:.2f}"
 
     # Do not force status defaults; keep whatever the user had (including none)
 

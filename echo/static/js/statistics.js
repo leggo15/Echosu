@@ -150,18 +150,33 @@
   function startAdminLatestPoll() {
     if (adminLatestTimer) return;
     function tick(){
-      if (adminLatestBusy) return;
-      adminLatestBusy = true;
       try {
         var sec = document.querySelector('.tab-section.is-active');
         if (!sec || sec.getAttribute('data-section') !== 'admin') return;
-        fetch('/statistics/latest-events/', { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        // If user has paged deeper via "See more", pause auto-refresh to avoid replacing appended content.
+        if (window.__adminEventsPaused) return;
+        if (adminLatestBusy) return;
+        adminLatestBusy = true;
+        var url = new URL(window.location.origin + '/statistics/latest-events/');
+        url.searchParams.set('offset', '0');
+        url.searchParams.set('limit', '30');
+        fetch(url.toString(), { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
           .then(function(r){ return r.json(); })
           .then(function(payload){
             if (!payload || !payload.html) return;
             var div = document.getElementById('adminLatestEvents');
             if (!div) return;
             div.innerHTML = payload.html;
+            // Reset paging state on live refresh
+            try {
+              window.__adminEventsOffset = 30;
+              window.__adminEventsHasMore = !!payload.has_more;
+              window.__adminEventsPaused = false;
+              var moreBtn = document.getElementById('adminEventsMoreBtn');
+              if (moreBtn) {
+                moreBtn.style.display = (window.__adminEventsHasMore ? '' : 'none');
+              }
+            } catch (e) {}
           })
           .finally(function(){ adminLatestBusy = false; });
       } catch (e) { adminLatestBusy = false; }
@@ -192,6 +207,97 @@
     });
   }
 
+  function renderBarWithPercentLine(canvasId, labels, counts, pctSeries, barLabel, barColor, pctLabel){
+    var canvas = document.getElementById(canvasId);
+    if (!canvas) return null;
+    var ctx = canvas.getContext('2d');
+    var pct = Array.isArray(pctSeries) ? pctSeries : [];
+    var plugins = [];
+    // Lightweight data-label draw for percent values (no external plugin dependency).
+    plugins.push({
+      id: 'percentLabels',
+      afterDatasetsDraw: function(chart){
+        try {
+          var dsIndex = 0; // bar dataset
+          var meta = chart.getDatasetMeta(dsIndex);
+          if (!meta || !meta.data) return;
+          var pctData = (chart.data.datasets[1] && chart.data.datasets[1].data) || [];
+          var ctx2 = chart.ctx;
+          ctx2.save();
+          ctx2.font = '11px sans-serif';
+          ctx2.fillStyle = 'rgba(255, 159, 64, 0.95)';
+          ctx2.textAlign = 'center';
+          ctx2.textBaseline = 'bottom';
+          for (var i = 0; i < meta.data.length; i++){
+            var el = meta.data[i];
+            if (!el) continue;
+            var v = pctData[i];
+            if (v === undefined || v === null) continue;
+            var c = (counts && counts[i]) || 0;
+            if (!c) continue; // avoid clutter on empty bins
+            var txt = (Math.round(Number(v) * 10) / 10) + '%';
+            var pos = el.tooltipPosition ? el.tooltipPosition() : el;
+            if (!pos || pos.y === undefined) continue;
+            ctx2.fillText(txt, pos.x, pos.y - 2);
+          }
+          ctx2.restore();
+        } catch (e) {}
+      }
+    });
+    return new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: labels || [],
+        datasets: [
+          {
+            type: 'bar',
+            label: barLabel || '',
+            data: counts || [],
+            backgroundColor: barColor || 'rgba(54, 162, 235, 0.5)',
+            borderColor: (barColor ? barColor.replace('0.5','1') : 'rgba(54, 162, 235, 1)'),
+            borderWidth: 1
+          },
+          {
+            type: 'line',
+            label: pctLabel || 'Download %',
+            data: pct || [],
+            yAxisID: 'y1',
+            borderColor: 'rgba(255, 159, 64, 1)',
+            backgroundColor: 'rgba(255, 159, 64, 0.15)',
+            pointRadius: 2,
+            pointHoverRadius: 3,
+            tension: 0.25,
+            fill: false
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          y: { beginAtZero: true, ticks: { precision: 0 } },
+          y1: { beginAtZero: true, position: 'right', suggestedMax: 100, grid: { drawOnChartArea: false }, ticks: { callback: function(v){ return v + '%'; } } }
+        },
+        plugins: {
+          tooltip: {
+            callbacks: {
+              label: function(ctx){
+                try {
+                  if (ctx.datasetIndex === 1) {
+                    return (pctLabel || 'Download %') + ': ' + (Math.round(Number(ctx.parsed.y || 0) * 10) / 10) + '%';
+                  }
+                  return (barLabel || 'Searches') + ': ' + (ctx.parsed.y || 0);
+                } catch (e) { return ''; }
+              }
+            }
+          },
+          legend: { position: 'top' }
+        }
+      },
+      plugins: plugins
+    });
+  }
+
   function updateAdminCharts(){
     if (!adminDataCache) return;
     try {
@@ -199,11 +305,43 @@
       var periodUniques = (document.getElementById('adminUniquesPeriod') || {}).value || 'hour';
       var s = (adminDataCache.searches && adminDataCache.searches[periodSearch]) || { labels: [], counts: [] };
       var u = (adminDataCache.uniques && adminDataCache.uniques[periodUniques]) || { labels: [], counts: [] };
+      // Overall conversion tile
+      var conv = adminDataCache.download_conversion || null;
+      var convContainer = document.getElementById('adminDownloadOverview');
+      if (convContainer) {
+        convContainer.innerHTML = '';
+        if (conv && (conv.searches_all_time !== undefined)) {
+          var pct = Math.round((Number(conv.percent_with_download_all_time || 0) * 10)) / 10;
+          var tile = document.createElement('div');
+          tile.className = 'stat-item';
+          tile.innerHTML =
+            '<span class="label">' + (conv.label || 'Search→Download conversion (all time)') + '</span>' +
+            '<span class="value">' + pct + '%</span>';
+          convContainer.appendChild(tile);
+          var metaTile = document.createElement('div');
+          metaTile.className = 'stat-item';
+          metaTile.innerHTML =
+            '<span class="label">Searches with download / total</span>' +
+            '<span class="value">' + (conv.searches_with_download_all_time || 0) + ' / ' + (conv.searches_all_time || 0) + '</span>';
+          convContainer.appendChild(metaTile);
+        }
+      }
       if (!adminCharts.searches) {
-        adminCharts.searches = renderBar('adminSearchesChart', s.labels, s.counts, 'Searches', 'rgba(54, 162, 235, 0.5)');
+        adminCharts.searches = renderBarWithPercentLine(
+          'adminSearchesChart',
+          s.labels,
+          s.counts,
+          s.dl_pct || [],
+          'Searches',
+          'rgba(54, 162, 235, 0.5)',
+          'Direct/View %'
+        );
       } else {
         adminCharts.searches.data.labels = s.labels || [];
         adminCharts.searches.data.datasets[0].data = s.counts || [];
+        if (adminCharts.searches.data.datasets[1]) {
+          adminCharts.searches.data.datasets[1].data = s.dl_pct || [];
+        }
         adminCharts.searches.update();
       }
       if (!adminCharts.uniques) {
@@ -288,14 +426,26 @@
       var s = (adminTagCache.searches && adminTagCache.searches[period]) || { labels: [], counts: [] };
       var labels = s.labels || [];
       var data = s.counts || [];
+      var dlPct = s.dl_pct || [];
 
       var canvas = document.getElementById('adminTagChart');
       if (canvas) {
         if (!adminTagChart) {
-          adminTagChart = renderBar('adminTagChart', labels, data, 'Tag searches', 'rgba(153, 102, 255, 0.5)');
+          adminTagChart = renderBarWithPercentLine(
+            'adminTagChart',
+            labels,
+            data,
+            dlPct,
+            'Tag searches',
+            'rgba(153, 102, 255, 0.5)',
+            'Direct/View %'
+          );
         } else {
           adminTagChart.data.labels = labels;
           adminTagChart.data.datasets[0].data = data;
+          if (adminTagChart.data.datasets[1]) {
+            adminTagChart.data.datasets[1].data = dlPct;
+          }
           adminTagChart.update();
         }
       }
@@ -352,8 +502,55 @@
       if (document.hidden) return;
       fetchAdminData().then(function(data){ if (data) { adminDataCache = data; updateAdminCharts(); } });
     }, 60 * 60 * 1000);
-    // Start latest searches log poll
+    // Start latest events poll + see-more
     startAdminLatestPoll();
+    (function(){
+      var moreBtn = document.getElementById('adminEventsMoreBtn');
+      if (!moreBtn) return;
+      // Track how many events we have appended so far.
+      window.__adminEventsOffset = 0;
+      window.__adminEventsHasMore = true;
+      function setBtnVisible(){
+        try {
+          if (window.__adminEventsHasMore && window.__adminEventsOffset >= 0) {
+            moreBtn.style.display = '';
+          } else {
+            moreBtn.style.display = 'none';
+          }
+        } catch (e) {}
+      }
+      moreBtn.addEventListener('click', function(){
+        try {
+          moreBtn.disabled = true;
+          // Once user asks for more, pause live refresh to avoid replacing appended history.
+          window.__adminEventsPaused = true;
+          var url = new URL(window.location.origin + '/statistics/latest-events/');
+          url.searchParams.set('offset', String(window.__adminEventsOffset || 0));
+          url.searchParams.set('limit', '30');
+          fetch(url.toString(), { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(function(r){ return r.json(); })
+            .then(function(payload){
+              var div = document.getElementById('adminLatestEvents');
+              if (!div || !payload) return;
+              // First page replaces; subsequent pages append
+              if ((window.__adminEventsOffset || 0) === 0) {
+                div.innerHTML = payload.html || '';
+              } else {
+                var wrapper = document.createElement('div');
+                wrapper.innerHTML = payload.html || '';
+                while (wrapper.firstChild) { div.appendChild(wrapper.firstChild); }
+              }
+              window.__adminEventsOffset = (window.__adminEventsOffset || 0) + 30;
+              window.__adminEventsHasMore = !!payload.has_more;
+              setBtnVisible();
+            })
+            .finally(function(){
+              moreBtn.disabled = false;
+            });
+        } catch (e) { moreBtn.disabled = false; }
+      });
+      setBtnVisible();
+    })();
 
     // Tag detail form
     var form = document.getElementById('adminTagForm');

@@ -761,17 +761,30 @@ def statistics_latest_searches(request: HttpRequest):
 
 
 def statistics_latest_events(request: HttpRequest):
-    """AJAX: return merged search + button logs (latest 30)."""
+    """AJAX: return merged search + button logs (paged, default 30)."""
     try:
         if not getattr(request.user, 'is_staff', False):
             return JsonResponse({ 'html': '' }, status=403)
+
+        try:
+            offset = max(0, int((request.GET.get('offset') or '0').strip()))
+        except Exception:
+            offset = 0
+        try:
+            limit = max(1, min(100, int((request.GET.get('limit') or '30').strip())))
+        except Exception:
+            limit = 30
+
+        # Fetch more than we need from each source so combined ordering is stable.
+        # (Merged streams require oversampling; 2x is usually enough for low-volume admin analytics.)
+        fetch_n = max(60, (offset + limit) * 2)
 
         search_events = []
         for e in (
             AnalyticsSearchEvent.objects
             .exclude(query__isnull=True)
             .exclude(query__exact='')
-            .order_by('-created_at')[:30]
+            .order_by('-created_at')[:fetch_n]
         ):
             results = e.results_count
             if results is None:
@@ -796,17 +809,18 @@ def statistics_latest_events(request: HttpRequest):
                 'label': e.action or 'click',
                 'meta': e.meta or {},
             }
-            for e in AnalyticsClickEvent.objects.order_by('-created_at')[:30]
+            for e in AnalyticsClickEvent.objects.order_by('-created_at')[:fetch_n]
         ]
 
         combined = search_events + click_events
         combined.sort(key=lambda ev: ev['created_at'], reverse=True)
-        combined = combined[:30]
+        window = combined[offset:offset + limit]
+        has_more = len(combined) > (offset + limit)
 
         palette = ['#ff9f43', '#1e90ff', '#2ecc71', '#e74c3c', '#9b59b6', '#f1c40f', '#e67e22', '#16a085']
         color_map = {}
         palette_index = 0
-        for ev in combined:
+        for ev in window:
             cid = ev['client_id']
             if cid not in color_map:
                 color_map[cid] = palette[palette_index % len(palette)]
@@ -814,8 +828,8 @@ def statistics_latest_events(request: HttpRequest):
             ev['color'] = color_map[cid]
             ev['text_color'] = color_map[cid] + 'cc'
 
-        html = render_to_string('partials/admin_event_log.html', {'events': combined}, request=request)
-        return JsonResponse({ 'html': html })
+        html = render_to_string('partials/admin_event_log.html', {'events': window}, request=request)
+        return JsonResponse({ 'html': html, 'has_more': bool(has_more) })
     except Exception:
         return JsonResponse({ 'html': '' })
 
@@ -828,12 +842,146 @@ def _day_floor(dt):
     return dt.replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=dt.tzinfo)
 
 
+def _week_floor(dt):
+    """Floor datetime to start of week (Monday 00:00) in the same timezone."""
+    try:
+        days = int(dt.weekday())  # Monday=0..Sunday=6
+    except Exception:
+        days = 0
+    return dt.replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=dt.tzinfo) - timezone.timedelta(days=days)
+
+
+def _safe_client_id(v) -> str | None:
+    try:
+        s = (v or '').strip()
+        return s or None
+    except Exception:
+        return None
+
+
+def _compute_followup_ids_for_searches(search_rows: list[dict], action_names: list[str]) -> set[str]:
+    """Return set of search_event_id strings that have at least one followup click with matching client_id."""
+    try:
+        if not search_rows:
+            return set()
+        event_id_to_client: dict[str, str] = {}
+        event_ids = []
+        for r in search_rows:
+            eid = r.get('event_id')
+            cid = _safe_client_id(r.get('client_id'))
+            if not eid or not cid:
+                continue
+            eid_str = str(eid)
+            event_id_to_client[eid_str] = cid
+            event_ids.append(eid)
+        if not event_ids:
+            return set()
+        click_qs = (
+            AnalyticsClickEvent.objects
+            .filter(action__in=action_names, search_event_id__in=event_ids)
+            .values('search_event_id', 'client_id')
+            .distinct()
+        )
+        matched: set[str] = set()
+        for c in click_qs:
+            sid = c.get('search_event_id')
+            cid = _safe_client_id(c.get('client_id'))
+            if not sid or not cid:
+                continue
+            sid_str = str(sid)
+            if event_id_to_client.get(sid_str) == cid:
+                matched.add(sid_str)
+        return matched
+    except Exception:
+        return set()
+
+
+def _bucket_series(
+    search_rows: list[dict],
+    start,
+    bucket_seconds: int,
+    bucket_count: int,
+    followup_ids: set[str],
+) -> tuple[list[int], list[int], list[float]]:
+    """Return (search_counts, followup_counts, followup_pct) per bucket."""
+    counts = [0] * bucket_count
+    f_counts = [0] * bucket_count
+    for r in (search_rows or []):
+        try:
+            created = r.get('created_at')
+            if not created:
+                continue
+            idx = int((created - start).total_seconds() // bucket_seconds)
+            if idx < 0 or idx >= bucket_count:
+                continue
+            counts[idx] += 1
+            eid = r.get('event_id')
+            if eid and str(eid) in followup_ids:
+                f_counts[idx] += 1
+        except Exception:
+            continue
+    pct: list[float] = []
+    for i in range(bucket_count):
+        pct.append((float(f_counts[i]) / float(counts[i]) * 100.0) if counts[i] else 0.0)
+    return counts, f_counts, pct
+
+
 def statistics_admin_data(request: HttpRequest):
     """AJAX endpoint returning admin analytics (staff only)."""
     if not getattr(request.user, 'is_staff', False):
         return JsonResponse({}, status=403)
     try:
         now = timezone.now()
+        # Follow-up actions that represent a "download / take-away" from a search.
+        # Must include view_on_osu to match the existing tag stat "% with Direct/View (all time)".
+        download_actions = ['direct', 'view_on_osu', 'beatconnect', 'bulk_direct_all']
+
+        # -------------------- Overall Search -> Download conversion (all time) --------------------
+        total_searches_all = (
+            AnalyticsSearchEvent.objects
+            .exclude(query__isnull=True)
+            .exclude(query__exact='')
+            .count()
+        )
+        downloads_all = 0
+        pct_downloads_all = 0.0
+        try:
+            click_rows = list(
+                AnalyticsClickEvent.objects
+                .filter(action__in=download_actions)
+                .exclude(search_event_id__isnull=True)
+                .values('search_event_id', 'client_id')
+                .distinct()
+            )
+            referenced_ids = [c.get('search_event_id') for c in click_rows if c.get('search_event_id')]
+            referenced_ids = [i for i in referenced_ids if i]
+            if referenced_ids:
+                # Only load searches that were referenced by a download click (fast-path).
+                search_map = {
+                    str(eid): _safe_client_id(cid)
+                    for eid, cid in (
+                        AnalyticsSearchEvent.objects
+                        .filter(event_id__in=referenced_ids)
+                        .exclude(query__isnull=True)
+                        .exclude(query__exact='')
+                        .values_list('event_id', 'client_id')
+                    )
+                    if _safe_client_id(cid)
+                }
+                matched: set[str] = set()
+                for c in click_rows:
+                    sid = c.get('search_event_id')
+                    cid = _safe_client_id(c.get('client_id'))
+                    if not sid or not cid:
+                        continue
+                    sid_str = str(sid)
+                    if search_map.get(sid_str) == cid:
+                        matched.add(sid_str)
+                downloads_all = len(matched)
+        except Exception:
+            downloads_all = 0
+        pct_downloads_all = (float(downloads_all) / float(total_searches_all) * 100.0) if total_searches_all else 0.0
+
         # Hourly (last 24 hours)
         hour_labels: list[str] = []
         hour_search_counts: list[int] = []
@@ -873,6 +1021,26 @@ def statistics_admin_data(request: HttpRequest):
                 uniq = 0
             hour_unique_counts.append(int(uniq))
 
+        # Download % per hour (last 24h)
+        hour_dl_followups: list[int] = [0] * 24
+        hour_dl_pct: list[float] = [0.0] * 24
+        try:
+            start_24h = _hour_floor(now - timezone.timedelta(hours=23))
+            end_24h = start_24h + timezone.timedelta(hours=24)
+            hour_search_rows = list(
+                AnalyticsSearchEvent.objects
+                .filter(created_at__gte=start_24h, created_at__lt=end_24h)
+                .exclude(query__isnull=True)
+                .exclude(query__exact='')
+                .values('event_id', 'client_id', 'created_at')
+            )
+            hour_followup_ids = _compute_followup_ids_for_searches(hour_search_rows, download_actions)
+            _, f_counts, pct = _bucket_series(hour_search_rows, start_24h, 3600, 24, hour_followup_ids)
+            hour_dl_followups = [int(v) for v in f_counts]
+            hour_dl_pct = [float(v) for v in pct]
+        except Exception:
+            pass
+
         # Daily (last 30 days)
         day_labels: list[str] = []
         day_search_counts: list[int] = []
@@ -909,6 +1077,145 @@ def statistics_admin_data(request: HttpRequest):
             except Exception:
                 uniq = 0
             day_unique_counts.append(int(uniq))
+
+        # Download % per day (last 30d)
+        day_dl_followups: list[int] = [0] * 30
+        day_dl_pct: list[float] = [0.0] * 30
+        try:
+            start_30d = _day_floor(now - timezone.timedelta(days=29))
+            end_30d = start_30d + timezone.timedelta(days=30)
+            day_search_rows = list(
+                AnalyticsSearchEvent.objects
+                .filter(created_at__gte=start_30d, created_at__lt=end_30d)
+                .exclude(query__isnull=True)
+                .exclude(query__exact='')
+                .values('event_id', 'client_id', 'created_at')
+            )
+            day_followup_ids = _compute_followup_ids_for_searches(day_search_rows, download_actions)
+            _, f_counts_d, pct_d = _bucket_series(day_search_rows, start_30d, 24 * 3600, 30, day_followup_ids)
+            day_dl_followups = [int(v) for v in f_counts_d]
+            day_dl_pct = [float(v) for v in pct_d]
+        except Exception:
+            pass
+
+        # Weekly (last 52 weeks) - used for "Year" view (52 candles)
+        week_labels: list[str] = []
+        week_search_counts: list[int] = []
+        week_unique_counts: list[int] = []
+        week_dl_followups: list[int] = [0] * 52
+        week_dl_pct: list[float] = [0.0] * 52
+        start_52w = _week_floor(now) - timezone.timedelta(weeks=51)
+        end_52w = start_52w + timezone.timedelta(weeks=52)
+        try:
+            week_search_rows = list(
+                AnalyticsSearchEvent.objects
+                .filter(created_at__gte=start_52w, created_at__lt=end_52w)
+                .exclude(query__isnull=True)
+                .exclude(query__exact='')
+                .values('event_id', 'client_id', 'created_at')
+            )
+            week_followup_ids = _compute_followup_ids_for_searches(week_search_rows, download_actions)
+            w_counts, w_f, w_pct = _bucket_series(week_search_rows, start_52w, 7 * 24 * 3600, 52, week_followup_ids)
+            week_dl_followups = [int(v) for v in w_f]
+            week_dl_pct = [float(v) for v in w_pct]
+
+            # Unique users per week: union of search + click client_id in that week bucket
+            week_click_rows = list(
+                AnalyticsClickEvent.objects
+                .filter(created_at__gte=start_52w, created_at__lt=end_52w)
+                .values('client_id', 'created_at')
+            )
+            week_client_sets = [set() for _ in range(52)]
+            for r in week_search_rows:
+                try:
+                    idx = int((r['created_at'] - start_52w).total_seconds() // (7 * 24 * 3600))
+                    if 0 <= idx < 52:
+                        cid = _safe_client_id(r.get('client_id'))
+                        if cid:
+                            week_client_sets[idx].add(cid)
+                except Exception:
+                    continue
+            for r in week_click_rows:
+                try:
+                    idx = int((r['created_at'] - start_52w).total_seconds() // (7 * 24 * 3600))
+                    if 0 <= idx < 52:
+                        cid = _safe_client_id(r.get('client_id'))
+                        if cid:
+                            week_client_sets[idx].add(cid)
+                except Exception:
+                    continue
+
+            for i in range(52):
+                wk_start = start_52w + timezone.timedelta(weeks=i)
+                week_labels.append(wk_start.strftime('%Y-%m-%d'))
+                week_search_counts.append(int(w_counts[i]))
+                week_unique_counts.append(int(len(week_client_sets[i])))
+        except Exception:
+            week_labels = [(start_52w + timezone.timedelta(weeks=i)).strftime('%Y-%m-%d') for i in range(52)]
+            week_search_counts = [0] * 52
+            week_unique_counts = [0] * 52
+
+        # All-time (up to 52 buckets)
+        all_labels: list[str] = []
+        all_search_counts: list[int] = []
+        all_unique_counts: list[int] = []
+        all_dl_followups: list[int] = []
+        all_dl_pct: list[float] = []
+        try:
+            first_ts = AnalyticsSearchEvent.objects.order_by('created_at').values_list('created_at', flat=True).first()
+        except Exception:
+            first_ts = None
+        if first_ts:
+            all_start = _day_floor(first_ts)
+            span_sec = max(1, int((now - all_start).total_seconds()))
+            bucket_sec = int(math.ceil(span_sec / 52.0))
+            bucket_count = int(math.ceil(span_sec / float(bucket_sec)))
+            bucket_count = min(52, max(1, bucket_count))
+            all_end = all_start + timezone.timedelta(seconds=bucket_sec * bucket_count)
+            try:
+                all_search_rows = list(
+                    AnalyticsSearchEvent.objects
+                    .filter(created_at__gte=all_start, created_at__lt=all_end)
+                    .exclude(query__isnull=True)
+                    .exclude(query__exact='')
+                    .values('event_id', 'client_id', 'created_at')
+                )
+                all_followup_ids = _compute_followup_ids_for_searches(all_search_rows, download_actions)
+                a_counts, a_f, a_pct = _bucket_series(all_search_rows, all_start, bucket_sec, bucket_count, all_followup_ids)
+                all_dl_followups = [int(v) for v in a_f]
+                all_dl_pct = [float(v) for v in a_pct]
+
+                all_click_rows = list(
+                    AnalyticsClickEvent.objects
+                    .filter(created_at__gte=all_start, created_at__lt=all_end)
+                    .values('client_id', 'created_at')
+                )
+                all_client_sets = [set() for _ in range(bucket_count)]
+                for r in all_search_rows:
+                    try:
+                        idx = int((r['created_at'] - all_start).total_seconds() // bucket_sec)
+                        if 0 <= idx < bucket_count:
+                            cid = _safe_client_id(r.get('client_id'))
+                            if cid:
+                                all_client_sets[idx].add(cid)
+                    except Exception:
+                        continue
+                for r in all_click_rows:
+                    try:
+                        idx = int((r['created_at'] - all_start).total_seconds() // bucket_sec)
+                        if 0 <= idx < bucket_count:
+                            cid = _safe_client_id(r.get('client_id'))
+                            if cid:
+                                all_client_sets[idx].add(cid)
+                    except Exception:
+                        continue
+                for i in range(bucket_count):
+                    bstart = all_start + timezone.timedelta(seconds=bucket_sec * i)
+                    all_labels.append(bstart.strftime('%Y-%m-%d'))
+                    all_search_counts.append(int(a_counts[i]))
+                    all_unique_counts.append(int(len(all_client_sets[i])))
+            except Exception:
+                all_labels, all_search_counts, all_unique_counts, all_dl_followups, all_dl_pct = [], [], [], [], []
 
         # Average clicks per action per day (last 30 days)
         clicks_since = _day_floor(now) - timezone.timedelta(days=29)
@@ -985,12 +1292,22 @@ def statistics_admin_data(request: HttpRequest):
 
         return JsonResponse({
             'searches': {
-                'hour': { 'labels': hour_labels, 'counts': hour_search_counts },
-                'day': { 'labels': day_labels, 'counts': day_search_counts },
+                'hour': { 'labels': hour_labels, 'counts': hour_search_counts, 'dl_followups': hour_dl_followups, 'dl_pct': hour_dl_pct },
+                'day': { 'labels': day_labels, 'counts': day_search_counts, 'dl_followups': day_dl_followups, 'dl_pct': day_dl_pct },
+                'year': { 'labels': week_labels, 'counts': week_search_counts, 'dl_followups': week_dl_followups, 'dl_pct': week_dl_pct },
+                'all': { 'labels': all_labels, 'counts': all_search_counts, 'dl_followups': all_dl_followups, 'dl_pct': all_dl_pct },
             },
             'uniques': {
                 'hour': { 'labels': hour_labels, 'counts': hour_unique_counts },
                 'day': { 'labels': day_labels, 'counts': day_unique_counts },
+                'year': { 'labels': week_labels, 'counts': week_unique_counts },
+                'all': { 'labels': all_labels, 'counts': all_unique_counts },
+            },
+            'download_conversion': {
+                'label': 'Search→Direct/View conversion (all time)',
+                'searches_all_time': total_searches_all,
+                'searches_with_download_all_time': downloads_all,
+                'percent_with_download_all_time': pct_downloads_all,
             },
             'avg_clicks_per_action_per_day': avg_clicks,
             'click_counts_30d': click_counts_30d,
@@ -1020,9 +1337,11 @@ def statistics_admin_tag(request: HttpRequest):
     tag_lower = tag_name.lower()
     try:
         now = timezone.now()
+        download_actions = ['direct', 'view_on_osu', 'beatconnect', 'bulk_direct_all']
         # Define 24h and 30d windows
         start_24h = _hour_floor(now - timezone.timedelta(hours=23))
         start_30d = _day_floor(now - timezone.timedelta(days=29))
+        start_52w = _week_floor(now) - timezone.timedelta(weeks=51)
 
         # Prepare bins
         hour_labels: list[str] = []
@@ -1036,6 +1355,13 @@ def statistics_admin_tag(request: HttpRequest):
             d = _day_floor(start_30d + timezone.timedelta(days=i))
             day_labels.append(d.strftime('%Y-%m-%d'))
         day_counts = [0] * 30
+
+        year_labels: list[str] = [(start_52w + timezone.timedelta(weeks=i)).strftime('%Y-%m-%d') for i in range(52)]
+        year_counts = [0] * 52
+
+        hour_dl_pct = [0.0] * 24
+        day_dl_pct = [0.0] * 30
+        year_dl_pct = [0.0] * 52
 
         # Fetch events for last 24h and 30d in one go
         events_30d = list(
@@ -1072,6 +1398,93 @@ def statistics_admin_tag(request: HttpRequest):
                 delta_hours = int((created - start_24h).total_seconds() // 3600)
                 if 0 <= delta_hours < 24:
                     hour_counts[delta_hours] += 1
+
+            # 52w weekly bucket (subset)
+            if created >= start_52w:
+                delta_weeks = int((created - start_52w).total_seconds() // (7 * 24 * 3600))
+                if 0 <= delta_weeks < 52:
+                    year_counts[delta_weeks] += 1
+
+        # Download % per bucket (hour/day/year) for this tag
+        try:
+            # Hour
+            hour_end = start_24h + timezone.timedelta(hours=24)
+            hour_rows = list(
+                AnalyticsSearchEvent.objects
+                .filter(created_at__gte=start_24h, created_at__lt=hour_end)
+                .exclude(query__isnull=True)
+                .exclude(query__exact='')
+                .values('event_id', 'client_id', 'created_at', 'query', 'flags')
+            )
+            filtered_hour = []
+            for r in hour_rows:
+                flags = r.get('flags') or {}
+                search_mode = Tag.normalize_mode(flags.get('mode'))
+                if search_mode != requested_mode:
+                    continue
+                raw_query = r.get('query') or ''
+                tokens = _tokenize_query_terms(raw_query)
+                if (tag_lower not in tokens) and (not _query_contains_phrase(raw_query, tag_lower)):
+                    continue
+                filtered_hour.append(r)
+            hour_followup_ids = _compute_followup_ids_for_searches(filtered_hour, download_actions)
+            _, _, hpct = _bucket_series(filtered_hour, start_24h, 3600, 24, hour_followup_ids)
+            hour_dl_pct = [float(v) for v in hpct]
+        except Exception:
+            pass
+        try:
+            # Day
+            day_end = start_30d + timezone.timedelta(days=30)
+            day_rows = list(
+                AnalyticsSearchEvent.objects
+                .filter(created_at__gte=start_30d, created_at__lt=day_end)
+                .exclude(query__isnull=True)
+                .exclude(query__exact='')
+                .values('event_id', 'client_id', 'created_at', 'query', 'flags')
+            )
+            filtered_day = []
+            for r in day_rows:
+                flags = r.get('flags') or {}
+                search_mode = Tag.normalize_mode(flags.get('mode'))
+                if search_mode != requested_mode:
+                    continue
+                raw_query = r.get('query') or ''
+                tokens = _tokenize_query_terms(raw_query)
+                if (tag_lower not in tokens) and (not _query_contains_phrase(raw_query, tag_lower)):
+                    continue
+                filtered_day.append(r)
+            day_followup_ids = _compute_followup_ids_for_searches(filtered_day, download_actions)
+            _, _, dpct = _bucket_series(filtered_day, start_30d, 24 * 3600, 30, day_followup_ids)
+            day_dl_pct = [float(v) for v in dpct]
+        except Exception:
+            pass
+        try:
+            # Year (52 weeks)
+            year_end = start_52w + timezone.timedelta(weeks=52)
+            year_rows = list(
+                AnalyticsSearchEvent.objects
+                .filter(created_at__gte=start_52w, created_at__lt=year_end)
+                .exclude(query__isnull=True)
+                .exclude(query__exact='')
+                .values('event_id', 'client_id', 'created_at', 'query', 'flags')
+            )
+            filtered_year = []
+            for r in year_rows:
+                flags = r.get('flags') or {}
+                search_mode = Tag.normalize_mode(flags.get('mode'))
+                if search_mode != requested_mode:
+                    continue
+                raw_query = r.get('query') or ''
+                tokens = _tokenize_query_terms(raw_query)
+                if (tag_lower not in tokens) and (not _query_contains_phrase(raw_query, tag_lower)):
+                    continue
+                filtered_year.append(r)
+            year_followup_ids = _compute_followup_ids_for_searches(filtered_year, download_actions)
+            y_counts, _, ypct = _bucket_series(filtered_year, start_52w, 7 * 24 * 3600, 52, year_followup_ids)
+            year_counts = [int(v) for v in y_counts]
+            year_dl_pct = [float(v) for v in ypct]
+        except Exception:
+            pass
 
         # All-time totals and click-through (direct/view_on_osu)
         all_events = list(
@@ -1129,8 +1542,9 @@ def statistics_admin_tag(request: HttpRequest):
             'tag': tag_name,
             'mode': requested_mode,
             'searches': {
-                'hour': { 'labels': hour_labels, 'counts': hour_counts },
-                'day': { 'labels': day_labels, 'counts': day_counts },
+                'hour': { 'labels': hour_labels, 'counts': hour_counts, 'dl_pct': hour_dl_pct },
+                'day': { 'labels': day_labels, 'counts': day_counts, 'dl_pct': day_dl_pct },
+                'year': { 'labels': year_labels, 'counts': year_counts, 'dl_pct': year_dl_pct },
             },
             'totals': {
                 'searches_all_time': total_all_searches,
@@ -1147,4 +1561,5 @@ def statistics_admin_tag(request: HttpRequest):
         })
     except Exception:
         return JsonResponse({})
+
 

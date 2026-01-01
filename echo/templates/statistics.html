@@ -144,8 +144,65 @@
   <!-- My Statistics Tab -->
   <section class="tab-section" data-section="mine" style="display:none;">
     {% if user.is_authenticated %}
+    {% if my_mapper_has_maps %}
     <div class="stats-section">
-      <h2>My Statistics</h2>
+      <h2>Mapper Statistics</h2>
+        <div class="my-stats-overview">
+          <div class="stat-item">
+            <span class="label">Maps on Echo</span>
+            <span class="value">{{ my_mapper_maps_total|default:0 }}</span>
+          </div>
+        </div>
+
+        <div style="margin-top:10px;">
+          <h3 style="margin:0 0 6px 0;">Downloads & result impressions</h3>
+          <ul class="tag-usage-list mapper-map-list">
+            <li class="is-header">
+              <span class="tag-name">Map</span>
+              <span class="tag-count col-downloads">Downloads</span>
+              <span class="tag-count col-shown">Shown</span>
+            </li>
+            {% for row in my_mapper_maps %}
+              <li>
+                <span class="tag-name">
+                  <a href="/beatmap_detail/{{ row.beatmap.beatmap_id }}/">{{ row.beatmap.title|default:"(untitled)" }}</a>
+                  {% if row.beatmap.version %}<span style="opacity:0.75; font-weight:400;">[{{ row.beatmap.version }}]</span>{% endif %}
+                </span>
+                <span class="tag-count col-downloads" title="Downloads (Direct/View/Beatconnect)">{{ row.downloads|default:0 }}</span>
+                <span class="tag-count col-shown" title="Times shown on a visible results page">{{ row.impressions|default:0 }}</span>
+              </li>
+            {% empty %}
+              <li>No maps found.</li>
+            {% endfor %}
+          </ul>
+        </div>
+
+        <div style="margin-top:12px;">
+          <h3 style="margin:0 0 6px 0;">Tags leading to downloads</h3>
+          {% if my_mapper_top_download_tags %}
+            <ul class="tag-usage-list mapper-tag-list">
+              <li class="is-header">
+                <span class="tag-name">Tag</span>
+                <span class="tag-count col-count">Count</span>
+                <span class="tag-count col-pct">%</span>
+              </li>
+              {% for t in my_mapper_top_download_tags %}
+                <li>
+                  <span class="tag-name">{{ t.name }}</span>
+                  <span class="tag-count col-count">{{ t.count }}</span>
+                  <span class="tag-count col-pct">{{ t.percent|floatformat:"1" }}%</span>
+                </li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <p>No download-linked tags yet.</p>
+          {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="stats-section" style="margin-top:16px;">
+      <h2>Tagging Statistics</h2>
       <div class="my-stats-overview">
         <div class="stat-item"><span class="label">Tag applications</span><span class="value">{{ my_total_applications|default:0 }}</span></div>
         <div class="stat-item"><span class="label">Maps tagged</span><span class="value">{{ my_maps_tagged_count|default:0 }}</span></div>

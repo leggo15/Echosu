@@ -6,8 +6,11 @@ from typing import Any, Dict
 from django.http import JsonResponse, HttpRequest
 from django.views.decorators.http import require_POST
 from django.utils.timezone import now
+from django.views.decorators.csrf import csrf_exempt
 
-from ..models import AnalyticsSearchEvent, AnalyticsClickEvent
+from django.db.models import F
+
+from ..models import AnalyticsSearchEvent, AnalyticsClickEvent, Beatmap
 
 
 def _get_client_id(request: HttpRequest) -> str | None:
@@ -108,5 +111,56 @@ def log_click_event(request: HttpRequest):
 		search_event_id=search_event_id,
 		meta=meta,
 	)
+	# Increment persistent impression counter for beatmaps.
+	# This is safe to fire for anonymous events; it's just aggregate stats.
+	try:
+		if action == 'impression' and beatmap_id:
+			Beatmap.objects.filter(beatmap_id=str(beatmap_id)).update(shown_in_search=F('shown_in_search') + 1)
+	except Exception:
+		pass
 	return JsonResponse({'ok': True})
+
+
+@require_POST
+def log_impressions(request: HttpRequest):
+	"""
+	Increment Beatmap.shown_in_search for a batch of beatmap ids that were visible on a search results page.
+	Expected JSON body:
+	{
+	  "beatmap_ids": [str|int],
+	  "search_event_id": str | null,
+	  "page": int | null
+	}
+	"""
+	try:
+		payload: Dict[str, Any] = json.loads(request.body.decode('utf-8') or '{}')
+	except Exception:
+		payload = {}
+
+	beatmap_ids = payload.get('beatmap_ids') or []
+	if not isinstance(beatmap_ids, list):
+		beatmap_ids = []
+	# De-duplicate and sanitize
+	ids = []
+	seen = set()
+	for v in beatmap_ids:
+		try:
+			s = str(v).strip()
+			if not s:
+				continue
+			if s in seen:
+				continue
+			seen.add(s)
+			ids.append(s)
+		except Exception:
+			continue
+
+	if not ids:
+		return JsonResponse({'ok': True, 'updated': 0})
+
+	try:
+		updated = Beatmap.objects.filter(beatmap_id__in=ids).update(shown_in_search=F('shown_in_search') + 1)
+	except Exception:
+		updated = 0
+	return JsonResponse({'ok': True, 'updated': int(updated)})
 

@@ -23,6 +23,7 @@ from echo.views.pages      import error_page_view, custom_404_view
 from echo.views.statistics import statistics, statistics_player_data, statistics_latest_maps
 from echo.views.statistics import statistics_latest_searches, statistics_latest_events, statistics_admin_data, statistics_admin_tag
 from echo.views.analytics import log_search_event, log_click_event
+from echo.views.analytics import log_impressions
 
 # DRF viewsets
 from echo.views.api import (
@@ -79,6 +80,7 @@ urlpatterns = [
     # Anonymous analytics endpoints
     path('analytics/log/search/', log_search_event, name='analytics_log_search'),
     path('analytics/log/click/', log_click_event, name='analytics_log_click'),
+    path('analytics/log/impressions/', log_impressions, name='analytics_log_impressions'),
     
 
 

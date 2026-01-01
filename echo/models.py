@@ -47,6 +47,8 @@ class Beatmap(models.Model):
     pp_ez = models.FloatField(null=True, blank=True, db_index=True)
     pp_fl = models.FloatField(null=True, blank=True, db_index=True)
     max_combo = models.IntegerField(null=True, blank=True, db_index=True)
+    # How many times this beatmap was shown on a visible search results page (impressions).
+    shown_in_search = models.IntegerField(default=0, db_index=True)
 
     class Meta:
         indexes = [

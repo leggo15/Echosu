@@ -21,7 +21,7 @@ from django.template.loader import render_to_string
 from django.utils import timezone
 
 # Local
-from ..models import Beatmap, Tag, TagApplication, SavedSearch
+from ..models import Beatmap, Tag, TagApplication, SavedSearch, UserProfile
 from ..models import AnalyticsSearchEvent, AnalyticsClickEvent
 from collections import Counter
 from .auth import api
@@ -407,6 +407,10 @@ def statistics(request: HttpRequest):
     my_activity_total_pages: int = 1
     my_search_history = []
     my_saved_searches = []
+    my_mapper_has_maps = False
+    my_mapper_maps = []
+    my_mapper_maps_total = 0
+    my_mapper_top_download_tags = []
 
     try:
         if getattr(request, 'user', None) and request.user.is_authenticated:
@@ -549,6 +553,106 @@ def statistics(request: HttpRequest):
                 }
                 for s in saved_qs
             ]
+
+            # -------------------- My Mapper Statistics (only if user has maps) --------------------
+            try:
+                my_osu_id = request.session.get('osu_id')
+                if not my_osu_id:
+                    my_osu_id = (
+                        UserProfile.objects
+                        .filter(user=request.user)
+                        .values_list('osu_id', flat=True)
+                        .first()
+                    )
+                my_osu_id = int(my_osu_id) if my_osu_id else None
+            except Exception:
+                my_osu_id = None
+
+            if my_osu_id:
+                user_maps_qs = Beatmap.objects.filter(
+                    listed_owner_id__regex=r'(^|,)\s*%s(\s*,|$)' % re.escape(str(my_osu_id))
+                )
+                my_mapper_has_maps = user_maps_qs.exists()
+                if my_mapper_has_maps:
+                    try:
+                        my_mapper_maps_total = int(user_maps_qs.count())
+                    except Exception:
+                        my_mapper_maps_total = 0
+                    # Limit to avoid heavy pages; order by most downloaded later.
+                    user_maps = list(
+                        user_maps_qs.only(
+                            'id',
+                            'beatmap_id',
+                            'title',
+                            'artist',
+                            'version',
+                            'mode',
+                            'listed_owner',
+                            'listed_owner_id',
+                            'shown_in_search',
+                        )[:200]
+                    )
+                    bm_ids = [str(b.beatmap_id) for b in user_maps if getattr(b, 'beatmap_id', None)]
+
+                    download_actions = ['direct', 'view_on_osu', 'beatconnect']
+                    download_counts = {
+                        str(r['beatmap_id']): int(r['c'])
+                        for r in (
+                            AnalyticsClickEvent.objects
+                            .filter(action__in=download_actions, beatmap_id__in=bm_ids)
+                            .values('beatmap_id')
+                            .annotate(c=Count('id'))
+                        )
+                    }
+                    # Per-map rows
+                    rows = []
+                    for bm in user_maps:
+                        bid = str(getattr(bm, 'beatmap_id', '') or '')
+                        rows.append({
+                            'beatmap': bm,
+                            'downloads': int(download_counts.get(bid, 0)),
+                            'impressions': int(getattr(bm, 'shown_in_search', 0) or 0),
+                        })
+                    rows.sort(key=lambda r: (-(r.get('downloads') or 0), -(r.get('impressions') or 0)))
+                    my_mapper_maps = rows[:50]
+
+                    # Tags that tend to lead to downloads of your maps:
+                    # Count tag frequency among searches that resulted in a download click on one of your maps.
+                    try:
+                        click_rows = list(
+                            AnalyticsClickEvent.objects
+                            .filter(action__in=download_actions, beatmap_id__in=bm_ids)
+                            .exclude(search_event_id__isnull=True)
+                            .values('search_event_id')
+                        )
+                        se_ids = [c.get('search_event_id') for c in click_rows if c.get('search_event_id')]
+                        se_ids = [i for i in se_ids if i]
+                        se_tag_map = {}
+                        if se_ids:
+                            for eid, tags in (
+                                AnalyticsSearchEvent.objects
+                                .filter(event_id__in=se_ids)
+                                .values_list('event_id', 'tags')
+                            ):
+                                se_tag_map[str(eid)] = tags if isinstance(tags, list) else []
+                        tag_counts = Counter()
+                        total_dl = 0
+                        for c in click_rows:
+                            sid = c.get('search_event_id')
+                            if not sid:
+                                continue
+                            total_dl += 1
+                            for t in (se_tag_map.get(str(sid)) or []):
+                                if not t:
+                                    continue
+                                tag_counts[str(t)] += 1
+                        top = []
+                        for name, cnt in tag_counts.most_common(15):
+                            pct = (float(cnt) / float(total_dl) * 100.0) if total_dl else 0.0
+                            top.append({'name': name, 'count': int(cnt), 'percent': pct})
+                        my_mapper_top_download_tags = top
+                    except Exception:
+                        my_mapper_top_download_tags = []
     except Exception:
         # Leave defaults if any error
         pass
@@ -679,6 +783,10 @@ def statistics(request: HttpRequest):
             'my_activity_total_pages': my_activity_total_pages,
             'my_search_history': my_search_history,
             'my_saved_searches': my_saved_searches,
+            'my_mapper_has_maps': my_mapper_has_maps,
+            'my_mapper_maps': my_mapper_maps,
+            'my_mapper_maps_total': my_mapper_maps_total,
+            'my_mapper_top_download_tags': my_mapper_top_download_tags,
             # Latest maps tab
             'latest_maps': latest_maps,
         },

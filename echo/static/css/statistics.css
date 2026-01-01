@@ -185,6 +185,61 @@
 .tag-usage-list li { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; border-bottom: 1px solid rgba(0,0,0,0.08); }
 .tag-usage-list .tag-name { font-weight: 600; }
 .tag-usage-list .tag-count { color: #555; }
+[data-theme="dark"] .tag-usage-list .tag-count { color: #c6d1e0; }
+
+.tag-usage-list li.is-header {
+  padding-top: 6px;
+  padding-bottom: 6px;
+  background: rgba(0,0,0,0.02);
+  border-top: 1px solid rgba(0,0,0,0.08);
+}
+.tag-usage-list li.is-header .tag-name,
+.tag-usage-list li.is-header .tag-count {
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  opacity: 0.75;
+}
+[data-theme="dark"] .tag-usage-list li.is-header {
+  background: rgba(255,255,255,0.04);
+  border-color: rgba(255,255,255,0.08);
+}
+
+/* Align numeric columns for mapper stats lists */
+.tag-usage-list.mapper-map-list li,
+.tag-usage-list.mapper-tag-list li {
+  justify-content: flex-start;
+  gap: 12px;
+}
+.tag-usage-list.mapper-map-list .tag-name,
+.tag-usage-list.mapper-tag-list .tag-name {
+  flex: 1 1 auto;
+  max-width: 70%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tag-usage-list.mapper-map-list .col-downloads {
+  width: 72px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.tag-usage-list.mapper-map-list .col-shown {
+  width: 90px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.tag-usage-list.mapper-tag-list .col-count {
+  width: 64px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.tag-usage-list.mapper-tag-list .col-pct {
+  width: 64px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
 
 .saved-row, .history-row { cursor: pointer; }
 .saved-row button.saved-edit-btn, .saved-row button.saved-save-btn { cursor: pointer; }
@@ -196,7 +251,6 @@
 [data-theme="dark"] .my-stats-overview .stat-item { background: #151a2a; border-color: #2b2f3a; box-shadow: none; }
 [data-theme="dark"] .my-stats-overview .label { color: #9aa4b2; }
 [data-theme="dark"] .tag-usage-list li { border-color: rgba(255,255,255,0.08); }
-[data-theme="dark"] .tag-usage-list .tag-count { color: #c6d1e0; }
 
 /* Modern star button for search history */
 .fav-btn {

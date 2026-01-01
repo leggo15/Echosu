@@ -62,9 +62,46 @@
   async function init(){
     var ctx = parseAnalyticsContext();
     if (!ctx) return;
-    // Only log when there is a real search interaction (including empty query with filters)
+    // Only count analytics (and impressions) when the user actually typed a search query.
+    // (Do not count filter-only browsing.)
+    var queryText = (ctx.query || '').trim();
+    if (!queryText) return;
+
+    // Log "impressions" for beatmaps that were actually shown on the current visible page.
+    // This enables per-map "shown in results" stats.
+    try {
+      var paramsImp = new URLSearchParams(window.location.search);
+      var pageImp = parseInt(paramsImp.get('page') || '1', 10);
+      if (!pageImp || pageImp < 1) pageImp = 1;
+      var cardsImp = document.querySelectorAll('.beatmap-card-wrapper[data-beatmap-id]');
+      if (cardsImp && cardsImp.length) {
+        // Fire-and-forget; impressions must never slow down navigation.
+        setTimeout(function(){
+          try {
+            var idsImp = [];
+            var seenImp = {};
+            cardsImp.forEach(function(card){
+              var bid = (card.getAttribute('data-beatmap-id') || '').trim();
+              if (!bid) return;
+              if (seenImp[bid]) return;
+              seenImp[bid] = true;
+              idsImp.push(bid);
+            });
+            if (idsImp.length) {
+              postJson('/analytics/log/impressions/', {
+                beatmap_ids: idsImp,
+                search_event_id: null,
+                page: pageImp
+              });
+            }
+          } catch (e) {}
+        }, 0);
+      }
+    } catch (e) {}
+
+    // Log the search event (used for conversion analytics, tag stats, etc.)
     var searchResp = await postJson('/analytics/log/search/', {
-      query: ctx.query || '',
+      query: queryText,
       tags: Array.isArray(ctx.tags) ? ctx.tags : null,
       results_count: typeof ctx.results_count === 'number' ? ctx.results_count : (ctx.results_total || null),
       sort: ctx.sort || '',

@@ -793,12 +793,60 @@ def statistics_latest_events(request: HttpRequest):
                     results = flags.get('results_count')
                 except Exception:
                     results = None
+            flags = e.flags if isinstance(e.flags, dict) else {}
+            mode_norm = Tag.normalize_mode(flags.get('mode'))
+            star_min = flags.get('star_min')
+            star_max = flags.get('star_max')
+            star_range = None
+            try:
+                if star_min is not None or star_max is not None:
+                    sm = str(star_min) if star_min is not None else '?'
+                    sx = str(star_max) if star_max is not None else '?'
+                    star_range = f'⭐ {sm}–{sx}'
+            except Exception:
+                star_range = None
+
+            # Build "Open" URL (best-effort; old events may not have flags)
+            href = None
+            try:
+                params = {}
+                params['query'] = e.query or ''
+                # Only include mode when non-std
+                if mode_norm and mode_norm != Tag.MODE_STD:
+                    params['mode'] = mode_norm
+                if star_min is not None:
+                    params['star_min'] = str(star_min)
+                if star_max is not None:
+                    params['star_max'] = str(star_max)
+                if e.sort:
+                    params['sort'] = e.sort
+                if e.predicted_mode:
+                    params['include_predicted'] = e.predicted_mode
+                # Status flags
+                if flags.get('status_ranked'):
+                    params['status_ranked'] = 'ranked'
+                if flags.get('status_loved'):
+                    params['status_loved'] = 'loved'
+                if flags.get('status_unranked'):
+                    params['status_unranked'] = 'unranked'
+                ex = flags.get('exclude_player')
+                if ex:
+                    params['exclude_player'] = str(ex)
+                keys = flags.get('keys')
+                if keys:
+                    params['keys'] = str(keys)
+                href = '/search_results/?' + urlencode(params)
+            except Exception:
+                href = None
             search_events.append({
                 'type': 'search',
                 'client_id': e.client_id or 'anonymous',
                 'created_at': e.created_at,
                 'label': (e.query or '(no query)')[:80],
                 'results': results if results is not None else '?',
+                'star_range': star_range,
+                'mode': mode_norm,
+                'href': href,
             })
 
         click_events = [

@@ -5,6 +5,15 @@
         <span class="event-label">Search</span>
         <span class="event-detail">{{ e.label }}</span>
         <span class="event-meta">({{ e.results|default:"?" }} results)</span>
+        {% if e.star_range %}
+          <span class="event-meta">{{ e.star_range }}</span>
+        {% endif %}
+        {% if e.mode and e.mode != 'std' %}
+          <span class="event-meta">({{ e.mode|upper }})</span>
+        {% endif %}
+        {% if e.href %}
+          <a class="search-btn" href="{{ e.href }}" style="padding:4px 8px; font-size:12px;">Open</a>
+        {% endif %}
       {% else %}
         <span class="event-label">Button</span>
         <span class="event-detail">{{ e.label }}</span>

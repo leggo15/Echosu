@@ -711,6 +711,12 @@ def search_results(request):
                 'status_loved': bool(status_loved),
                 'status_unranked': bool(status_unranked),
                 'mode': normalized_mode,
+                # Include key filters so admin event log can reconstruct the query
+                'star_min': star_min_value_str,
+                'star_max': star_max_value_str,
+                'exclude_player': exclude_player,
+                'include_predicted': predicted_mode,
+                'keys': (selected_keys if (mapped_mode == 'mania' and selected_keys and selected_keys != 'any') else None),
             },
         }
     except Exception:

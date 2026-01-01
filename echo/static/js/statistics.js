@@ -298,6 +298,99 @@
     });
   }
 
+  function renderBarWithFollowupLineAndPctLabels(canvasId, labels, counts, followupCounts, barLabel, barColor, followupLabel){
+    var canvas = document.getElementById(canvasId);
+    if (!canvas) return null;
+    var ctx = canvas.getContext('2d');
+    var follows = Array.isArray(followupCounts) ? followupCounts : [];
+    var plugins = [];
+    // Draw % labels at the top of each bar (computed from followups/counts).
+    plugins.push({
+      id: 'followupPercentLabels',
+      afterDatasetsDraw: function(chart){
+        try {
+          var barMeta = chart.getDatasetMeta(0);
+          if (!barMeta || !barMeta.data) return;
+          var barData = (chart.data.datasets[0] && chart.data.datasets[0].data) || [];
+          var followData = (chart.data.datasets[1] && chart.data.datasets[1].data) || [];
+          var ctx2 = chart.ctx;
+          ctx2.save();
+          ctx2.font = '11px sans-serif';
+          ctx2.fillStyle = 'rgba(255, 159, 64, 0.95)';
+          ctx2.textAlign = 'center';
+          ctx2.textBaseline = 'bottom';
+          for (var i = 0; i < barMeta.data.length; i++){
+            var el = barMeta.data[i];
+            if (!el) continue;
+            var c = Number(barData[i] || 0);
+            if (!c) continue;
+            var f = Number(followData[i] || 0);
+            var pct = (f / c) * 100.0;
+            var txt = (Math.round(pct * 10) / 10) + '%';
+            var pos = el.tooltipPosition ? el.tooltipPosition() : el;
+            if (!pos || pos.y === undefined) continue;
+            ctx2.fillText(txt, pos.x, pos.y - 2);
+          }
+          ctx2.restore();
+        } catch (e) {}
+      }
+    });
+    return new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: labels || [],
+        datasets: [
+          {
+            type: 'bar',
+            label: barLabel || '',
+            data: counts || [],
+            backgroundColor: barColor || 'rgba(54, 162, 235, 0.5)',
+            borderColor: (barColor ? barColor.replace('0.5','1') : 'rgba(54, 162, 235, 1)'),
+            borderWidth: 1
+          },
+          {
+            type: 'line',
+            label: followupLabel || 'Direct/View',
+            data: follows || [],
+            borderColor: 'rgba(255, 159, 64, 1)',
+            backgroundColor: 'rgba(255, 159, 64, 0.15)',
+            pointRadius: 2,
+            pointHoverRadius: 3,
+            tension: 0.25,
+            fill: false
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          y: { beginAtZero: true, ticks: { precision: 0 } }
+        },
+        plugins: {
+          tooltip: {
+            callbacks: {
+              label: function(ctx){
+                try {
+                  var idx = ctx.dataIndex;
+                  var searches = Number((ctx.chart.data.datasets[0].data[idx] || 0));
+                  var follows2 = Number((ctx.chart.data.datasets[1].data[idx] || 0));
+                  var pct2 = searches ? (follows2 / searches * 100.0) : 0.0;
+                  if (ctx.datasetIndex === 1) {
+                    return (followupLabel || 'Direct/View') + ': ' + follows2 + ' (' + (Math.round(pct2 * 10) / 10) + '%)';
+                  }
+                  return (barLabel || 'Searches') + ': ' + searches + ' (' + (Math.round(pct2 * 10) / 10) + '%)';
+                } catch (e) { return ''; }
+              }
+            }
+          },
+          legend: { position: 'top' }
+        }
+      },
+      plugins: plugins
+    });
+  }
+
   function updateAdminCharts(){
     if (!adminDataCache) return;
     try {
@@ -327,20 +420,20 @@
         }
       }
       if (!adminCharts.searches) {
-        adminCharts.searches = renderBarWithPercentLine(
+        adminCharts.searches = renderBarWithFollowupLineAndPctLabels(
           'adminSearchesChart',
           s.labels,
           s.counts,
-          s.dl_pct || [],
+          s.dl_followups || [],
           'Searches',
           'rgba(54, 162, 235, 0.5)',
-          'Direct/View %'
+          'Direct/View'
         );
       } else {
         adminCharts.searches.data.labels = s.labels || [];
         adminCharts.searches.data.datasets[0].data = s.counts || [];
         if (adminCharts.searches.data.datasets[1]) {
-          adminCharts.searches.data.datasets[1].data = s.dl_pct || [];
+          adminCharts.searches.data.datasets[1].data = s.dl_followups || [];
         }
         adminCharts.searches.update();
       }

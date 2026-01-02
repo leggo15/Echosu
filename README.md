@@ -17,10 +17,52 @@ A booru board for osu! maps in a sense with OAuth login, genre fetching, and an 
   operators support inclusion/exclusion, quoted multi-word tags, numeric attribute filters, etc.
 * **Beatmap ingest** – paste an ID or osu! URL; metadata & cover pulled from the official API; genres auto-fetched from Last.fm/MusicBrainz
 * **Personalised recommendations** – shows maps similar to ones you’ve already tagged (getting axed and replaced by a propper recomendation algorithm)
-* **REST API** – read-write endpoints for beatmaps, tags, tag-applications & user profiles, plus a convenience `/api/beatmaps/tags/` aggregator; HMAC-style custom token auth
+* **REST API** – read-write endpoints for beatmaps, tags, tag-applications & user profiles, plus bulk helpers under `/api/beatmaps/tags/` and basic rate limiting
 * **Admin & analytics** – Django admin, request logging middleware, user-stats dashboard
 
 ---
+
+### API (current reality)
+
+- **Docs**: see `echo/api_docs/README.md` for full endpoint docs + response shapes.
+- **Auth**
+  - Most endpoints require auth via either:
+    - **Token auth**: `Authorization: Token <YOUR_API_TOKEN>`
+    - **Logged-in session** (for viewsets that include `SessionAuthentication`)
+  - **Token generation**: in the site UI under Settings. Generating a new token invalidates the previous one (one active token per user).
+- **Rate limiting (throttling)**: enabled for `/api/` endpoints (see `echoOsu/settings.py`). Heavy endpoints use scoped throttles (`bulk`, `toggle`).
+
+#### Batch / bulk fetching (avoid “500 calls”)
+
+- **GET `/api/beatmaps/tags/?batch_size=500&offset=0`**
+  - Returns a *plain list* of beatmaps (BeatmapSerializer) in deterministic order.
+  - Useful for bulk export/import scripts.
+- **POST `/api/beatmaps/tags/`**
+  - Aggregates tag counts for a provided list of beatmap IDs in one request.
+
+Example (Python):
+
+```python
+import os
+import requests
+
+BASE_URL = os.getenv("ECHOSU_BASE_URL", "https://www.echosu.com")
+TOKEN = os.environ["ECHOSU_API_TOKEN"]
+
+headers = {"Authorization": f"Token {TOKEN}", "Content-Type": "application/json"}
+
+resp = requests.post(
+    f"{BASE_URL}/api/beatmaps/tags/",
+    json={
+        "beatmap_ids": ["2897724", "1244293"],
+        "include": "tag_counts,predicted_tags,true_negatives",
+    },
+    headers=headers,
+    timeout=30,
+)
+resp.raise_for_status()
+print(resp.json())
+```
 
 ### Thanks / Acknowledgements
 

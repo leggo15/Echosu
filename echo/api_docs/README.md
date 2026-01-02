@@ -30,7 +30,7 @@ The API uses Token-Based Authentication to secure endpoints. To use the API, you
 
 - Login to echosu.com (through the osu authentication api)
 - Click your profile picture and go to settings.
-- Click generate API token. You can generate as many tokens as you want, but only the latest one will be active.
+- Click generate API token. Generating a new token will invalidate your previous token (only one active token per user).
 
 #### Store the Token Securely:
 
@@ -59,14 +59,16 @@ All tag data for a beatmap is exposed via the tag applications endpoint, filtere
 - **Authentication:** Required (Token or logged-in session)
 - **Query Parameters:**
 
-  - `beatmap_id` (required): string, the beatmap ID to fetch applications for
+  - `beatmap_id` (recommended): string, the beatmap ID to fetch applications for. When present, the response is a lite representation (no embedded beatmap).
   - `include` (optional): comma-separated extras. Supported:
     - `tag_counts`: attach `count` to each `tag` (applications per tag on this beatmap; excludes predictions by default)
     - `tag_timestamps`: attach `consensus_intervals` to each `tag` (aggregated intervals across users)
     - `predicted_tags`: include predicted tags
     - `true_negatives` (or `negative_tags`): include true negative tags (some times added by staff for modeling pruposes)
-    - `metadata`: attach `category` and `parents` (parent tag names) to each `tag`
+    - `metadata`: convenience metadata enrichment. (Note: tag objects already include `category`, `mode`, and structured `parents` by default; this flag additionally attaches parent names in a simplified form.)
   - `user` (optional): if `me`, attach `user_intervals` for the current user under each `tag`
+  - `include_predicted` (optional): alternate boolean flag for including predicted tags. Truthy values: `1,true,yes,on,include`
+  - `tag` (optional): filter by an exact tag name (case-insensitive)
 
 ```json
 [
@@ -77,6 +79,7 @@ All tag data for a beatmap is exposed via the tag applications endpoint, filtere
       "id": 22,
       "name": "Jumps",
       "category": "Pattern Type",
+      "mode": "osu",
       "parents": [
         {
           "id": 10,
@@ -89,7 +92,9 @@ All tag data for a beatmap is exposed via the tag applications endpoint, filtere
       "consensus_intervals": [[83.18, 93.75], [127.34, 135.47]],
       "user_intervals": [[90.0, 92.0]]
     },
-    "created_at": "2025-08-13T19:46:56.480951Z"
+    "created_at": "2025-08-13T19:46:56.480951Z",
+    "is_prediction": false,
+    "true_negative": false
   }
 ]
 ```
@@ -113,11 +118,45 @@ Interact with Beatmap data. Provides read-only operations and filtering.
   - **Filtered Beatmaps**
     - **URL:** `/api/beatmaps/filtered/`
     - **Method:** `GET`
-    - **Description:** Retrieve beatmaps filtered by a query string.
+    - **Description:** Retrieve beatmaps filtered by a query string (matches title OR artist OR tag name).
     - **Parameters:**
       - `query` (required): The search term to filter beatmaps by title.
         - **Type:** string
         - **Example:** `/api/beatmaps/filtered/?query=Test`
+
+  - **Batch Tag Aggregation (recommended for bulk clients)**
+    - **URL:** `/api/beatmaps/tags/`
+    - **Methods:** `GET`, `POST`
+    - **Description:** Bulk helpers to avoid calling `/api/tag-applications/?beatmap_id=...` hundreds of times.
+      - `GET` returns a simple list of beatmaps (BeatmapSerializer) using `batch_size` + `offset`.
+      - `POST` returns aggregated tag counts for a provided list of beatmap IDs.
+    - **GET Query Params:**
+      - `batch_size` (optional, default 500, max 500)
+      - `offset` (optional, default 0)
+    - **Body:**
+
+```json
+{
+  "beatmap_ids": ["2897724", "1244293"],
+  "include": "tag_counts,predicted_tags,true_negatives"
+}
+```
+
+    - **Response:**
+
+```json
+{
+  "results": [
+    {
+      "beatmap_id": "2897724",
+      "tags": [
+        {"id": 1, "name": "aim", "category": "Mapping Genre", "mode": "osu", "parents": [], "count": 4}
+      ]
+    }
+  ],
+  "missing": ["999999"]
+}
+```
 
 ```json
 {
@@ -128,7 +167,10 @@ Interact with Beatmap data. Provides read-only operations and filtering.
     "tags": [
         {
             "id": 1,
-            "name": "aim"
+            "name": "aim",
+            "category": "Mapping Genre",
+            "mode": "osu",
+            "parents": []
         }
     ]
 }
@@ -154,7 +196,10 @@ Interact with Tag data. Provides standard read-only operations.
 ```json
 {
     "id": 1,
-    "name": "aim"
+    "name": "aim",
+    "category": "Mapping Genre",
+    "mode": "osu",
+    "parents": []
 }
 ```
 
@@ -169,7 +214,9 @@ Manage tag applications to beatmaps. Provides standard read-only operations, and
   - **List Tag Applications**
     - **URL:** `/api/tag-applications/`
     - **Method:** `GET`
-    - **Description:** Retrieve a list of tag applications. When filtered with `?beatmap_id=<id>`, returns a lite representation and supports `include=tag_counts,tag_timestamps` and `user=me` to attach derived data to each `tag`.
+    - **Description:** Retrieve a list of tag applications.
+      - When filtered with `?beatmap_id=<id>`, returns a **lite** representation (no embedded beatmap) and supports `include=tag_counts,tag_timestamps,predicted_tags,true_negatives,metadata` and `user=me` to attach derived data to each `tag`.
+      - When **not** filtered by `beatmap_id`, returns the **full** representation including the embedded `beatmap` object and fields like `is_prediction`, `prediction_confidence`, and `true_negative`.
   - **Retrieve a Tag Application**
     - **URL:** `/api/tag-applications/{id}/`
     - **Method:** `GET`
@@ -214,7 +261,15 @@ Manage tag applications to beatmaps. Provides standard read-only operations, and
 ```json
 {
     "tags": [
-        "Tags must be 1-25 characters long and can only contain letters, numbers, spaces, hyphens, and underscores."
+        "Tags must be 1-25 characters long and can only contain letters, numbers, spaces, hyphens, underscores, and slashes."
+    ]
+}
+```
+
+```json
+{
+    "tags": [
+        "Tags cannot contain inappropriate language."
     ]
 }
 ```
@@ -225,7 +280,7 @@ Manage user profiles. Provides standard read-only operations.
 
 - **Base URL:** `/api/user-profiles/`
 - **Methods:** `GET`
-- **Authentication:** Required (Token or logged-in session)
+- **Authentication:** Required (**Token**; this viewset does not accept session auth)
 - **Actions:**
   - **List User Profiles**
     - **URL:** `/api/user-profiles/`

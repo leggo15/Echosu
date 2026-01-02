@@ -235,6 +235,22 @@ REST_FRAMEWORK = {
     'DEFAULT_RENDERER_CLASSES': [
         'rest_framework.renderers.JSONRenderer',
     ],
+    # Basic abuse-prevention / rate limiting.
+    # Applies to all /api/ endpoints unless a view overrides throttling.
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
+        'rest_framework.throttling.ScopedRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        # Anonymous browsing (if any endpoints allow it)
+        'anon': '60/min',
+        # Authenticated users (token or session)
+        'user': '600/min',
+        # Heavier endpoints (explicit scope)
+        'bulk': '60/min',
+        'toggle': '120/min',
+    },
 }
 
 # admin provisioning via env (comma-separated osu IDs)

@@ -29,6 +29,7 @@ from rest_framework.decorators import (
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 from django.core.cache import cache
 from django.utils import timezone
 
@@ -80,6 +81,7 @@ class BeatmapViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = BeatmapSerializer
     authentication_classes = [CustomTokenAuthentication, SessionAuthentication]
     permission_classes = [IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
 
     # Allow lookup by beatmap_id string instead of internal pk for clarity
     lookup_field = 'beatmap_id'
@@ -87,6 +89,7 @@ class BeatmapViewSet(viewsets.ReadOnlyModelViewSet):
 
     @action(detail=False, methods=['get'], url_path='filtered')
     def filtered(self, request):
+        self.throttle_scope = 'bulk'
         query = request.query_params.get('query')
         if not query:
             return Response(
@@ -100,6 +103,100 @@ class BeatmapViewSet(viewsets.ReadOnlyModelViewSet):
             | Q(tags__name__icontains=query)
         ).distinct()
         return Response(self.get_serializer(beatmaps, many=True).data)
+
+    @action(detail=False, methods=['get', 'post'], url_path='tags')
+    def tags(self, request):
+        """Bulk helpers for beatmaps/tags.
+
+        GET /api/beatmaps/tags/?batch_size=500&offset=0
+          - Returns a simple list of beatmaps (BeatmapSerializer) in deterministic order.
+          - Useful for bulk export/import without paging through DRF pagination objects.
+
+        POST /api/beatmaps/tags/
+          - Aggregate tag counts for many beatmaps in a single request.
+
+        Body:
+          {"beatmap_ids": ["123", "456"], "include": "tag_counts,predicted_tags,true_negatives"}
+
+        Returns:
+          {
+            "results": [{"beatmap_id": "123", "tags": [{"id": 1, "name": "...", "count": 3, ...}]}],
+            "missing": ["999"]
+          }
+        """
+        self.throttle_scope = 'bulk'
+
+        # ── GET: bulk list beatmaps (simple list, offset-based) ────────────────
+        if request.method.upper() == 'GET':
+            try:
+                batch_size = int((request.query_params.get('batch_size') or '500').strip())
+            except Exception:
+                batch_size = 500
+            try:
+                offset = int((request.query_params.get('offset') or '0').strip())
+            except Exception:
+                offset = 0
+            batch_size = max(1, min(batch_size, 500))
+            offset = max(0, offset)
+            qs = Beatmap.objects.all().order_by('id')[offset:offset + batch_size]
+            return Response(self.get_serializer(qs, many=True).data)
+
+        # ── POST: aggregate tag counts for a provided id list ──────────────────
+        payload = request.data if isinstance(request.data, dict) else {}
+        beatmap_ids = payload.get('beatmap_ids') or payload.get('ids') or []
+        if not isinstance(beatmap_ids, list) or not beatmap_ids:
+            return Response({'beatmap_ids': ['Provide a non-empty list of beatmap IDs.']}, status=400)
+        if len(beatmap_ids) > 500:
+            return Response({'beatmap_ids': ['Maximum 500 beatmap IDs per request.']}, status=400)
+
+        beatmap_ids = [str(x).strip() for x in beatmap_ids if str(x).strip()]
+        beatmap_ids = list(dict.fromkeys(beatmap_ids))  # de-dupe, preserve order
+        include_tokens = [s.strip() for s in str(payload.get('include') or '').split(',') if s.strip()]
+        include_predicted_flag = 'predicted_tags' in include_tokens or str(payload.get('include_predicted', '0')).lower() in ['1','true','yes','on','include']
+        include_true_negatives_flag = ('true_negatives' in include_tokens) or ('negative_tags' in include_tokens)
+
+        beatmaps = list(Beatmap.objects.filter(beatmap_id__in=beatmap_ids))
+        bm_by_id = {b.beatmap_id: b for b in beatmaps}
+        missing = [bm for bm in beatmap_ids if bm not in bm_by_id]
+
+        # Base queryset for aggregation
+        ta_qs = TagApplication.objects.filter(beatmap__beatmap_id__in=beatmap_ids)
+        ta_qs = ta_qs.exclude(user__isnull=True, is_prediction=False)
+        if not include_predicted_flag:
+            ta_qs = ta_qs.filter(is_prediction=False)
+        if not include_true_negatives_flag:
+            ta_qs = ta_qs.filter(true_negative=False)
+
+        # Aggregate counts per beatmap+tag
+        rows = (
+            ta_qs.values('beatmap__beatmap_id', 'tag_id')
+            .annotate(tag_count=Count('tag_id'))
+        )
+        by_bm = {}
+        tag_ids = set()
+        for r in rows:
+            bm_id = str(r['beatmap__beatmap_id'])
+            tid = r['tag_id']
+            tag_ids.add(tid)
+            by_bm.setdefault(bm_id, []).append({'tag_id': tid, 'count': int(r['tag_count'] or 0)})
+
+        # Serialize tags once
+        tags_qs = Tag.objects.filter(id__in=tag_ids).prefetch_related('parents')
+        tag_map = {t.id: TagSerializer(t).data for t in tags_qs}
+
+        results = []
+        for bm_id in beatmap_ids:
+            entries = []
+            for item in by_bm.get(bm_id, []):
+                t = tag_map.get(item['tag_id'])
+                if not t:
+                    continue
+                t = dict(t)
+                t['count'] = item['count']
+                entries.append(t)
+            results.append({'beatmap_id': bm_id, 'tags': entries})
+
+        return Response({'results': results, 'missing': missing})
 
     # retrieve remains the default: only beatmap fields
     # All tag data is provided via /api/tag-applications/?beatmap_id=... with include=...
@@ -117,18 +214,7 @@ class TagApplicationViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = TagApplicationSerializer
     authentication_classes = [CustomTokenAuthentication, SessionAuthentication]
     permission_classes = [IsAuthenticated]
-    
-    def get_permissions(self):
-        """Allow unauthenticated read-only access when filtered by beatmap.
-        This enables public viewing of consensus tag timestamps on beatmap pages,
-        while keeping all write operations and unfiltered access locked down.
-        """
-        try:
-            if self.action == 'list' and self.request.method == 'GET' and 'beatmap_id' in self.request.query_params:
-                return [AllowAny()]
-        except Exception:
-            pass
-        return [IsAuthenticated()]
+    throttle_classes = [ScopedRateThrottle]
     
     def get_queryset(self):
         qs = super().get_queryset()
@@ -154,6 +240,7 @@ class TagApplicationViewSet(viewsets.ReadOnlyModelViewSet):
 
     @action(detail=False, methods=['post'], url_path='toggle')
     def toggle_tags(self, request):
+        self.throttle_scope = 'toggle'
         """
         Apply/remove a tag for a beatmap.  
         If the beatmap isn’t in the DB yet, fetch it from the osu! API first.

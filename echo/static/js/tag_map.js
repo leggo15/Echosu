@@ -346,7 +346,9 @@
             var q = quoteIfNeeded(d.data.name);
             (nd.tags || []).forEach(function (t) {
               if (!t) return;
-              var token = (/\s/.test(String(t)) ? ('."' + String(t).replace(/"/g, '\\"') + '"') : ('.' + String(t)));
+              // Tags should be passed as plain tokens (quoted if needed), without the '.' prefix.
+              var token = quoteIfNeeded(t);
+              if (!token) return;
               q += (q ? ' ' : '') + token;
             });
             window.location.href = '/search_results/?query=' + enc(q);

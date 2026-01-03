@@ -901,7 +901,7 @@ def statistics_tag_map_data(request: HttpRequest):
         if view not in ['tagsets', 'single', 'overlap']:
             view = 'tagsets'
         custom_tagset_raw = (request.GET.get('custom_tagset') or '').strip()
-        consolidation = 0.05
+        consolidation = 0.02
         CONS_STRICT_EPS = 0.01
         CONS_MEGA_EPS = 0.99
 

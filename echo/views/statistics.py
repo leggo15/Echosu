@@ -1103,10 +1103,11 @@ def statistics_tag_map_data(request: HttpRequest):
                 mapper = (row.get('listed_owner') or row.get('creator') or '').strip()
                 mapper_by_bm[bm_pk] = mapper or '(unknown)'
 
-            # Thresholds tuned similarly to tagsets (but we want plenty of small subsets)
-            min_pair = max(5, int(round(2 + 8 * (1.0 - consolidation))))
-            edge_threshold = max(0.05, 0.35 - (0.30 * consolidation))
-            k = max(3, min(24, int(round(4 + 14 * consolidation))))
+            # Thresholds tuned similarly to tagsets.
+            # For overlap mode we want *many* candidate relationships so we can build lots of 3–10 tag sets.
+            min_pair = max(2, int(round(2 + 6 * (1.0 - consolidation))))  # 2..8
+            edge_threshold = max(0.02, 0.30 - (0.24 * consolidation))
+            k = max(6, min(40, int(round(10 + 22 * consolidation))))
 
             # Co-occurrence counts + neighbor lists (same as tagsets path)
             pair_counts: Counter[tuple[int, int]] = Counter()
@@ -1170,70 +1171,108 @@ def statistics_tag_map_data(request: HttpRequest):
                 reverse=True,
             )
 
-            # Create overlapping tagsets:
-            # - macro cores: seed tag + its strongest neighbors (size 3..6)
-            # - pairs: strong edges (size 2)
-            # Keep output bounded.
-            max_macro = max(6, min(30, int(round(10 + 12 * consolidation))))
-            max_pairs = max(40, min(220, int(round(90 + 80 * (1.0 - consolidation)))))
-            macro_size = max(30, min(100, int(round(50 + 60 * consolidation))))
+            # Create overlapping tagsets (3..10 tags per set).
+            # We intentionally generate MANY sets:
+            # - seed-cores: one per seed tag (seed + strongest neighbors, then fill within component)
+            # - triads: (a,b) strong edge plus a shared neighbor c
+            macro_min_size = 3
+            macro_size = 10
+            max_sets_total = max(80, min(220, int(round(140 + 80 * (1.0 - consolidation)))))
 
             tagsets: list[list[int]] = []
             seen: set[tuple[int, ...]] = set()
 
-            # Macro cores
-            for comp in components[: max_macro * 2]:
-                comp_sorted = sorted(comp, key=lambda t: int(tag_support.get(int(t)) or 0), reverse=True)
-                if not comp_sorted:
-                    continue
-                seed = int(comp_sorted[0])
+            # Build helper: component membership lookup so we can fill cores "within component"
+            comp_index_by_tag: dict[int, int] = {}
+            for ci, comp in enumerate(components):
+                for t in comp:
+                    comp_index_by_tag[int(t)] = int(ci)
+
+            # Seeds: favor high-support tags; generate one core per seed tag
+            seeds = sorted(tag_ids, key=lambda t: int(tag_support.get(int(t)) or 0), reverse=True)
+            max_seed_cores = max(60, min(200, int(round(110 + 80 * (1.0 - consolidation)))))
+            for seed in seeds[:max_seed_cores]:
+                seed = int(seed)
+                comp = None
+                try:
+                    comp = components[int(comp_index_by_tag.get(seed, 0))]
+                except Exception:
+                    comp = None
+                comp_set = set(comp) if comp else set()
+
                 core = [seed]
                 for o, _, _ in (top.get(seed) or []):
-                    if o in comp and o not in core:
-                        core.append(int(o))
+                    oo = int(o)
+                    if comp_set and oo not in comp_set:
+                        continue
+                    if oo not in core:
+                        core.append(oo)
                     if len(core) >= macro_size:
                         break
-                # Ensure a stable, dedupable signature
+
+                # Fill from within component by support if needed
+                if len(core) < macro_size and comp:
+                    comp_sorted = sorted(comp, key=lambda t: int(tag_support.get(int(t)) or 0), reverse=True)
+                    for t in comp_sorted:
+                        tt = int(t)
+                        if tt not in core:
+                            core.append(tt)
+                        if len(core) >= macro_size:
+                            break
+
                 sig = tuple(sorted(set(core)))
-                if len(sig) < 2:
+                if len(sig) < macro_min_size:
                     continue
                 if sig in seen:
                     continue
                 seen.add(sig)
                 tagsets.append(list(sig))
-                if len(tagsets) >= max_macro:
+                if len(tagsets) >= max_sets_total:
                     break
 
-            # Pairs
-            # Sort edges by (npmi, cooc) and take the top unique pairs.
-            pair_edges: list[tuple[float, int, int]] = []
-            for a, lst in top.items():
-                for b, npmi, cooc in lst:
-                    if a == b:
-                        continue
-                    x, y = (a, b) if a < b else (b, a)
-                    pair_edges.append((float(npmi), int(cooc), (x << 20) + y))
-            pair_edges.sort(reverse=True)
-            for npmi, cooc, packed in pair_edges:
-                x = int(packed >> 20)
-                y = int(packed & ((1 << 20) - 1))
-                sig = (x, y)
-                if sig in seen:
-                    continue
-                # Require at least min_pair support by real intersection (robust vs count drift)
-                bm_x = tag_to_bm.get(x) or set()
-                bm_y = tag_to_bm.get(y) or set()
-                if not bm_x or not bm_y:
-                    continue
-                if len(bm_x) > len(bm_y):
-                    bm_x, bm_y = bm_y, bm_x
-                inter = [bid for bid in bm_x if bid in bm_y]
-                if len(inter) < min_pair:
-                    continue
-                seen.add(sig)
-                tagsets.append([x, y])
-                if len(tagsets) >= (max_macro + max_pairs):
-                    break
+            # Triads: for strong edges (a,b), add a shared neighbor c to make 3-tag sets.
+            # This replaces the old 2-tag pair sets while keeping the "fine-grained" signal.
+            if len(tagsets) < max_sets_total:
+                for a, lst in top.items():
+                    a = int(a)
+                    # Only consider a limited number of edges per node to bound cost
+                    for b, _, _ in (lst or [])[: min(18, len(lst or []))]:
+                        b = int(b)
+                        if a == b:
+                            continue
+                        # Find shared neighbors
+                        na = [int(x[0]) for x in (top.get(a) or [])]
+                        nb = set(int(x[0]) for x in (top.get(b) or []))
+                        c = None
+                        for cand in na:
+                            if cand != a and cand != b and cand in nb:
+                                c = int(cand)
+                                break
+                        if c is None:
+                            continue
+                        sig = tuple(sorted((a, b, c)))
+                        if sig in seen:
+                            continue
+                        # Require real intersection support
+                        bm_a = tag_to_bm.get(a) or set()
+                        bm_b = tag_to_bm.get(b) or set()
+                        bm_c = tag_to_bm.get(c) or set()
+                        if not bm_a or not bm_b or not bm_c:
+                            continue
+                        base = bm_a
+                        if len(bm_b) < len(base):
+                            base = bm_b
+                        if len(bm_c) < len(base):
+                            base = bm_c
+                        inter3 = [bid for bid in base if (bid in bm_a and bid in bm_b and bid in bm_c)]
+                        if len(inter3) < min_pair:
+                            continue
+                        seen.add(sig)
+                        tagsets.append([a, b, c])
+                        if len(tagsets) >= max_sets_total:
+                            break
+                    if len(tagsets) >= max_sets_total:
+                        break
 
             # Build payload (intersection semantics: a map "fits" if it has *all* tags in the set)
             sets = []

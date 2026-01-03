@@ -1,6 +1,8 @@
-// Statistics "Mapper Similarity Map" (tagmap tab)
-// - Renders a treemap of tagsets (sectors) with nested mapper rectangles.
-// - Supports layout zoom (rerender bigger + scroll), drag-pan, and touch pinch/2-finger pan.
+// Tagset map visualization (Voronoi polygons + mapper bubbles)
+// - Each tagset is a region (polygon) in a seamless tessellation (no overlap/gaps).
+// - Regions are positioned to keep similar tagsets close (Jaccard similarity).
+// - Inside each region, we render mapper bubbles sized by map count (clipped to polygon).
+// - Hover a region to see its tags (and mapper stats); tags are also shown faintly in background.
 
 (function () {
   function $(id) { return document.getElementById(id); }
@@ -15,19 +17,38 @@
   }
 
   function createTooltip() {
-    // In fullscreen, only the fullscreen element subtree is rendered.
-    // So the tooltip must live inside `document.fullscreenElement` to be visible.
-    var mount = document.fullscreenElement || document.body;
     var el = document.querySelector('.tagmap-tooltip');
-    if (!el) {
-      el = document.createElement('div');
-      el.className = 'tagmap-tooltip';
-      el.style.display = 'none';
-    }
+    if (el) return el;
+    el = document.createElement('div');
+    el.className = 'tagmap-tooltip';
+    el.style.display = 'none';
+    // IMPORTANT: when in fullscreen, only the fullscreen element subtree is visible.
+    // So we must attach the tooltip inside the fullscreen element (tag map panel) to keep it visible.
     try {
-      if (mount && el.parentNode !== mount) mount.appendChild(el);
-    } catch (e) { /* no-op */ }
+      var fs = document.fullscreenElement;
+      var panel = document.getElementById('tagMapPanel');
+      if (fs && panel && (fs === panel || (panel.contains && panel.contains(fs)))) {
+        panel.appendChild(el);
+      } else if (fs && panel && (fs.contains && fs.contains(panel))) {
+        panel.appendChild(el);
+      } else {
+        document.body.appendChild(el);
+      }
+    } catch (e) {
+      document.body.appendChild(el);
+    }
     return el;
+  }
+
+  function categoryColor(category) {
+    // Match Tag.CATEGORY_* roughly
+    var m = {
+      mapping_genre: '#2ecc71',
+      pattern_type: '#1e90ff',
+      metadata: '#9b59b6',
+      other: '#ff9f43'
+    };
+    return m[category] || '#ff9f43';
   }
 
   function componentColor(idx) {
@@ -60,10 +81,26 @@
     zoomScale = clamp(zoomScale, 1.0, 6.0);
 
     // Base viewport size
+    // In fullscreen (and on tall/portrait screens), using width-only can make the map too short,
+    // which prevents vertical scrolling even after moderate zoom. So we ensure the base height
+    // roughly fills the available container height by inflating w0 when needed.
     var w0 = container.clientWidth || 900;
     var h0 = Math.round(w0 * 9 / 16);
-    // Keep it usable on small screens
-    h0 = Math.max(360, h0);
+    try {
+      if (document.fullscreenElement) {
+        var ch = container.clientHeight || 0;
+        if (ch > 0) {
+          var wByH = Math.round(ch * 16 / 9);
+          w0 = Math.max(w0, wByH);
+          h0 = Math.round(w0 * 9 / 16);
+        }
+      } else {
+        // Keep it usable on small screens
+        h0 = Math.max(360, h0);
+      }
+    } catch (e) {
+      h0 = Math.max(360, h0);
+    }
 
     // Actual rendered SVG size (can exceed container viewport)
     var w = Math.round(w0 * zoomScale);
@@ -251,6 +288,7 @@
       var rEnter = rects.enter().append('g').attr('class', 'mapper');
       rEnter.append('rect').attr('class', 'mapper-rect');
       rEnter.append('text').attr('class', 'mapper-text');
+      rEnter.append('title');
       rects = rEnter.merge(rects);
       rects.attr('data-mapper', function (d) { return d.data.name; });
 
@@ -342,7 +380,7 @@
           } catch (e) { }
         });
 
-      // Intentionally no <title> tooltip (we use the custom rich tooltip instead).
+      rects.select('title').text(function (d) { return d.data.name + ' (' + d.data.count + ')'; });
     });
 
     // Apply selection highlight (persists across reload/resize)
@@ -399,6 +437,21 @@
       });
       document.addEventListener('fullscreenchange', function () {
         updateLabel();
+        // Ensure tooltip element is inside the visible fullscreen subtree (or back on body when exiting).
+        try {
+          var tip = document.querySelector('.tagmap-tooltip');
+          var fs = document.fullscreenElement;
+          var panelEl = panel;
+          if (tip && panelEl) {
+            if (fs) {
+              // In fullscreen: attach to panel so it renders.
+              if (tip.parentNode !== panelEl) panelEl.appendChild(tip);
+            } else {
+              // Not fullscreen: attach to body (keeps it above everything site-wide).
+              if (tip.parentNode !== document.body) document.body.appendChild(tip);
+            }
+          }
+        } catch (e) {}
         // Re-render to adapt sizing to fullscreen/non-fullscreen layout.
         try { if (lastPayload) render(container, lastPayload, statusEl); } catch (e) {}
       });
@@ -491,13 +544,9 @@
           // Left mouse / primary pointer only
           if (ev.button != null && ev.button !== 0) return;
         } catch (e) {}
-
-        // Don't hijack clicks on mapper tiles (they have click/dblclick behavior),
-        // unless Ctrl is held (Ctrl = navigation mode: drag/zoom anywhere, no selection).
-        try {
-          var t = ev.target;
-          if (t && t.closest && t.closest('g.mapper') && !(ev && ev.ctrlKey)) return;
-        } catch (e) {}
+        // Allow drag-pan to start anywhere (including mapper tiles).
+        // Click/dblclick are preserved because we only "commit" to drag after DRAG_PX movement,
+        // and click handlers bail out when a drag occurred.
 
         isDown = true;
         didDrag = false;
@@ -606,6 +655,8 @@
 
     function load() {
       statusEl.textContent = 'Loading…';
+      // Consolidation is now fixed (best known-good value)
+      var cons = 0.2;
       var custom = '';
       try { custom = String(customInput.value || '').trim(); } catch (e) { custom = ''; }
       var statusFilter = 'ranked';
@@ -615,8 +666,9 @@
         status_filter: statusFilter,
         view: viewSel.value,
         custom_tagset: custom,
+        consolidation: cons,
         max_tags: 150,
-        // Note: sector sizing / thresholds are server-side
+        // Note: max_sets/max_set_size/min_support/min_pair are driven by consolidation server-side
         max_mappers: 60
       };
       fetchTagMapData(params)
@@ -851,9 +903,31 @@
         var dir = (ev.deltaY || 0) > 0 ? -1 : 1;
         var step = 0.18;
         var next = clamp(z * (1.0 + (dir * step)), 1.0, 6.0);
-        window.__tagMapLayoutZoom = next;
         if (!lastPayload) return;
+
+        // Zoom around cursor: keep the content point under the cursor stable.
+        var rect = null;
+        var pxView = 0, pyView = 0;
+        var pxContent = 0, pyContent = 0;
+        try {
+          rect = container.getBoundingClientRect();
+          pxView = (ev.clientX || 0) - (rect.left || 0);
+          pyView = (ev.clientY || 0) - (rect.top || 0);
+          pxContent = pxView + (container.scrollLeft || 0);
+          pyContent = pyView + (container.scrollTop || 0);
+        } catch (e) { rect = null; }
+
+        window.__tagMapLayoutZoom = next;
         try { render(container, lastPayload, statusEl); } catch (e) { }
+
+        // Apply corrected scroll after re-render
+        try {
+          var scale = next / (z || 1.0);
+          var newSL = (pxContent * scale) - pxView;
+          var newST = (pyContent * scale) - pyView;
+          if (isFinite(newSL)) container.scrollLeft = Math.max(0, newSL);
+          if (isFinite(newST)) container.scrollTop = Math.max(0, newST);
+        } catch (e) { }
       } catch (e) { }
     }, { passive: false });
 

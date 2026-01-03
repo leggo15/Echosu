@@ -141,6 +141,7 @@
       </div>
     </section>
   </section>
+
   <!-- Stock-market Style Nested Treemap -->
   <section class="tab-section" data-section="tagmap" style="display:none;">
     <div class="stats-section">
@@ -149,7 +150,7 @@
         Tagsubsets are sectors, and mappers are nested rectangles sized by how many maps they have in that sector.
       </p>
       <p style="margin-top:6px; opacity:0.85;">
-      Hold Ctrl to drag and zoom on the chart.
+        Hold Ctrl to drag and zoom on the chart.
       </p>
       <div class="tagmap-panel" id="tagMapPanel">
       <div class="stats-form" style="margin-top:10px;">
@@ -173,11 +174,9 @@
             <option value="overlap">Overlapping Tag Sets</option>
             <option value="single">Single Tag</option>
           </select>
-          <div>
-            <label for="tagMapCustom" style="margin-left:6px;">Custom tagset:</label>
-            <input id="tagMapCustom" type="text" placeholder='.aim .bursts "sharp angles"' style="min-width:260px; max-width:520px; flex: 1 1 auto;">
-            <button type="button" id="tagMapReloadBtn">Reload</button>
-          </div>
+          <label for="tagMapCustom" style="margin-left:6px;">Custom tagset:</label>
+          <input id="tagMapCustom" type="text" placeholder='.aim .bursts "sharp angles"' style="min-width:260px; max-width:520px; flex: 1 1 auto;">
+          <button type="button" id="tagMapReloadBtn">Reload</button>
         </div>
       </div>
       <div id="tagMapStatus" style="margin-top:10px; font-size: 13px; opacity:0.8;">Ready.</div>

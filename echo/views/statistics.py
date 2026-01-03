@@ -851,11 +851,659 @@ def statistics_latest_maps(request: HttpRequest):
     except Exception:
         return JsonResponse({ 'html': '' })
 
+class _UnionFind:
+    def __init__(self, items):
+        self.parent = {i: i for i in items}
+        self.rank = {i: 0 for i in items}
+
+    def find(self, x):
+        p = self.parent.get(x, x)
+        if p != x:
+            self.parent[x] = self.find(p)
+        return self.parent.get(x, x)
+
+    def union(self, a, b):
+        ra = self.find(a)
+        rb = self.find(b)
+        if ra == rb:
+            return
+        rka = self.rank.get(ra, 0)
+        rkb = self.rank.get(rb, 0)
+        if rka < rkb:
+            self.parent[ra] = rb
+        elif rka > rkb:
+            self.parent[rb] = ra
+        else:
+            self.parent[rb] = ra
+            self.rank[ra] = rka + 1
+
+
 def statistics_tag_map_data(request: HttpRequest):
-    """AJAX endpoint for the Statistics Tag Map tab (see `echo/helpers/tagmap.py`)."""
+    """AJAX endpoint: build tagset sectors + nested mapper rectangles.
+
+    The front-end (`echo/static/js/tag_map.js`) expects:
+      { sets: [{ id, tags: [str], map_count: int, top_mappers: [{name, count}] }] }
+
+    Design notes
+    - **Asymmetry / mega-common tags**: We use **NPMI** (normalized PMI) on tag co-occurrence,
+      which strongly down-weights globally frequent tags compared to raw co-occurrence / Jaccard.
+    - **Disjoint sectors**: The treemap is space-filling (no overlap), so we assign each beatmap
+      to exactly one sector (best tagset match) to avoid double counting.
+    - **Consolidation slider**: Controls graph threshold / kNN density (higher = fewer, larger sectors).
+    """
     try:
-        from ..helpers.tagmap import build_tagmap_payload
-        return JsonResponse(build_tagmap_payload(request))
+        # ---- Parse inputs (mirrors `tag_map.js`) ----
+        mode = Tag.normalize_mode((request.GET.get('mode') or Tag.MODE_STD).strip())
+        status_filter = (request.GET.get('status_filter') or 'ranked').strip().lower()
+        if status_filter not in ['ranked', 'unranked', 'all']:
+            status_filter = 'ranked'
+        view = (request.GET.get('view') or 'tagsets').strip().lower()
+        if view not in ['tagsets', 'single', 'overlap']:
+            view = 'tagsets'
+        custom_tagset_raw = (request.GET.get('custom_tagset') or '').strip()
+        consolidation = 0.1
+        CONS_STRICT_EPS = 0.01
+        CONS_MEGA_EPS = 0.99
+
+        try:
+            max_tags = int((request.GET.get('max_tags') or '150').strip())
+        except Exception:
+            max_tags = 150
+        max_tags = max(20, min(400, max_tags))
+
+        try:
+            max_mappers = int((request.GET.get('max_mappers') or '60').strip())
+        except Exception:
+            max_mappers = 60
+        max_mappers = max(10, min(200, max_mappers))
+
+        # ---- Base corpus (tag applications) ----
+        # Exclude explicit negatives and "legacy" rows where user is null but not marked prediction.
+        ta = (
+            TagApplication.objects
+            .filter(true_negative=False, tag__mode=mode)
+            .exclude(user__isnull=True, is_prediction=False)
+        )
+
+        # Beatmap status filter (mirrors search.py buckets)
+        if status_filter == 'ranked':
+            ta = ta.filter(beatmap__status__in=['Ranked', 'Approved'])
+        elif status_filter == 'unranked':
+            ta = ta.filter(beatmap__status__in=['Graveyard', 'WIP', 'Pending', 'Qualified', 'Loved'])
+        else:
+            # all: no filter
+            pass
+
+        # NOTE: Predicted include/exclude has been removed from this visualization.
+        # We always include both user-applied and predicted tags (excluding explicit negatives / legacy rows).
+
+        total_maps = ta.values('beatmap_id').distinct().count()
+        if not total_maps:
+            return JsonResponse({'sets': []})
+
+        # ---- Custom tagset (exact intersection) ----
+        # Accepts search-like token formatting:
+        #   .aim .bursts "sharp angles"
+        # Also supports exclusion with '-' prefix:
+        #   .aim .bursts -farm
+        if custom_tagset_raw:
+            try:
+                include_names: list[str] = []
+                exclude_names: list[str] = []
+                pattern = r'[-.]?"[^"]+"|[-.]?[^"\s]+'
+                for match in re.findall(pattern, custom_tagset_raw):
+                    token = (match or '').strip()
+                    if not token:
+                        continue
+                    prefix = ''
+                    if token[0] in '.-':
+                        prefix = token[0]
+                        token = token[1:]
+                    token = token.strip().strip('"').strip("'").strip().lower()
+                    if not token:
+                        continue
+                    if prefix == '-':
+                        exclude_names.append(token)
+                    else:
+                        include_names.append(token)
+
+                include_names = [t for t in include_names if t]
+                exclude_names = [t for t in exclude_names if t]
+
+                # Resolve to tag IDs for this mode
+                include_tags = list(Tag.objects.filter(mode=mode, name__in=include_names).values_list('id', flat=True))
+                exclude_tags = list(Tag.objects.filter(mode=mode, name__in=exclude_names).values_list('id', flat=True))
+
+                if include_tags:
+                    # Build beatmap set intersection for include tags
+                    bm_sets: list[set[int]] = []
+                    for tid in include_tags:
+                        ids = set(
+                            ta.filter(tag_id=int(tid))
+                            .values_list('beatmap_id', flat=True)
+                            .distinct()
+                        )
+                        if not ids:
+                            bm_sets = []
+                            break
+                        bm_sets.append(ids)
+
+                    if bm_sets:
+                        bm_sets.sort(key=lambda s: len(s))
+                        inter = set(bm_sets[0])
+                        for s in bm_sets[1:]:
+                            inter.intersection_update(s)
+                    else:
+                        inter = set()
+
+                    # Exclude tags (if provided)
+                    if inter and exclude_tags:
+                        ex_union: set[int] = set()
+                        for tid in exclude_tags:
+                            ex_union.update(
+                                set(
+                                    ta.filter(tag_id=int(tid))
+                                    .values_list('beatmap_id', flat=True)
+                                    .distinct()
+                                )
+                            )
+                        if ex_union:
+                            inter.difference_update(ex_union)
+
+                    bm_ids = list(inter)
+                else:
+                    # No include tags => nothing meaningful to compute
+                    bm_ids = []
+
+                if not bm_ids:
+                    return JsonResponse({'sets': []})
+
+                mapper_by_bm: dict[int, str] = {}
+                for row in Beatmap.objects.filter(id__in=bm_ids).values('id', 'listed_owner', 'creator'):
+                    bm_pk = int(row.get('id'))
+                    mapper = (row.get('listed_owner') or row.get('creator') or '').strip()
+                    mapper_by_bm[bm_pk] = mapper or '(unknown)'
+
+                m_ctr: Counter[str] = Counter()
+                for bid in bm_ids:
+                    m = mapper_by_bm.get(int(bid))
+                    if m:
+                        m_ctr[m] += 1
+
+                tags_out = include_names[:]  # display as typed (normalized)
+                sets = [{
+                    'id': 0,
+                    'tags': tags_out,
+                    'map_count': int(len(bm_ids)),
+                    'top_mappers': [{'name': n, 'count': int(c)} for n, c in m_ctr.most_common(max_mappers)],
+                }]
+                return JsonResponse({'sets': sets})
+            except Exception:
+                return JsonResponse({'sets': []})
+
+        # ---- Pick candidate tags (support filter) ----
+        # Lower consolidation (more fragmented) => require higher support to avoid noisy micro-sectors.
+        min_support = max(2, int(round(3 + 12 * (1.0 - consolidation))))  # 3..15
+
+        support_rows = list(
+            ta.values('tag_id')
+            .annotate(cnt=Count('beatmap_id', distinct=True))
+            .order_by('-cnt')[: max_tags * 3]
+        )
+        picked = [(int(r['tag_id']), int(r['cnt'])) for r in support_rows if int(r.get('cnt') or 0) >= min_support]
+        if len(picked) < min(25, max_tags):
+            # Fallback: if corpus is sparse, still show *something*.
+            picked = [(int(r['tag_id']), int(r['cnt'])) for r in support_rows[:max_tags]]
+
+        picked = picked[:max_tags]
+        tag_support: dict[int, int] = {tid: cnt for tid, cnt in picked}
+        tag_ids: list[int] = list(tag_support.keys())
+        if not tag_ids:
+            return JsonResponse({'sets': []})
+
+        tag_name_map: dict[int, str] = {
+            int(t['id']): str(t['name'])
+            for t in Tag.objects.filter(id__in=tag_ids).values('id', 'name')
+        }
+
+        # ---- Beatmap -> tag list (restricted to picked tags) ----
+        bm_tags: dict[int, list[int]] = defaultdict(list)
+        pair_qs = (
+            ta.filter(tag_id__in=tag_ids)
+            .values_list('beatmap_id', 'tag_id')
+            .distinct()
+            .iterator(chunk_size=5000)
+        )
+        for bm_id, tag_id in pair_qs:
+            try:
+                bm_tags[int(bm_id)].append(int(tag_id))
+            except Exception:
+                continue
+
+        if not bm_tags:
+            return JsonResponse({'sets': []})
+
+        # ---- Overlapping tagset view ----
+        # Goal: allow a beatmap to belong to *multiple* tagsets (e.g., a 5-tag "macro" set and a 2-tag subset).
+        # We do this by generating overlapping tagsets (macro cores + strong pairs) and computing support by
+        # intersection of tag->beatmap sets. This means total sector area can exceed "total maps" (by design).
+        if view == 'overlap':
+            # Build inverted index: tag -> set(beatmap_ids)
+            tag_to_bm: dict[int, set[int]] = {int(t): set() for t in tag_ids}
+            for bm_id, tags in bm_tags.items():
+                for tid in set(tags or []):
+                    if tid in tag_to_bm:
+                        tag_to_bm[tid].add(int(bm_id))
+
+            # Mapper lookup for all beatmaps once
+            bm_ids_all = list(bm_tags.keys())
+            mapper_by_bm: dict[int, str] = {}
+            for row in Beatmap.objects.filter(id__in=bm_ids_all).values('id', 'listed_owner', 'creator'):
+                bm_pk = int(row.get('id'))
+                mapper = (row.get('listed_owner') or row.get('creator') or '').strip()
+                mapper_by_bm[bm_pk] = mapper or '(unknown)'
+
+            # Thresholds tuned similarly to tagsets (but we want plenty of small subsets)
+            min_pair = max(2, int(round(2 + 8 * (1.0 - consolidation))))  # 2..10
+            edge_threshold = max(0.05, 0.35 - (0.30 * consolidation))
+            k = max(3, min(24, int(round(4 + 14 * consolidation))))
+
+            # Co-occurrence counts + neighbor lists (same as tagsets path)
+            pair_counts: Counter[tuple[int, int]] = Counter()
+            for tags in bm_tags.values():
+                if not tags or len(tags) < 2:
+                    continue
+                uniq = sorted(set(tags))
+                if len(uniq) < 2:
+                    continue
+                for i in range(len(uniq)):
+                    a = uniq[i]
+                    for j in range(i + 1, len(uniq)):
+                        b = uniq[j]
+                        pair_counts[(a, b)] += 1
+
+            eps = 1e-12
+            neigh: dict[int, list[tuple[int, float, int]]] = defaultdict(list)
+            for (a, b), c in pair_counts.items():
+                if c < min_pair:
+                    continue
+                ca = tag_support.get(a) or 0
+                cb = tag_support.get(b) or 0
+                if not ca or not cb:
+                    continue
+                pab = float(c) / float(total_maps)
+                if pab <= 0.0:
+                    continue
+                pa = float(ca) / float(total_maps)
+                pb = float(cb) / float(total_maps)
+                try:
+                    pmi = math.log((pab + eps) / ((pa * pb) + eps))
+                    denom = -math.log(pab + eps)
+                    npmi = float(pmi / denom) if denom > 0 else 0.0
+                except Exception:
+                    continue
+                if npmi < edge_threshold:
+                    continue
+                neigh[int(a)].append((int(b), npmi, int(c)))
+                neigh[int(b)].append((int(a), npmi, int(c)))
+
+            top: dict[int, list[tuple[int, float, int]]] = {}
+            for t, lst in neigh.items():
+                lst.sort(key=lambda x: (x[1], x[2]), reverse=True)
+                top[t] = lst[:k]
+
+            # Build macro components (mutual-kNN union-find), then create "macro cores" using a seed + strongest neighbors.
+            top_set: dict[int, set[int]] = {t: {o for (o, _, _) in lst} for t, lst in top.items()}
+            uf = _UnionFind(tag_ids)
+            for a, lst in top.items():
+                aset = top_set.get(a) or set()
+                for b, _, _ in lst:
+                    if b in aset and a in (top_set.get(b) or set()):
+                        uf.union(a, b)
+            comps: dict[int, list[int]] = defaultdict(list)
+            for tid in tag_ids:
+                comps[int(uf.find(tid))].append(int(tid))
+
+            components = sorted(
+                comps.values(),
+                key=lambda comp: sum(int(tag_support.get(t) or 0) for t in comp),
+                reverse=True,
+            )
+
+            # Create overlapping tagsets:
+            # - macro cores: seed tag + its strongest neighbors (size 3..6)
+            # - pairs: strong edges (size 2)
+            # Keep output bounded.
+            max_macro = max(6, min(30, int(round(10 + 12 * consolidation))))
+            max_pairs = max(40, min(220, int(round(90 + 80 * (1.0 - consolidation)))))
+            macro_size = max(3, min(6, int(round(4 + 2 * consolidation))))
+
+            tagsets: list[list[int]] = []
+            seen: set[tuple[int, ...]] = set()
+
+            # Macro cores
+            for comp in components[: max_macro * 2]:
+                comp_sorted = sorted(comp, key=lambda t: int(tag_support.get(int(t)) or 0), reverse=True)
+                if not comp_sorted:
+                    continue
+                seed = int(comp_sorted[0])
+                core = [seed]
+                for o, _, _ in (top.get(seed) or []):
+                    if o in comp and o not in core:
+                        core.append(int(o))
+                    if len(core) >= macro_size:
+                        break
+                # Ensure a stable, dedupable signature
+                sig = tuple(sorted(set(core)))
+                if len(sig) < 2:
+                    continue
+                if sig in seen:
+                    continue
+                seen.add(sig)
+                tagsets.append(list(sig))
+                if len(tagsets) >= max_macro:
+                    break
+
+            # Pairs
+            # Sort edges by (npmi, cooc) and take the top unique pairs.
+            pair_edges: list[tuple[float, int, int]] = []
+            for a, lst in top.items():
+                for b, npmi, cooc in lst:
+                    if a == b:
+                        continue
+                    x, y = (a, b) if a < b else (b, a)
+                    pair_edges.append((float(npmi), int(cooc), (x << 20) + y))
+            pair_edges.sort(reverse=True)
+            for npmi, cooc, packed in pair_edges:
+                x = int(packed >> 20)
+                y = int(packed & ((1 << 20) - 1))
+                sig = (x, y)
+                if sig in seen:
+                    continue
+                # Require at least min_pair support by real intersection (robust vs count drift)
+                bm_x = tag_to_bm.get(x) or set()
+                bm_y = tag_to_bm.get(y) or set()
+                if not bm_x or not bm_y:
+                    continue
+                if len(bm_x) > len(bm_y):
+                    bm_x, bm_y = bm_y, bm_x
+                inter = [bid for bid in bm_x if bid in bm_y]
+                if len(inter) < min_pair:
+                    continue
+                seen.add(sig)
+                tagsets.append([x, y])
+                if len(tagsets) >= (max_macro + max_pairs):
+                    break
+
+            # Build payload (intersection semantics: a map "fits" if it has *all* tags in the set)
+            sets = []
+            next_id = 0
+            for ts in tagsets:
+                # Compute intersection of bm sets
+                bm_sets = [tag_to_bm.get(int(t)) or set() for t in ts]
+                bm_sets = [s for s in bm_sets if s]
+                if len(bm_sets) != len(ts):
+                    continue
+                bm_sets.sort(key=lambda s: len(s))
+                base = bm_sets[0]
+                inter_ids = [bid for bid in base if all(bid in s for s in bm_sets[1:])]
+                if not inter_ids:
+                    continue
+
+                m_ctr: Counter[str] = Counter()
+                for bid in inter_ids:
+                    m = mapper_by_bm.get(int(bid))
+                    if m:
+                        m_ctr[m] += 1
+                top_mappers = [{'name': n, 'count': int(c)} for n, c in m_ctr.most_common(max_mappers)]
+
+                tags_out = []
+                for tid in ts:
+                    nm = tag_name_map.get(int(tid))
+                    if nm:
+                        tags_out.append(nm)
+                if not tags_out:
+                    continue
+
+                sets.append({
+                    'id': next_id,
+                    'tags': tags_out,
+                    'map_count': int(len(inter_ids)),
+                    'top_mappers': top_mappers,
+                })
+                next_id += 1
+
+            sets.sort(key=lambda s: int(s.get('map_count') or 0), reverse=True)
+            return JsonResponse({'sets': sets})
+
+        # ---- Single-tag view (non-disjoint; each tag is a sector sized by its own support) ----
+        # This intentionally "double counts" beatmaps across sectors when maps have multiple tags.
+        # That's OK for this visualization mode: you're inspecting tags directly.
+        if view == 'single':
+            bm_ids_all = list(bm_tags.keys())
+            if not bm_ids_all:
+                return JsonResponse({'sets': []})
+
+            mapper_by_bm: dict[int, str] = {}
+            for row in Beatmap.objects.filter(id__in=bm_ids_all).values('id', 'listed_owner', 'creator'):
+                bm_pk = int(row.get('id'))
+                mapper = (row.get('listed_owner') or row.get('creator') or '').strip()
+                mapper_by_bm[bm_pk] = mapper or '(unknown)'
+
+            tag_map_counts: Counter[int] = Counter()
+            mapper_counts_by_tag: dict[int, Counter[str]] = defaultdict(Counter)
+            for bm_id, tags in bm_tags.items():
+                mapper = mapper_by_bm.get(int(bm_id)) or '(unknown)'
+                for tid in set(tags or []):
+                    tag_map_counts[int(tid)] += 1
+                    mapper_counts_by_tag[int(tid)][mapper] += 1
+
+            sets = []
+            next_id = 0
+            for tid, cnt in tag_map_counts.most_common():
+                name = tag_name_map.get(int(tid))
+                if not name:
+                    continue
+                m_ctr = mapper_counts_by_tag.get(int(tid)) or Counter()
+                top_mappers = [{'name': n, 'count': int(c)} for n, c in m_ctr.most_common(max_mappers)]
+                sets.append({
+                    'id': next_id,
+                    'tags': [name],
+                    'map_count': int(cnt),
+                    'top_mappers': top_mappers,
+                })
+                next_id += 1
+                # Respect the same max_sets logic (derived from consolidation) so payload stays bounded.
+                max_sets_single = max(6, min(120, int(round(18 + 90 * (1.0 - consolidation)))))
+                if len(sets) >= max_sets_single:
+                    break
+
+            return JsonResponse({'sets': sets})
+
+        # ---- Hard extremes: sector definitions ----
+        # Note: we still keep disjoint beatmap assignment so the treemap area doesn't double-count maps.
+        if consolidation <= CONS_STRICT_EPS:
+            # One sector per tag (components = singletons)
+            components: list[list[int]] = [[int(t)] for t in tag_ids]
+        elif consolidation >= CONS_MEGA_EPS:
+            # One mega community
+            components = [list(tag_ids)]
+        else:
+            components = []
+
+        # ---- Build co-occurrence counts ----
+        pair_counts: Counter[tuple[int, int]] = Counter()
+        if not components:
+            for tags in bm_tags.values():
+                if not tags or len(tags) < 2:
+                    continue
+                # dedupe within a map
+                uniq = sorted(set(tags))
+                if len(uniq) < 2:
+                    continue
+                for i in range(len(uniq)):
+                    a = uniq[i]
+                    for j in range(i + 1, len(uniq)):
+                        b = uniq[j]
+                        pair_counts[(a, b)] += 1
+
+        # ---- Build mutual-kNN NPMI graph (hub-resistant) ----
+        # Edge weight: NPMI in [-1, 1] (hub-resistant)
+        if not components:
+            # Consolidation high => lower threshold + larger k => bigger components.
+            NPMI_THRESH_AT_0 = 0.35
+            NPMI_THRESH_SLOPE = 0.30
+            NPMI_THRESH_MIN = 0.05
+            edge_threshold = max(NPMI_THRESH_MIN, NPMI_THRESH_AT_0 - (NPMI_THRESH_SLOPE * consolidation))
+
+            # Also require a minimum co-occurrence; lower consolidation => stricter (avoid spurious edges).
+            min_pair = max(2, int(round(2 + 8 * (1.0 - consolidation))))  # 2..10
+
+            # kNN fanout per node (mutual kNN to avoid mega hubs exploding everything)
+            k = max(3, min(24, int(round(4 + 14 * consolidation))))  # 4..18-ish (capped)
+
+            eps = 1e-12
+            neigh: dict[int, list[tuple[int, float, int]]] = defaultdict(list)  # tag -> [(other, npmi, cooc)]
+            for (a, b), c in pair_counts.items():
+                if c < min_pair:
+                    continue
+                ca = tag_support.get(a) or 0
+                cb = tag_support.get(b) or 0
+                if not ca or not cb:
+                    continue
+                pab = float(c) / float(total_maps)
+                if pab <= 0.0:
+                    continue
+                pa = float(ca) / float(total_maps)
+                pb = float(cb) / float(total_maps)
+
+                # PMI = log( P(a,b) / (P(a)P(b)) ); NPMI = PMI / -log(P(a,b))
+                try:
+                    pmi = math.log((pab + eps) / ((pa * pb) + eps))
+                    denom = -math.log(pab + eps)
+                    npmi = float(pmi / denom) if denom > 0 else 0.0
+                except Exception:
+                    continue
+
+                if npmi < edge_threshold:
+                    continue
+
+                neigh[int(a)].append((int(b), npmi, int(c)))
+                neigh[int(b)].append((int(a), npmi, int(c)))
+
+            # Keep only top-k neighbors per node
+            top: dict[int, list[tuple[int, float, int]]] = {}
+            top_set: dict[int, set[int]] = {}
+            for t, lst in neigh.items():
+                lst.sort(key=lambda x: (x[1], x[2]), reverse=True)  # by npmi then cooc
+                kept = lst[:k]
+                top[t] = kept
+                top_set[t] = {o for (o, _, _) in kept}
+
+            # Union mutual edges
+            uf = _UnionFind(tag_ids)
+            for a, lst in top.items():
+                aset = top_set.get(a) or set()
+                for b, _, _ in lst:
+                    if b in aset and a in (top_set.get(b) or set()):
+                        uf.union(a, b)
+
+            comps: dict[int, list[int]] = defaultdict(list)
+            for tid in tag_ids:
+                comps[int(uf.find(tid))].append(int(tid))
+
+            components = sorted(
+                comps.values(),
+                key=lambda comp: sum(int(tag_support.get(t) or 0) for t in comp),
+                reverse=True,
+            )
+
+        # Limit number of sectors: low consolidation => allow more sectors.
+        max_sets = max(6, min(80, int(round(12 + 48 * (1.0 - consolidation)))))  # 60..12
+        components = components[: max_sets * 3]
+
+        # ---- Assign each beatmap to exactly one component (avoid double-counting) ----
+        # Score = sum over tags in component of inv_log_support(tag)
+        inv_log_support: dict[int, float] = {}
+        for tid, cnt in tag_support.items():
+            try:
+                inv_log_support[int(tid)] = 1.0 / max(1e-6, math.log(2.0 + float(cnt)))
+            except Exception:
+                inv_log_support[int(tid)] = 1.0
+
+        comp_by_tag: dict[int, int] = {}
+        for idx, comp in enumerate(components):
+            for tid in comp:
+                comp_by_tag[int(tid)] = idx
+
+        comp_bm_ids: dict[int, list[int]] = defaultdict(list)
+        for bm_id, tags in bm_tags.items():
+            if not tags:
+                continue
+            scores: dict[int, float] = defaultdict(float)
+            for tid in set(tags):
+                ci = comp_by_tag.get(int(tid))
+                if ci is None:
+                    continue
+                scores[int(ci)] += float(inv_log_support.get(int(tid), 1.0))
+            if not scores:
+                continue
+            best_idx = max(scores.items(), key=lambda kv: kv[1])[0]
+            comp_bm_ids[int(best_idx)].append(int(bm_id))
+
+        # ---- Mapper counts per sector ----
+        all_assigned_ids: list[int] = []
+        for ids in comp_bm_ids.values():
+            all_assigned_ids.extend(ids)
+        if not all_assigned_ids:
+            return JsonResponse({'sets': []})
+
+        mapper_by_bm: dict[int, str] = {}
+        for row in Beatmap.objects.filter(id__in=all_assigned_ids).values('id', 'listed_owner', 'creator'):
+            bm_pk = int(row.get('id'))
+            mapper = (row.get('listed_owner') or row.get('creator') or '').strip()
+            mapper_by_bm[bm_pk] = mapper or '(unknown)'
+
+        # ---- Build response ----
+        # Fewer consolidation => smaller "label" tag lists; higher => show more "sector identity".
+        max_set_size = max(4, min(14, int(round(6 + 6 * consolidation))))  # 6..12-ish (capped)
+
+        sets = []
+        next_id = 0
+        for idx, comp in enumerate(components):
+            bm_ids = comp_bm_ids.get(idx) or []
+            if not bm_ids:
+                continue
+
+            # Sector tags: top by support (display only)
+            top_tags = sorted(comp, key=lambda t: int(tag_support.get(int(t)) or 0), reverse=True)[:max_set_size]
+            tags_out = []
+            for tid in top_tags:
+                nm = tag_name_map.get(int(tid))
+                if nm:
+                    tags_out.append(nm)
+
+            # Top mappers within this sector
+            m_ctr: Counter[str] = Counter()
+            for bm_id in bm_ids:
+                m = mapper_by_bm.get(int(bm_id))
+                if m:
+                    m_ctr[m] += 1
+            top_mappers = [{'name': name, 'count': int(cnt)} for name, cnt in m_ctr.most_common(max_mappers)]
+
+            sets.append({
+                'id': next_id,
+                'tags': tags_out,
+                'map_count': int(len(bm_ids)),
+                'top_mappers': top_mappers,
+            })
+            next_id += 1
+            if len(sets) >= max_sets:
+                break
+
+        # Sort by size (front-end uses `map_count` for area)
+        sets.sort(key=lambda s: int(s.get('map_count') or 0), reverse=True)
+        return JsonResponse({'sets': sets})
     except Exception:
         return JsonResponse({'sets': []})
 

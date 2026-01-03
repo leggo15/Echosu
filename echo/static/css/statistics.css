@@ -344,10 +344,16 @@
 #tagMapPanel:fullscreen #tagMapStatus {
   flex: 0 0 auto;
 }
+#tagMapPanel:fullscreen .tagmap-mapwrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
 #tagMapPanel:fullscreen .tagmap-container {
   aspect-ratio: auto;
   flex: 1 1 auto;
-  height: auto;
+  height: 100%;
   min-height: 0;
 }
 

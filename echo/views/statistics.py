@@ -1104,9 +1104,9 @@ def statistics_tag_map_data(request: HttpRequest):
                 mapper_by_bm[bm_pk] = mapper or '(unknown)'
 
             # Thresholds tuned similarly to tagsets (but we want plenty of small subsets)
-            min_pair = max(5, int(round(2 + 8 * (1.0 - consolidation*25))))  # 2..10
-            edge_threshold = max(0.05, 0.35 - (0.30 * consolidation*25))
-            k = max(3, min(24, int(round(4 + 14 * consolidation*25))))
+            min_pair = max(5, int(round(2 + 8 * (1.0 - consolidation))))
+            edge_threshold = max(0.05, 0.35 - (0.30 * consolidation))
+            k = max(3, min(24, int(round(4 + 14 * consolidation))))
 
             # Co-occurrence counts + neighbor lists (same as tagsets path)
             pair_counts: Counter[tuple[int, int]] = Counter()
@@ -1176,7 +1176,7 @@ def statistics_tag_map_data(request: HttpRequest):
             # Keep output bounded.
             max_macro = max(6, min(30, int(round(10 + 12 * consolidation))))
             max_pairs = max(40, min(220, int(round(90 + 80 * (1.0 - consolidation)))))
-            macro_size = max(3, min(6, int(round(4 + 2 * consolidation))))
+            macro_size = max(3, min(6, int(round(4 + 2 * consolidation*3))))
 
             tagsets: list[list[int]] = []
             seen: set[tuple[int, ...]] = set()

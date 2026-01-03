@@ -1176,7 +1176,7 @@ def statistics_tag_map_data(request: HttpRequest):
             # Keep output bounded.
             max_macro = max(6, min(30, int(round(10 + 12 * consolidation))))
             max_pairs = max(40, min(220, int(round(90 + 80 * (1.0 - consolidation)))))
-            macro_size = max(3, min(10, int(round(5 + 6 * consolidation))))
+            macro_size = max(30, min(100, int(round(50 + 60 * consolidation))))
 
             tagsets: list[list[int]] = []
             seen: set[tuple[int, ...]] = set()

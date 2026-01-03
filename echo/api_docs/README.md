@@ -32,11 +32,6 @@ The API uses Token-Based Authentication to secure endpoints. To use the API, you
 - Click your profile picture and go to settings.
 - Click generate API token. Generating a new token will invalidate your previous token (only one active token per user).
 
-#### Store the Token Securely:
-
-- Once generated, copy the token key.
-- Store it securely; it won't be displayed again.
-
 ### Using the API Token
 
 Include the token in the `Authorization` header of your API requests as follows:
@@ -108,14 +103,17 @@ Interact with Beatmap data. Provides read-only operations and filtering.
 - **Authentication:** Required (Token or logged-in session)
 - **Actions:**
   - **List Beatmaps**
+
     - **URL:** `/api/beatmaps/`
     - **Method:** `GET`
     - **Description:** Retrieve a list of all beatmaps.
   - **Retrieve a Beatmap**
+
     - **URL:** `/api/beatmaps/{beatmap_id}/`
     - **Method:** `GET`
     - **Description:** Retrieve details of a specific beatmap by its beatmap ID.
   - **Filtered Beatmaps**
+
     - **URL:** `/api/beatmaps/filtered/`
     - **Method:** `GET`
     - **Description:** Retrieve beatmaps filtered by a query string (matches title OR artist OR tag name).
@@ -123,8 +121,8 @@ Interact with Beatmap data. Provides read-only operations and filtering.
       - `query` (required): The search term to filter beatmaps by title.
         - **Type:** string
         - **Example:** `/api/beatmaps/filtered/?query=Test`
-
   - **Batch Tag Aggregation (recommended for bulk clients)**
+
     - **URL:** `/api/beatmaps/tags/`
     - **Methods:** `GET`, `POST`
     - **Description:** Bulk helpers to avoid calling `/api/tag-applications/?beatmap_id=...` hundreds of times.
@@ -142,7 +140,7 @@ Interact with Beatmap data. Provides read-only operations and filtering.
 }
 ```
 
-    - **Response:**
+    -**Response:**
 
 ```json
 {

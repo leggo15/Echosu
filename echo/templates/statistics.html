@@ -14,6 +14,7 @@
     <button class="tab-button" type="button" data-tab="global">Global Statistics</button>
     <button class="tab-button {% if not input_user and not resolved_username %}active{% endif %}" type="button" data-tab="latest">Latest Maps</button>
     <button class="tab-button {% if input_user or resolved_username %}active{% endif %}" type="button" data-tab="user">User Statistics</button>
+    <button class="tab-button" type="button" data-tab="tagmap">Nested Treemap</button>
     <button class="tab-button" type="button" data-tab="mine">My Statistics</button>
     <button class="tab-button" type="button" data-tab="activity">My Tagging Activity</button>
     <button class="tab-button" type="button" data-tab="history">My Search History</button>
@@ -139,6 +140,53 @@
         </div>
       </div>
     </section>
+  </section>
+  <!-- Stock-market Style Nested Treemap -->
+  <section class="tab-section" data-section="tagmap" style="display:none;">
+    <div class="stats-section">
+      <h2>Stock-market Style Nested Treemap</h2>
+      <p style="margin-top:6px; opacity:0.85;">
+        Tagsubsets are sectors, and mappers are nested rectangles sized by how many maps they have in that sector.
+      </p>
+      <p style="margin-top:6px; opacity:0.85;">
+      Hold Ctrl to drag and zoom on the chart.
+      </p>
+      <div class="tagmap-panel" id="tagMapPanel">
+      <div class="stats-form" style="margin-top:10px;">
+        <div class="search-row" style="flex-wrap:wrap;">
+          <label for="tagMapMode">Mode:</label>
+          <select id="tagMapMode">
+            <option value="std" selected>Standard</option>
+            <option value="taiko">Taiko</option>
+            <option value="catch">Catch</option>
+            <option value="mania">Mania</option>
+          </select>
+          <label for="tagMapBeatmapStatus">Status:</label>
+          <select id="tagMapBeatmapStatus">
+            <option value="ranked" selected>Ranked</option>
+            <option value="unranked">Unranked</option>
+            <option value="all">All</option>
+          </select>
+          <label for="tagMapView">View:</label>
+          <select id="tagMapView">
+            <option value="tagsets" selected>Tag Sets</option>
+            <option value="overlap">Overlapping Tag Sets</option>
+            <option value="single">Single Tag</option>
+          </select>
+          <div>
+            <label for="tagMapCustom" style="margin-left:6px;">Custom tagset:</label>
+            <input id="tagMapCustom" type="text" placeholder='.aim .bursts "sharp angles"' style="min-width:260px; max-width:520px; flex: 1 1 auto;">
+            <button type="button" id="tagMapReloadBtn">Reload</button>
+          </div>
+        </div>
+      </div>
+      <div id="tagMapStatus" style="margin-top:10px; font-size: 13px; opacity:0.8;">Ready.</div>
+      <div class="tagmap-mapwrap">
+        <button type="button" id="tagMapFullscreenBtn" class="tagmap-fullscreen-btn" title="Fullscreen">Fullscreen</button>
+        <div class="tagmap-container" id="tagMapContainer" aria-label="Tag similarity map"></div>
+      </div>
+      </div>
+    </div>
   </section>
 
   <!-- My Statistics Tab -->
@@ -409,8 +457,10 @@
 
 {% block foot_js %}
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
   <script src="{% static 'js/tagging.js' %}"></script>
   <script src="{% static 'js/statistics.js' %}"></script>
+  <script src="{% static 'js/tag_map.js' %}"></script>
   {{ mapper_labels|default:'[]'|json_script:'mapperLabels' }}
   {{ mapper_counts|default:'[]'|json_script:'mapperCounts' }}
   {{ mapper_click_queries|default:'[]'|json_script:'mapperClickQueries' }}

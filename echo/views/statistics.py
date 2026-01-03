@@ -27,6 +27,7 @@ from collections import Counter
 from .auth import api
 from .shared import format_length_hms
 from ..helpers.rosu_utils import get_or_compute_pp
+from collections import defaultdict
 
 
 def _tokenize_query_terms(raw_query: str) -> set[str]:
@@ -849,6 +850,14 @@ def statistics_latest_maps(request: HttpRequest):
         return JsonResponse({ 'html': ''.join(html_parts) })
     except Exception:
         return JsonResponse({ 'html': '' })
+
+def statistics_tag_map_data(request: HttpRequest):
+    """AJAX endpoint for the Statistics Tag Map tab (see `echo/helpers/tagmap.py`)."""
+    try:
+        from ..helpers.tagmap import build_tagmap_payload
+        return JsonResponse(build_tagmap_payload(request))
+    except Exception:
+        return JsonResponse({'sets': []})
 
 
 def statistics_latest_searches(request: HttpRequest):

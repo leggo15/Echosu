@@ -303,4 +303,133 @@
   border-color: rgba(255,255,255,0.08);
 }
 
+/* Tag map */
+.tagmap-panel {
+  position: relative;
+}
+.tagmap-mapwrap {
+  position: relative;
+}
+.tagmap-fullscreen-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 6;
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(0,0,0,0.12);
+  background: rgba(255,255,255,0.85);
+  font-weight: 700;
+  cursor: pointer;
+}
+[data-theme="dark"] .tagmap-fullscreen-btn {
+  border-color: rgba(255,255,255,0.14);
+  background: rgba(20,24,34,0.75);
+  color: rgba(255,255,255,0.9);
+}
+
+/* Fullscreen layout: let the map use the available vertical space */
+#tagMapPanel:fullscreen {
+  padding: 10px;
+  background: rgba(255,255,255,0.95);
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  box-sizing: border-box;
+}
+[data-theme="dark"] #tagMapPanel:fullscreen {
+  background: rgba(10,12,18,0.98);
+}
+#tagMapPanel:fullscreen .stats-form,
+#tagMapPanel:fullscreen #tagMapStatus {
+  flex: 0 0 auto;
+}
+#tagMapPanel:fullscreen .tagmap-container {
+  aspect-ratio: auto;
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 0;
+}
+
+.tagmap-container {
+  width: 100%;
+  /* Dynamic sizing, but keep a consistent overall shape (16:9) */
+  aspect-ratio: 16 / 9;
+  height: auto;
+  min-height: 480px;
+  max-height: none;
+  border: 1px solid rgba(0,0,0,0.08);
+  border-radius: 12px;
+  background: rgba(255,255,255,0.65);
+  /* Allow "layout zoom" (SVG becomes larger than the viewport and we scroll). */
+  overflow: auto;
+  margin-top: 12px;
+  /* Prevent accidental text selection while dragging/panning/hovering */
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  /* Allow custom pinch/drag gestures without browser scrolling/zooming inside the map */
+  touch-action: none;
+}
+.tagmap-container * {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+[data-theme="dark"] .tagmap-container {
+  border-color: rgba(255,255,255,0.10);
+  background: rgba(20,24,34,0.7);
+}
+
+.tagmap-tooltip {
+  position: fixed;
+  z-index: 9999;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(20, 24, 34, 0.92);
+  color: #fff;
+  font-size: 12px;
+  pointer-events: none;
+  box-shadow: 0 10px 24px rgba(0,0,0,0.35);
+  transform: translate(-50%, -120%);
+  max-width: 280px;
+}
+
+/* SVG styling for the tagset Voronoi map */
+.tagmap-container svg text.faint {
+  user-select: none;
+}
+[data-theme="dark"] .tagmap-container svg text.faint {
+  fill: rgba(255,255,255,0.16) !important;
+}
+[data-theme="dark"] .tagmap-container svg path.region {
+  stroke: rgba(255,255,255,0.18) !important;
+}
+
+[data-theme="dark"] .tagmap-container svg g.m text {
+  fill: rgba(255,255,255,0.78) !important;
+}
+
+/* Tagmap heatmap (nested treemap) */
+.tagmap-container svg rect.region {
+  shape-rendering: crispEdges;
+}
+.tagmap-container svg g.mapper:hover rect.mapper-rect {
+  stroke: #ffffff !important;
+  stroke-width: 2 !important;
+}
+.tagmap-container svg g.mapper.is-selected rect.mapper-rect {
+  stroke: #ffffff !important;
+  stroke-width: 2 !important;
+  opacity: 0.85 !important;
+}
+.tagmap-container svg g.mapper.is-dimmed rect.mapper-rect {
+  opacity: 0.12 !important;
+}
+.tagmap-container svg g.mapper.is-dimmed text.mapper-text {
+  opacity: 0.15 !important;
+}
+
 

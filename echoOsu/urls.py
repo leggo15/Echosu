@@ -22,6 +22,7 @@ from echo.views.userSettings  import (
 from echo.views.pages      import error_page_view, custom_404_view
 from echo.views.statistics import statistics, statistics_player_data, statistics_latest_maps
 from echo.views.statistics import statistics_latest_searches, statistics_latest_events, statistics_admin_data, statistics_admin_tag
+from echo.views.statistics import statistics_tag_map_data
 from echo.views.analytics import log_search_event, log_click_event
 from echo.views.analytics import log_impressions
 
@@ -66,6 +67,7 @@ urlpatterns = [
     path('statistics/latest-events/', statistics_latest_events, name='statistics_latest_events'),
     path('statistics/admin-data/', statistics_admin_data, name='statistics_admin_data'),
     path('statistics/admin-tag/', statistics_admin_tag, name='statistics_admin_tag'),
+    path('statistics/tag-map-data/', statistics_tag_map_data, name='statistics_tag_map_data'),
     path('search/saved/toggle/', toggle_saved_search, name='toggle_saved_search'),
     path('search/saved/update-title/', update_saved_search_title, name='update_saved_search_title'),
     path('search/saved/delete/', delete_saved_search, name='delete_saved_search'),

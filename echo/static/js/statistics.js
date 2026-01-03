@@ -698,6 +698,7 @@
       // Set initial state per default
       setActiveTab(initial);
       if (initial === 'latest') { startLatestPoll(); }
+      if (initial === 'tagmap' && window.initTagMap) { try { window.initTagMap(); } catch (e) {} }
       if (initial === 'user' && !chartsInitialized && window.initStatistics) {
         chartsInitialized = true;
         try { window.initStatistics(cfg || {}); } catch(e) {}
@@ -721,6 +722,7 @@
           setActiveTab(target);
           if (target === 'latest') { startLatestPoll(); } else { stopLatestPoll(); }
           if (target === 'admin') { initAdmin(); startAdminLatestPoll(); } else { stopAdminLatestPoll(); }
+          if (target === 'tagmap' && window.initTagMap) { try { window.initTagMap(); } catch (e) {} }
           // Persist tab in URL without reloading
           try {
             var u = new URL(window.location.href);

@@ -898,7 +898,7 @@ def statistics_tag_map_data(request: HttpRequest):
         if status_filter not in ['ranked', 'unranked', 'all']:
             status_filter = 'ranked'
         view = (request.GET.get('view') or 'tagsets').strip().lower()
-        if view not in ['tagsets', 'single', 'overlap']:
+        if view not in ['tagsets', 'single', 'overlap', 'crafted']:
             view = 'tagsets'
         custom_tagset_raw = (request.GET.get('custom_tagset') or '').strip()
         # Default consolidation (what the old slider % mapped to as value/100).
@@ -919,35 +919,31 @@ def statistics_tag_map_data(request: HttpRequest):
             max_mappers = 60
         max_mappers = max(10, min(200, max_mappers))
 
-        # Admin-only tuning overrides (purely client-side experimentation; not persisted)
-        is_staff = bool(getattr(request.user, 'is_staff', False))
-        if is_staff:
-            try:
-                raw = (request.GET.get('consolidation') or '').strip()
-                if raw:
-                    consolidation = float(raw)
-            except Exception:
-                pass
-            consolidation = max(0.0, min(1.0, consolidation))
-            try:
-                raw = (request.GET.get('max_tags') or '').strip()
-                if raw:
-                    max_tags = int(raw)
-            except Exception:
-                pass
-            max_tags = max(20, min(400, max_tags))
-            try:
-                raw = (request.GET.get('max_mappers') or '').strip()
-                if raw:
-                    max_mappers = int(raw)
-            except Exception:
-                pass
-            max_mappers = max(10, min(200, max_mappers))
+        # Tuning overrides (public; client-side experimentation; not persisted)
+        try:
+            raw = (request.GET.get('consolidation') or '').strip()
+            if raw:
+                consolidation = float(raw)
+        except Exception:
+            pass
+        consolidation = max(0.0, min(1.0, consolidation))
+        try:
+            raw = (request.GET.get('max_tags') or '').strip()
+            if raw:
+                max_tags = int(raw)
+        except Exception:
+            pass
+        max_tags = max(20, min(400, max_tags))
+        try:
+            raw = (request.GET.get('max_mappers') or '').strip()
+            if raw:
+                max_mappers = int(raw)
+        except Exception:
+            pass
+        max_mappers = max(10, min(200, max_mappers))
 
-        # Optional advanced overrides (staff only)
+        # Optional advanced overrides (public; bounded)
         def _opt_int(key: str) -> int | None:
-            if not is_staff:
-                return None
             try:
                 raw = (request.GET.get(key) or '').strip()
                 if not raw:
@@ -957,8 +953,6 @@ def statistics_tag_map_data(request: HttpRequest):
                 return None
 
         def _opt_float(key: str) -> float | None:
-            if not is_staff:
-                return None
             try:
                 raw = (request.GET.get(key) or '').strip()
                 if not raw:
@@ -981,6 +975,133 @@ def statistics_tag_map_data(request: HttpRequest):
         overlap_macro_size_override = _opt_int('overlap_macro_size')
         overlap_seed_cores_override = _opt_int('overlap_seed_cores')
         overlap_triads_per_node_override = _opt_int('overlap_triads_per_node')
+
+        # ---- Crafted Map (manual sectors) ----
+        if view == 'crafted':
+            try:
+                import os
+                crafted_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'crafted_tagmap.json')
+                crafted_path = os.path.normpath(crafted_path)
+                with open(crafted_path, 'r', encoding='utf-8') as f:
+                    cfg = json.load(f) or {}
+                mode_cfg = {}
+                try:
+                    mode_cfg = (cfg.get('modes') or {}).get(mode) or []
+                except Exception:
+                    mode_cfg = []
+                if not isinstance(mode_cfg, list):
+                    mode_cfg = []
+
+                # Resolve all tags referenced by crafted sectors
+                sector_defs: list[dict] = []
+                all_tag_names: set[str] = set()
+                for s in mode_cfg:
+                    if not isinstance(s, dict):
+                        continue
+                    tags = s.get('tags') or []
+                    if not isinstance(tags, list):
+                        continue
+                    tags_norm = [str(t).strip().lower() for t in tags if str(t).strip()]
+                    if not tags_norm:
+                        continue
+                    sector_defs.append({'id': str(s.get('id') or ''), 'tags': tags_norm})
+                    all_tag_names.update(tags_norm)
+
+                if not sector_defs:
+                    return JsonResponse({'sets': []})
+
+                tag_rows = list(Tag.objects.filter(mode=mode, name__in=list(all_tag_names)).values('id', 'name'))
+                name_to_id = {str(r['name']): int(r['id']) for r in tag_rows if r.get('name') and r.get('id')}
+                sector_tag_ids: list[list[int]] = []
+                sector_tag_names: list[list[str]] = []
+                for s in sector_defs:
+                    tids = []
+                    tnames = []
+                    for nm in s['tags']:
+                        tid = name_to_id.get(nm)
+                        if tid:
+                            tids.append(int(tid))
+                            tnames.append(nm)
+                    if tids:
+                        sector_tag_ids.append(tids)
+                        sector_tag_names.append(tnames)
+
+                if not sector_tag_ids:
+                    return JsonResponse({'sets': []})
+
+                # Build beatmap -> picked tag set (only tags used by crafted sectors)
+                all_ids = sorted({tid for lst in sector_tag_ids for tid in lst})
+                bm_tags: dict[int, set[int]] = defaultdict(set)
+                for bm_id, tag_id in (
+                    ta.filter(tag_id__in=all_ids)
+                    .values_list('beatmap_id', 'tag_id')
+                    .distinct()
+                    .iterator(chunk_size=5000)
+                ):
+                    try:
+                        bm_tags[int(bm_id)].add(int(tag_id))
+                    except Exception:
+                        continue
+
+                if not bm_tags:
+                    return JsonResponse({'sets': []})
+
+                # Support for scoring (rarer tags count more for disjoint assignment)
+                tag_support: dict[int, int] = {
+                    int(r['tag_id']): int(r['cnt'])
+                    for r in ta.filter(tag_id__in=all_ids)
+                    .values('tag_id')
+                    .annotate(cnt=Count('beatmap_id', distinct=True))
+                }
+                inv_log_support: dict[int, float] = {}
+                for tid in all_ids:
+                    cnt = tag_support.get(int(tid), 1)
+                    inv_log_support[int(tid)] = 1.0 / max(1e-6, math.log(2.0 + float(cnt)))
+
+                # Assign each beatmap to best matching crafted sector (disjoint sectors)
+                sector_bm_ids: dict[int, list[int]] = defaultdict(list)
+                for bm_id, tset in bm_tags.items():
+                    best = None
+                    best_score = None
+                    for si, tids in enumerate(sector_tag_ids):
+                        if all(int(t) in tset for t in tids):
+                            score = sum(inv_log_support.get(int(t), 1.0) for t in tids)
+                            # tie-breaker: more tags wins
+                            if best_score is None or score > best_score or (score == best_score and len(tids) > len(sector_tag_ids[best])):
+                                best = si
+                                best_score = score
+                    if best is not None:
+                        sector_bm_ids[int(best)].append(int(bm_id))
+
+                if not sector_bm_ids:
+                    return JsonResponse({'sets': []})
+
+                # Mapper lookup (supports comma-separated mappers)
+                bm_ids_all = [bid for ids in sector_bm_ids.values() for bid in ids]
+                mapper_by_bm: dict[int, list[str]] = {}
+                for row in Beatmap.objects.filter(id__in=bm_ids_all).values('id', 'listed_owner', 'creator'):
+                    bm_pk = int(row.get('id'))
+                    mapper_field = row.get('listed_owner') or row.get('creator') or ''
+                    mapper_by_bm[bm_pk] = _split_mappers(mapper_field)
+
+                sets = []
+                for si, bm_ids in sector_bm_ids.items():
+                    m_ctr: Counter[str] = Counter()
+                    for bid in bm_ids:
+                        for m in (mapper_by_bm.get(int(bid)) or ['(unknown)']):
+                            if m:
+                                m_ctr[m] += 1
+                    sets.append({
+                        'id': int(si),
+                        'tags': sector_tag_names[int(si)],
+                        'map_count': int(len(bm_ids)),
+                        'top_mappers': [{'name': n, 'count': int(c)} for n, c in m_ctr.most_common(max_mappers)],
+                    })
+
+                sets.sort(key=lambda s: int(s.get('map_count') or 0), reverse=True)
+                return JsonResponse({'sets': sets})
+            except Exception:
+                return JsonResponse({'sets': []})
 
         def _split_mappers(raw: str | None) -> list[str]:
             """Split comma-separated mapper strings into individual mapper names."""

@@ -1,0 +1,45 @@
+{
+  "description": "Manually crafted tag-map sectors. Used by statistics_tag_map_data view=crafted.",
+  "schema": {
+    "modes": {
+      "std": [
+        { "id": "aim farm", "tags": ["aim", "farm", "jumps", "no-bursts", "no-triples", "sharp angles", "aimslop", "comfortable", "simple rhythm", "large jumps", "aim diff spike"] },
+        { "id": "aim", "tags": ["aim", "large jumps", "cross screen jumps", "aim consistency", "large jumps"] },
+        { "id": "stream farm", "tags": ["streams", "farm", "no-jumps", "flow", "streamslop", "bursts", "stamina", "stream diff spike"] },
+        { "id": "speed farm", "tags": ["speed", "farm", "no-jumps", "flow", "speedslop", "bursts", "triples", "dt farm", "dt speed"] },
+        { "id": "streams", "tags": ["streams", "flow", "spaced streams", "variable streams", "consistency", "deathstreams", "burst sliders", "cut streams"] },
+        { "id": "alternating", "tags": ["alternating", "alt", "finger control", "flow aim", "anti-aim"] },
+        { "id": "awkward aim", "tags": ["wide angles", "awkward aim", "flow aim", "snap aim", "linear aim", "aim consistency", "uncomfortable", "aim control"] },
+        { "id": "hybrid farm", "tags": ["aim", "streams", "hybrid", "farm", "jumps", "sharp angles", "comfortable", "large jumps", "consistency", "bursts", "triples"] },
+        { "id": "hybrid", "tags": ["aim", "streams", "hybrid", "jumps", "large jumps", "consistency", "bursts", "triples"] },
+        { "id": "geometric", "tags": ["geometric", "linear aim", "square jumps", "symetrical"] },
+        { "id": "tech", "tags": ["tech"] },
+        { "id": "reading", "tags": ["reading", "dense", "low ar gimmick", "overlapping patterns", "complex patterns", "complex rhythms", "yokes like"] },
+        { "id": "finger control", "tags": ["finger control", "complex rhythms", "fast", "alternating"] },
+        { "id": "aim consistency", "tags": ["cross screen jumps", "aim consistency", "gds like"] },
+        { "id": "unconventional farm", "tags": ["unconventional farm", "hybrid", ""] },
+        { "id": "flow", "tags": ["variable streams", "variable deathstreams", "flow", "flow aim", "laminar flow", "turbulent flow"] },
+        { "id": "classic farm", "tags": ["classic", "farm", "aim"] },
+        { "id": "stamina", "tags": ["stamina", "stamina killer", "bursts", "streams", "triples", "finger control", "deathstream"] },
+        { "id": "micro aim", "tags": ["micro aim", "micro 1-2", "short jumps", "fast jumps"] },
+        { "id": "2b", "tags": ["2b", "conceptual", "unique"] },
+        { "id": "unique", "tags": ["unique", "conceptual", "avant-garde", "weird"] },
+        { "id": "gimmick", "tags": ["spinner gimmick", "repeating patterns", "squares gimmick", "grid mapping", "slider gimmick", "repeat slider gimmick", "double gimmick", "reading gimmick"] },
+        { "id": "slider tech", "tags": ["large sliders", "fast sliders", "slider tech", "hard tech", "slider spam", "variable slider velocity", "notch slider", "slider snap", "repeat sliders"] },
+        { "id": "Mechanical tech", "tags": ["mechtech", "mechanical tech", "hybrid tech", "circle tech"] },
+        { "id": "control", "tags": ["aim control", "finger control", "whp"] }
+      ],
+      "taiko": [],
+      "catch": [],
+      "mania": []
+    }
+  },
+  "modes": {
+    "std": [],
+    "taiko": [],
+    "catch": [],
+    "mania": []
+  }
+}
+
+

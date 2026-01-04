@@ -172,6 +172,7 @@
           <select id="tagMapView">
             <option value="tagsets" selected>Tag Sets</option>
             <option value="overlap">Overlapping Tag Sets</option>
+            <option value="crafted">Crafted Map</option>
             <option value="single">Single Tag</option>
           </select>
           <div>
@@ -181,9 +182,8 @@
           </div>
         </div>
       </div>
-      {% if user.is_staff %}
       <details class="tagmap-admin-tuning" style="margin-top:8px;">
-        <summary style="cursor:pointer; font-weight:800; opacity:0.92;">Admin tuning</summary>
+        <summary style="cursor:pointer; font-weight:800; opacity:0.92;">Parameter Tuning</summary>
         <div class="stats-form" style="margin-top:8px;">
           <div class="search-row" style="flex-wrap:wrap;">
             <label for="tagMapConsolidation">Consolidation:</label>
@@ -247,7 +247,6 @@
           </div>
         </div>
       </details>
-      {% endif %}
       <div id="tagMapStatus" style="margin-top:10px; font-size: 13px; opacity:0.8;">Ready.</div>
       <div class="tagmap-mapwrap">
         <button type="button" id="tagMapFullscreenBtn" class="tagmap-fullscreen-btn" title="Fullscreen">Fullscreen</button>

@@ -994,7 +994,32 @@ def statistics_tag_map_data(request: HttpRequest):
                     parts.append(pp)
             return parts or ['(unknown)']
 
+        # ---- Base corpus (tag applications) ----
+        # Exclude explicit negatives and "legacy" rows where user is null but not marked prediction.
+        ta = (
+            TagApplication.objects
+            .filter(true_negative=False, tag__mode=mode)
+            .exclude(user__isnull=True, is_prediction=False)
+        )
+
+        # Beatmap status filter (mirrors search.py buckets)
+        if status_filter == 'ranked':
+            ta = ta.filter(beatmap__status__in=['Ranked', 'Approved'])
+        elif status_filter == 'unranked':
+            ta = ta.filter(beatmap__status__in=['Graveyard', 'WIP', 'Pending', 'Qualified', 'Loved'])
+        else:
+            # all: no filter
+            pass
+
+        # NOTE: Predicted include/exclude has been removed from this visualization.
+        # We always include both user-applied and predicted tags (excluding explicit negatives / legacy rows).
+
+        total_maps = ta.values('beatmap_id').distinct().count()
+        if not total_maps:
+            return JsonResponse({'sets': []})
+
         # ---- Crafted Map (manual sectors) ----
+        # NOTE: Crafted Map uses the same corpus filters (mode/status/etc) as the other views.
         if view == 'crafted':
             try:
                 import os
@@ -1002,7 +1027,8 @@ def statistics_tag_map_data(request: HttpRequest):
                 crafted_path = os.path.normpath(crafted_path)
                 with open(crafted_path, 'r', encoding='utf-8') as f:
                     cfg = json.load(f) or {}
-                # Accept either top-level `modes` (preferred) or `schema.modes` (backwards-compatible with earlier examples).
+
+                # Accept either top-level `modes` (preferred) or `schema.modes` (backwards-compatible).
                 mode_cfg = []
                 try:
                     mode_cfg = (cfg.get('modes') or {}).get(mode) or []
@@ -1036,6 +1062,7 @@ def statistics_tag_map_data(request: HttpRequest):
 
                 tag_rows = list(Tag.objects.filter(mode=mode, name__in=list(all_tag_names)).values('id', 'name'))
                 name_to_id = {str(r['name']): int(r['id']) for r in tag_rows if r.get('name') and r.get('id')}
+
                 sector_tag_ids: list[list[int]] = []
                 sector_tag_names: list[list[str]] = []
                 for s in sector_defs:
@@ -1053,8 +1080,8 @@ def statistics_tag_map_data(request: HttpRequest):
                 if not sector_tag_ids:
                     return JsonResponse({'sets': []})
 
-                # Crafted membership rule:
-                # A beatmap belongs to a sector if at least 50% of the beatmap's tags are contained in the sector.
+                # Membership rule:
+                # A beatmap belongs to a sector if >= 50% of the beatmap's tags are contained in the sector.
                 # Multiple-sector membership is allowed.
                 threshold = 0.50
 
@@ -1148,30 +1175,6 @@ def statistics_tag_map_data(request: HttpRequest):
                 return JsonResponse({'sets': sets})
             except Exception:
                 return JsonResponse({'sets': []})
-
-        # ---- Base corpus (tag applications) ----
-        # Exclude explicit negatives and "legacy" rows where user is null but not marked prediction.
-        ta = (
-            TagApplication.objects
-            .filter(true_negative=False, tag__mode=mode)
-            .exclude(user__isnull=True, is_prediction=False)
-        )
-
-        # Beatmap status filter (mirrors search.py buckets)
-        if status_filter == 'ranked':
-            ta = ta.filter(beatmap__status__in=['Ranked', 'Approved'])
-        elif status_filter == 'unranked':
-            ta = ta.filter(beatmap__status__in=['Graveyard', 'WIP', 'Pending', 'Qualified', 'Loved'])
-        else:
-            # all: no filter
-            pass
-
-        # NOTE: Predicted include/exclude has been removed from this visualization.
-        # We always include both user-applied and predicted tags (excluding explicit negatives / legacy rows).
-
-        total_maps = ta.values('beatmap_id').distinct().count()
-        if not total_maps:
-            return JsonResponse({'sets': []})
 
         # ---- Custom tagset (exact intersection) ----
         # Plain tag tokens only (quoted tags supported).

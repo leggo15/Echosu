@@ -1065,6 +1065,7 @@ def statistics_tag_map_data(request: HttpRequest):
 
                 sector_tag_ids: list[list[int]] = []
                 sector_tag_names: list[list[str]] = []
+                sector_labels: list[str] = []
                 for s in sector_defs:
                     tids = []
                     tnames = []
@@ -1076,6 +1077,7 @@ def statistics_tag_map_data(request: HttpRequest):
                     if tids:
                         sector_tag_ids.append(tids)
                         sector_tag_names.append(tnames)
+                        sector_labels.append((s.get('id') or '').strip() or 'Sector')
 
                 if not sector_tag_ids:
                     return JsonResponse({'sets': []})
@@ -1166,6 +1168,7 @@ def statistics_tag_map_data(request: HttpRequest):
                         continue
                     sets.append({
                         'id': int(si),
+                        'label': sector_labels[int(si)] if int(si) < len(sector_labels) else 'Sector',
                         'tags': sector_tag_names[int(si)],
                         'map_count': int(len(chosen)),
                         'top_mappers': [{'name': n, 'count': int(c)} for n, c in m_ctr.most_common(max_mappers)],

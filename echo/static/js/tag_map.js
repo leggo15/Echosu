@@ -133,6 +133,7 @@
       var tops = (s && s.top_mappers) ? s.top_mappers : [];
       return {
         id: (s && s.id != null) ? s.id : i,
+        label: (s && s.label) ? String(s.label) : '',
         tags: tags,
         map_count: Number(s.map_count) || 0,
         top_mappers: tops,
@@ -256,9 +257,10 @@
         .attr('pointer-events', 'none')
         .text(function () {
           // Fit tags into the available width by truncating.
+          var label = safeText(nd.label || '').trim();
           var tags = (nd.tags || []);
-          if (!tags.length) return '';
-          var text = tags.join(', ');
+          var text = label || (tags.length ? tags.join(', ') : '');
+          if (!text) return '';
           // Roughly estimate how many characters can fit (depends on font size).
           var maxChars = Math.max(3, Math.floor((wCell - 10) / Math.max(3, headerFont * 0.55)));
           if (text.length <= maxChars) return text;
@@ -307,7 +309,9 @@
             tooltip.style.display = 'block';
             tooltip.innerHTML =
               '<div style="font-weight:700; margin-bottom:4px;">' + safeText(d.data.name) + '</div>' +
-              '<div style="opacity:0.9;">Maps in this tagset: <b>' + safeText(d.data.count) + '</b></div>' +
+              '<div style="opacity:0.9;">Maps by this mapper (in sector): <b>' + safeText(d.data.count) + '</b></div>' +
+              '<div style="opacity:0.9;">Total maps in sector: <b>' + safeText(nd.map_count) + '</b></div>' +
+              (nd.label ? ('<div style="opacity:0.85; margin-top:6px;">Sector:</div><div style="opacity:0.95;">' + safeText(nd.label) + '</div>') : '') +
               '<div style="opacity:0.85; margin-top:6px;">Tagset:</div>' +
               '<div style="opacity:0.95;">' + safeText((nd.tags || []).join(', ')) + '</div>' +
               '<div style="opacity:0.75; margin-top:6px;">Click to open search results</div>';

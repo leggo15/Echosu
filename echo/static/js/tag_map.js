@@ -95,11 +95,11 @@
           h0 = Math.round(w0 * 9 / 16);
         }
       } else {
-        // Keep it usable on small screens
-        h0 = Math.max(360, h0);
+        // Keep it usable on small screens (and avoid the map feeling "too short")
+        h0 = Math.max(520, h0);
       }
     } catch (e) {
-      h0 = Math.max(360, h0);
+      h0 = Math.max(520, h0);
     }
 
     // Actual rendered SVG size (can exceed container viewport)

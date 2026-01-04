@@ -145,13 +145,18 @@
   <!-- Stock-market Style Nested Treemap -->
   <section class="tab-section" data-section="tagmap" style="display:none;">
     <div class="stats-section">
-      <h2>Stock-market Style Nested Treemap</h2>
+      <h2>Treemap</h2>
       <p style="margin-top:6px; opacity:0.85;">
-        Tagsubsets are sectors, and mappers are nested rectangles sized by how many maps they have in that sector. The groupings are generated based on a fuzzy community detection algorithm.
+        Tagsubsets are sectors, and mappers are nested rectangles sized by how many maps they have in that sector.
       </p>
       <p style="margin-top:6px; opacity:0.85;">
-        Hold Ctrl to drag and zoom on the chart.
+        Views:
+        <span style="font-weight:800;">Treemap</span> = manually crafted sectors from `crafted_tagmap.json`.
+        <span style="font-weight:800;">FCD-Treemap</span> = fuzzy community detection (NPMI + mutual-kNN) sectors.
+        <span style="font-weight:800;">OFCD-Treemap</span> = overlapping fuzzy sectors (maps can appear in multiple).
+        <span style="font-weight:800;">Single-Tag-Trees</span> = one sector per tag.
       </p>
+      <p style="margin-top:6px; opacity:0.85;">Hold Ctrl to drag and zoom on the chart.</p>
       <div class="tagmap-panel" id="tagMapPanel">
       <div class="stats-form" style="margin-top:10px;">
         <div class="search-row" style="flex-wrap:wrap;">
@@ -170,10 +175,10 @@
           </select>
           <label for="tagMapView">View:</label>
           <select id="tagMapView">
-            <option value="tagsets" selected>Tag Sets</option>
-            <option value="overlap">Overlapping Tag Sets</option>
-            <option value="crafted">Crafted Map</option>
-            <option value="single">Single Tag</option>
+            <option value="crafted" selected>Treemap</option>
+            <option value="tagsets">FCD-Treemap</option>
+            <option value="overlap">OFCD-Treemap</option>
+            <option value="single">Single-Tag-Trees</option>
           </select>
           <div>
           <label for="tagMapCustom" style="margin-left:6px;">Custom tagset:</label>

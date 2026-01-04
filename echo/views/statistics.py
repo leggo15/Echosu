@@ -901,7 +901,8 @@ def statistics_tag_map_data(request: HttpRequest):
         if view not in ['tagsets', 'single', 'overlap']:
             view = 'tagsets'
         custom_tagset_raw = (request.GET.get('custom_tagset') or '').strip()
-        consolidation = 0.02
+        # Default consolidation (what the old 20% slider corresponded to).
+        consolidation = 0.2
         CONS_STRICT_EPS = 0.01
         CONS_MEGA_EPS = 0.99
 
@@ -916,6 +917,16 @@ def statistics_tag_map_data(request: HttpRequest):
         except Exception:
             max_mappers = 60
         max_mappers = max(10, min(200, max_mappers))
+
+        # Admin-only tuning overrides
+        is_staff = bool(getattr(request.user, 'is_staff', False))
+        if is_staff:
+            try:
+                consolidation = float((request.GET.get('consolidation') or str(consolidation)).strip())
+            except Exception:
+                consolidation = consolidation
+            consolidation = max(0.0, min(1.0, consolidation))
+        # Non-staff: keep stable defaults regardless of query params
 
         def _split_mappers(raw: str | None) -> list[str]:
             """Split comma-separated mapper strings into individual mapper names."""
@@ -1040,6 +1051,19 @@ def statistics_tag_map_data(request: HttpRequest):
         # ---- Pick candidate tags (support filter) ----
         # Lower consolidation (more fragmented) => require higher support to avoid noisy micro-sectors.
         min_support = max(2, int(round(3 + 12 * (1.0 - consolidation))))  # 3..15
+
+        # Allow staff to tune max_tags / max_mappers
+        if is_staff:
+            try:
+                max_tags = int((request.GET.get('max_tags') or str(max_tags)).strip())
+            except Exception:
+                max_tags = max_tags
+            max_tags = max(20, min(400, max_tags))
+            try:
+                max_mappers = int((request.GET.get('max_mappers') or str(max_mappers)).strip())
+            except Exception:
+                max_mappers = max_mappers
+            max_mappers = max(10, min(200, max_mappers))
 
         support_rows = list(
             ta.values('tag_id')
@@ -1174,6 +1198,17 @@ def statistics_tag_map_data(request: HttpRequest):
             macro_min_size = 3
             macro_size = 10
             max_sets_total = max(80, min(220, int(round(140 + 80 * (1.0 - consolidation)))))
+            if is_staff:
+                try:
+                    macro_size = int((request.GET.get('overlap_macro_size') or str(macro_size)).strip())
+                except Exception:
+                    macro_size = macro_size
+                macro_size = max(3, min(10, macro_size))
+                try:
+                    max_sets_total = int((request.GET.get('overlap_max_sets') or str(max_sets_total)).strip())
+                except Exception:
+                    max_sets_total = max_sets_total
+                max_sets_total = max(20, min(400, max_sets_total))
 
             tagsets: list[list[int]] = []
             seen: set[tuple[int, ...]] = set()

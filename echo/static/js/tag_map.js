@@ -408,6 +408,13 @@
     var btn = $('tagMapReloadBtn');
     var fsBtn = $('tagMapFullscreenBtn');
     var panel = $('tagMapPanel');
+    // Admin tuning controls (optional; only rendered for staff)
+    var consSel = $('tagMapConsolidation');
+    var consValue = $('tagMapConsolidationValue');
+    var maxTagsEl = $('tagMapMaxTags');
+    var maxMappersEl = $('tagMapMaxMappers');
+    var overlapMaxSetsEl = $('tagMapOverlapMaxSets');
+    var overlapMacroSizeEl = $('tagMapOverlapMacroSize');
 
     if (!container || !statusEl || !modeSel || !statusSel || !viewSel || !customInput || !btn || !fsBtn || !panel) return;
 
@@ -654,21 +661,34 @@
 
     function load() {
       statusEl.textContent = 'Loading…';
-      // Consolidation is now fixed (best known-good value)
+      // Consolidation: fixed for non-admin, tunable for staff (when control exists)
       var cons = 0.2;
+      try {
+        if (consSel) cons = Number(consSel.value || 20) / 100.0;
+      } catch (e) { cons = 0.2; }
       var custom = '';
       try { custom = String(customInput.value || '').trim(); } catch (e) { custom = ''; }
       var statusFilter = 'ranked';
       try { statusFilter = String(statusSel.value || 'ranked').trim().toLowerCase(); } catch (e) { statusFilter = 'ranked'; }
+      var maxTags = 150;
+      var maxMappers = 60;
+      var overlapMaxSets = 220;
+      var overlapMacroSize = 10;
+      try { if (maxTagsEl) maxTags = Number(maxTagsEl.value || 150) || 150; } catch (e) {}
+      try { if (maxMappersEl) maxMappers = Number(maxMappersEl.value || 60) || 60; } catch (e) {}
+      try { if (overlapMaxSetsEl) overlapMaxSets = Number(overlapMaxSetsEl.value || 220) || 220; } catch (e) {}
+      try { if (overlapMacroSizeEl) overlapMacroSize = Number(overlapMacroSizeEl.value || 10) || 10; } catch (e) {}
       var params = {
         mode: modeSel.value,
         status_filter: statusFilter,
         view: viewSel.value,
         custom_tagset: custom,
         consolidation: cons,
-        max_tags: 150,
+        max_tags: maxTags,
         // Note: max_sets/max_set_size/min_support/min_pair are driven by consolidation server-side
-        max_mappers: 60
+        max_mappers: maxMappers,
+        overlap_max_sets: overlapMaxSets,
+        overlap_macro_size: overlapMacroSize
       };
       fetchTagMapData(params)
         .then(function (payload) {
@@ -684,6 +704,24 @@
     modeSel.addEventListener('change', load);
     statusSel.addEventListener('change', load);
     viewSel.addEventListener('change', load);
+
+    // Admin tuning: live label + debounce reloads
+    if (consSel && consValue) {
+      (function () {
+        var t = null;
+        function schedule() {
+          try { consValue.textContent = String(consSel.value) + '%'; } catch (e) {}
+          if (t) { try { clearTimeout(t); } catch (e) {} }
+          t = setTimeout(load, 140);
+        }
+        consSel.addEventListener('input', schedule);
+        consSel.addEventListener('change', load);
+      })();
+    }
+    [maxTagsEl, maxMappersEl, overlapMaxSetsEl, overlapMacroSizeEl].forEach(function (el) {
+      if (!el) return;
+      el.addEventListener('change', load);
+    });
 
     // Custom tagset: debounce reload while typing; Enter triggers immediate reload.
     (function () {

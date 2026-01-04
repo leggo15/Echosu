@@ -181,6 +181,30 @@
           </div>
         </div>
       </div>
+      {% if user.is_staff %}
+      <details class="tagmap-admin-tuning" style="margin-top:8px;">
+        <summary style="cursor:pointer; font-weight:700; opacity:0.9;">Admin tuning</summary>
+        <div class="stats-form" style="margin-top:8px;">
+          <div class="search-row" style="flex-wrap:wrap;">
+            <label for="tagMapConsolidation">Consolidation:</label>
+            <input id="tagMapConsolidation" type="range" min="0" max="100" value="20" step="1" style="width:220px;">
+            <span id="tagMapConsolidationValue" style="min-width:42px; font-weight:800; opacity:0.85;">20%</span>
+
+            <label for="tagMapMaxTags" style="margin-left:6px;">Max tags:</label>
+            <input id="tagMapMaxTags" type="number" min="20" max="400" value="150" step="10" style="width:90px;">
+
+            <label for="tagMapMaxMappers" style="margin-left:6px;">Max mappers:</label>
+            <input id="tagMapMaxMappers" type="number" min="10" max="200" value="60" step="5" style="width:90px;">
+
+            <label for="tagMapOverlapMaxSets" style="margin-left:6px;">Overlap max sets:</label>
+            <input id="tagMapOverlapMaxSets" type="number" min="20" max="400" value="220" step="10" style="width:90px;">
+
+            <label for="tagMapOverlapMacroSize" style="margin-left:6px;">Overlap max tags/set:</label>
+            <input id="tagMapOverlapMacroSize" type="number" min="3" max="10" value="10" step="1" style="width:70px;">
+          </div>
+        </div>
+      </details>
+      {% endif %}
       <div id="tagMapStatus" style="margin-top:10px; font-size: 13px; opacity:0.8;">Ready.</div>
       <div class="tagmap-mapwrap">
         <button type="button" id="tagMapFullscreenBtn" class="tagmap-fullscreen-btn" title="Fullscreen">Fullscreen</button>

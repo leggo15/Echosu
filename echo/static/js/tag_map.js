@@ -408,13 +408,27 @@
     var btn = $('tagMapReloadBtn');
     var fsBtn = $('tagMapFullscreenBtn');
     var panel = $('tagMapPanel');
+
     // Admin tuning controls (optional; only rendered for staff)
     var consSel = $('tagMapConsolidation');
     var consValue = $('tagMapConsolidationValue');
     var maxTagsEl = $('tagMapMaxTags');
     var maxMappersEl = $('tagMapMaxMappers');
+    // Tagsets tuning
+    var tagsetsMinSupportEl = $('tagMapTagsetsMinSupport');
+    var tagsetsMinPairEl = $('tagMapTagsetsMinPair');
+    var tagsetsEdgeThresholdEl = $('tagMapTagsetsEdgeThreshold');
+    var tagsetsKEl = $('tagMapTagsetsK');
+    var tagsetsMaxSetsEl = $('tagMapTagsetsMaxSets');
+    var tagsetsMaxSetSizeEl = $('tagMapTagsetsMaxSetSize');
+    // Overlap tuning
+    var overlapMinPairEl = $('tagMapOverlapMinPair');
+    var overlapEdgeThresholdEl = $('tagMapOverlapEdgeThreshold');
+    var overlapKEl = $('tagMapOverlapK');
     var overlapMaxSetsEl = $('tagMapOverlapMaxSets');
     var overlapMacroSizeEl = $('tagMapOverlapMacroSize');
+    var overlapSeedCoresEl = $('tagMapOverlapSeedCores');
+    var overlapTriadsPerNodeEl = $('tagMapOverlapTriadsPerNode');
 
     if (!container || !statusEl || !modeSel || !statusSel || !viewSel || !customInput || !btn || !fsBtn || !panel) return;
 
@@ -661,23 +675,44 @@
 
     function load() {
       statusEl.textContent = 'Loading…';
-      // Consolidation: fixed for non-admin, tunable for staff (when control exists)
-      var cons = 0.2;
+      // Defaults (non-admin stable)
+      var cons = 0.02;
       try {
-        if (consSel) cons = Number(consSel.value || 20) / 100.0;
-      } catch (e) { cons = 0.2; }
+        if (consSel) cons = Number(consSel.value || 2) / 100.0;
+      } catch (e) { cons = 0.02; }
       var custom = '';
       try { custom = String(customInput.value || '').trim(); } catch (e) { custom = ''; }
       var statusFilter = 'ranked';
       try { statusFilter = String(statusSel.value || 'ranked').trim().toLowerCase(); } catch (e) { statusFilter = 'ranked'; }
       var maxTags = 150;
       var maxMappers = 60;
-      var overlapMaxSets = 220;
-      var overlapMacroSize = 10;
       try { if (maxTagsEl) maxTags = Number(maxTagsEl.value || 150) || 150; } catch (e) {}
       try { if (maxMappersEl) maxMappers = Number(maxMappersEl.value || 60) || 60; } catch (e) {}
-      try { if (overlapMaxSetsEl) overlapMaxSets = Number(overlapMaxSetsEl.value || 220) || 220; } catch (e) {}
-      try { if (overlapMacroSizeEl) overlapMacroSize = Number(overlapMacroSizeEl.value || 10) || 10; } catch (e) {}
+
+      function readOptNumber(el) {
+        try {
+          if (!el) return null;
+          var raw = String(el.value || '').trim();
+          if (!raw) return null;
+          var n = Number(raw);
+          return isFinite(n) ? n : null;
+        } catch (e) { return null; }
+      }
+
+      var tagsetsMinSupport = readOptNumber(tagsetsMinSupportEl);
+      var tagsetsMinPair = readOptNumber(tagsetsMinPairEl);
+      var tagsetsEdgeThreshold = readOptNumber(tagsetsEdgeThresholdEl);
+      var tagsetsK = readOptNumber(tagsetsKEl);
+      var tagsetsMaxSets = readOptNumber(tagsetsMaxSetsEl);
+      var tagsetsMaxSetSize = readOptNumber(tagsetsMaxSetSizeEl);
+
+      var overlapMinPair = readOptNumber(overlapMinPairEl);
+      var overlapEdgeThreshold = readOptNumber(overlapEdgeThresholdEl);
+      var overlapK = readOptNumber(overlapKEl);
+      var overlapMaxSets = readOptNumber(overlapMaxSetsEl);
+      var overlapMacroSize = readOptNumber(overlapMacroSizeEl);
+      var overlapSeedCores = readOptNumber(overlapSeedCoresEl);
+      var overlapTriadsPerNode = readOptNumber(overlapTriadsPerNodeEl);
       var params = {
         mode: modeSel.value,
         status_filter: statusFilter,
@@ -686,10 +721,23 @@
         consolidation: cons,
         max_tags: maxTags,
         // Note: max_sets/max_set_size/min_support/min_pair are driven by consolidation server-side
-        max_mappers: maxMappers,
-        overlap_max_sets: overlapMaxSets,
-        overlap_macro_size: overlapMacroSize
+        max_mappers: maxMappers
       };
+      // Optional tuning (only applied server-side for staff)
+      if (tagsetsMinSupport != null) params.tagsets_min_support = tagsetsMinSupport;
+      if (tagsetsMinPair != null) params.tagsets_min_pair = tagsetsMinPair;
+      if (tagsetsEdgeThreshold != null) params.tagsets_edge_threshold = tagsetsEdgeThreshold;
+      if (tagsetsK != null) params.tagsets_k = tagsetsK;
+      if (tagsetsMaxSets != null) params.tagsets_max_sets = tagsetsMaxSets;
+      if (tagsetsMaxSetSize != null) params.tagsets_max_set_size = tagsetsMaxSetSize;
+
+      if (overlapMinPair != null) params.overlap_min_pair = overlapMinPair;
+      if (overlapEdgeThreshold != null) params.overlap_edge_threshold = overlapEdgeThreshold;
+      if (overlapK != null) params.overlap_k = overlapK;
+      if (overlapMaxSets != null) params.overlap_max_sets = overlapMaxSets;
+      if (overlapMacroSize != null) params.overlap_macro_size = overlapMacroSize;
+      if (overlapSeedCores != null) params.overlap_seed_cores = overlapSeedCores;
+      if (overlapTriadsPerNode != null) params.overlap_triads_per_node = overlapTriadsPerNode;
       fetchTagMapData(params)
         .then(function (payload) {
           lastPayload = payload;
@@ -705,7 +753,7 @@
     statusSel.addEventListener('change', load);
     viewSel.addEventListener('change', load);
 
-    // Admin tuning: live label + debounce reloads
+    // Admin tuning UX: live label + debounce reloads
     if (consSel && consValue) {
       (function () {
         var t = null;
@@ -716,9 +764,14 @@
         }
         consSel.addEventListener('input', schedule);
         consSel.addEventListener('change', load);
+        try { consValue.textContent = String(consSel.value) + '%'; } catch (e) {}
       })();
     }
-    [maxTagsEl, maxMappersEl, overlapMaxSetsEl, overlapMacroSizeEl].forEach(function (el) {
+    [
+      maxTagsEl, maxMappersEl,
+      tagsetsMinSupportEl, tagsetsMinPairEl, tagsetsEdgeThresholdEl, tagsetsKEl, tagsetsMaxSetsEl, tagsetsMaxSetSizeEl,
+      overlapMinPairEl, overlapEdgeThresholdEl, overlapKEl, overlapMaxSetsEl, overlapMacroSizeEl, overlapSeedCoresEl, overlapTriadsPerNodeEl
+    ].forEach(function (el) {
       if (!el) return;
       el.addEventListener('change', load);
     });

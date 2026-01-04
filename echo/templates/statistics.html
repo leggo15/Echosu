@@ -183,24 +183,67 @@
       </div>
       {% if user.is_staff %}
       <details class="tagmap-admin-tuning" style="margin-top:8px;">
-        <summary style="cursor:pointer; font-weight:700; opacity:0.9;">Admin tuning</summary>
+        <summary style="cursor:pointer; font-weight:800; opacity:0.92;">Admin tuning</summary>
         <div class="stats-form" style="margin-top:8px;">
           <div class="search-row" style="flex-wrap:wrap;">
             <label for="tagMapConsolidation">Consolidation:</label>
-            <input id="tagMapConsolidation" type="range" min="0" max="100" value="20" step="1" style="width:220px;">
-            <span id="tagMapConsolidationValue" style="min-width:42px; font-weight:800; opacity:0.85;">20%</span>
+            <input id="tagMapConsolidation" type="range" min="0" max="100" value="2" step="1" style="width:220px;">
+            <span id="tagMapConsolidationValue" style="min-width:42px; font-weight:900; opacity:0.9;">2%</span>
 
             <label for="tagMapMaxTags" style="margin-left:6px;">Max tags:</label>
             <input id="tagMapMaxTags" type="number" min="20" max="400" value="150" step="10" style="width:90px;">
 
             <label for="tagMapMaxMappers" style="margin-left:6px;">Max mappers:</label>
             <input id="tagMapMaxMappers" type="number" min="10" max="200" value="60" step="5" style="width:90px;">
+          </div>
+        </div>
 
-            <label for="tagMapOverlapMaxSets" style="margin-left:6px;">Overlap max sets:</label>
-            <input id="tagMapOverlapMaxSets" type="number" min="20" max="400" value="220" step="10" style="width:90px;">
+        <div class="stats-form" style="margin-top:8px;">
+          <div style="font-weight:900; opacity:0.9; margin:0 0 6px 0;">Tag Sets (NPMI graph)</div>
+          <div class="search-row" style="flex-wrap:wrap;">
+            <label for="tagMapTagsetsMinSupport">Min support:</label>
+            <input id="tagMapTagsetsMinSupport" type="number" min="1" max="50" value="" placeholder="auto" style="width:90px;">
 
-            <label for="tagMapOverlapMacroSize" style="margin-left:6px;">Overlap max tags/set:</label>
-            <input id="tagMapOverlapMacroSize" type="number" min="3" max="10" value="10" step="1" style="width:70px;">
+            <label for="tagMapTagsetsMinPair" style="margin-left:6px;">Min pair:</label>
+            <input id="tagMapTagsetsMinPair" type="number" min="1" max="50" value="" placeholder="auto" style="width:90px;">
+
+            <label for="tagMapTagsetsEdgeThreshold" style="margin-left:6px;">NPMI ≥</label>
+            <input id="tagMapTagsetsEdgeThreshold" type="number" min="0" max="1" step="0.01" value="" placeholder="auto" style="width:90px;">
+
+            <label for="tagMapTagsetsK" style="margin-left:6px;">kNN k:</label>
+            <input id="tagMapTagsetsK" type="number" min="1" max="80" value="" placeholder="auto" style="width:90px;">
+
+            <label for="tagMapTagsetsMaxSets" style="margin-left:6px;">Max sets:</label>
+            <input id="tagMapTagsetsMaxSets" type="number" min="2" max="200" value="" placeholder="auto" style="width:90px;">
+
+            <label for="tagMapTagsetsMaxSetSize" style="margin-left:6px;">Max tags/label:</label>
+            <input id="tagMapTagsetsMaxSetSize" type="number" min="2" max="30" value="" placeholder="auto" style="width:90px;">
+          </div>
+        </div>
+
+        <div class="stats-form" style="margin-top:8px;">
+          <div style="font-weight:900; opacity:0.9; margin:0 0 6px 0;">Overlapping Tag Sets</div>
+          <div class="search-row" style="flex-wrap:wrap;">
+            <label for="tagMapOverlapMinPair">Min pair:</label>
+            <input id="tagMapOverlapMinPair" type="number" min="1" max="50" value="" placeholder="auto" style="width:90px;">
+
+            <label for="tagMapOverlapEdgeThreshold" style="margin-left:6px;">NPMI ≥</label>
+            <input id="tagMapOverlapEdgeThreshold" type="number" min="0" max="1" step="0.01" value="" placeholder="auto" style="width:90px;">
+
+            <label for="tagMapOverlapK" style="margin-left:6px;">kNN k:</label>
+            <input id="tagMapOverlapK" type="number" min="1" max="80" value="" placeholder="auto" style="width:90px;">
+
+            <label for="tagMapOverlapMaxSets" style="margin-left:6px;">Max sets:</label>
+            <input id="tagMapOverlapMaxSets" type="number" min="20" max="400" value="" placeholder="auto" style="width:90px;">
+
+            <label for="tagMapOverlapMacroSize" style="margin-left:6px;">Max tags/set:</label>
+            <input id="tagMapOverlapMacroSize" type="number" min="3" max="10" value="" placeholder="auto" style="width:90px;">
+
+            <label for="tagMapOverlapSeedCores" style="margin-left:6px;">Seed cores:</label>
+            <input id="tagMapOverlapSeedCores" type="number" min="10" max="400" value="" placeholder="auto" style="width:90px;">
+
+            <label for="tagMapOverlapTriadsPerNode" style="margin-left:6px;">Triads cap:</label>
+            <input id="tagMapOverlapTriadsPerNode" type="number" min="1" max="60" value="" placeholder="auto" style="width:90px;">
           </div>
         </div>
       </details>

@@ -901,8 +901,9 @@ def statistics_tag_map_data(request: HttpRequest):
         if view not in ['tagsets', 'single', 'overlap']:
             view = 'tagsets'
         custom_tagset_raw = (request.GET.get('custom_tagset') or '').strip()
-        # Default consolidation (what the old 20% slider corresponded to).
-        consolidation = 0.2
+        # Default consolidation (what the old slider % mapped to as value/100).
+        # Non-staff users are locked to this stable default.
+        consolidation = 0.02
         CONS_STRICT_EPS = 0.01
         CONS_MEGA_EPS = 0.99
 
@@ -918,15 +919,68 @@ def statistics_tag_map_data(request: HttpRequest):
             max_mappers = 60
         max_mappers = max(10, min(200, max_mappers))
 
-        # Admin-only tuning overrides
+        # Admin-only tuning overrides (purely client-side experimentation; not persisted)
         is_staff = bool(getattr(request.user, 'is_staff', False))
         if is_staff:
             try:
-                consolidation = float((request.GET.get('consolidation') or str(consolidation)).strip())
+                raw = (request.GET.get('consolidation') or '').strip()
+                if raw:
+                    consolidation = float(raw)
             except Exception:
-                consolidation = consolidation
+                pass
             consolidation = max(0.0, min(1.0, consolidation))
-        # Non-staff: keep stable defaults regardless of query params
+            try:
+                raw = (request.GET.get('max_tags') or '').strip()
+                if raw:
+                    max_tags = int(raw)
+            except Exception:
+                pass
+            max_tags = max(20, min(400, max_tags))
+            try:
+                raw = (request.GET.get('max_mappers') or '').strip()
+                if raw:
+                    max_mappers = int(raw)
+            except Exception:
+                pass
+            max_mappers = max(10, min(200, max_mappers))
+
+        # Optional advanced overrides (staff only)
+        def _opt_int(key: str) -> int | None:
+            if not is_staff:
+                return None
+            try:
+                raw = (request.GET.get(key) or '').strip()
+                if not raw:
+                    return None
+                return int(float(raw))
+            except Exception:
+                return None
+
+        def _opt_float(key: str) -> float | None:
+            if not is_staff:
+                return None
+            try:
+                raw = (request.GET.get(key) or '').strip()
+                if not raw:
+                    return None
+                return float(raw)
+            except Exception:
+                return None
+
+        tagsets_min_support_override = _opt_int('tagsets_min_support')
+        tagsets_min_pair_override = _opt_int('tagsets_min_pair')
+        tagsets_edge_threshold_override = _opt_float('tagsets_edge_threshold')
+        tagsets_k_override = _opt_int('tagsets_k')
+        tagsets_max_sets_override = _opt_int('tagsets_max_sets')
+        tagsets_max_set_size_override = _opt_int('tagsets_max_set_size')
+
+        overlap_min_pair_override = _opt_int('overlap_min_pair')
+        overlap_edge_threshold_override = _opt_float('overlap_edge_threshold')
+        overlap_k_override = _opt_int('overlap_k')
+        overlap_max_sets_override = _opt_int('overlap_max_sets')
+        overlap_macro_size_override = _opt_int('overlap_macro_size')
+        overlap_seed_cores_override = _opt_int('overlap_seed_cores')
+        overlap_triads_per_node_override = _opt_int('overlap_triads_per_node')
 
         def _split_mappers(raw: str | None) -> list[str]:
             """Split comma-separated mapper strings into individual mapper names."""
@@ -1051,19 +1105,8 @@ def statistics_tag_map_data(request: HttpRequest):
         # ---- Pick candidate tags (support filter) ----
         # Lower consolidation (more fragmented) => require higher support to avoid noisy micro-sectors.
         min_support = max(2, int(round(3 + 12 * (1.0 - consolidation))))  # 3..15
-
-        # Allow staff to tune max_tags / max_mappers
-        if is_staff:
-            try:
-                max_tags = int((request.GET.get('max_tags') or str(max_tags)).strip())
-            except Exception:
-                max_tags = max_tags
-            max_tags = max(20, min(400, max_tags))
-            try:
-                max_mappers = int((request.GET.get('max_mappers') or str(max_mappers)).strip())
-            except Exception:
-                max_mappers = max_mappers
-            max_mappers = max(10, min(200, max_mappers))
+        if tagsets_min_support_override is not None:
+            min_support = max(1, min(50, int(tagsets_min_support_override)))
 
         support_rows = list(
             ta.values('tag_id')
@@ -1128,6 +1171,12 @@ def statistics_tag_map_data(request: HttpRequest):
             min_pair = max(2, int(round(2 + 6 * (1.0 - consolidation))))  # 2..8
             edge_threshold = max(0.02, 0.30 - (0.24 * consolidation))
             k = max(6, min(40, int(round(10 + 22 * consolidation))))
+            if overlap_min_pair_override is not None:
+                min_pair = max(1, min(50, int(overlap_min_pair_override)))
+            if overlap_edge_threshold_override is not None:
+                edge_threshold = max(0.0, min(1.0, float(overlap_edge_threshold_override)))
+            if overlap_k_override is not None:
+                k = max(1, min(80, int(overlap_k_override)))
 
             # Co-occurrence counts + neighbor lists (same as tagsets path)
             pair_counts: Counter[tuple[int, int]] = Counter()
@@ -1198,17 +1247,10 @@ def statistics_tag_map_data(request: HttpRequest):
             macro_min_size = 3
             macro_size = 10
             max_sets_total = max(80, min(220, int(round(140 + 80 * (1.0 - consolidation)))))
-            if is_staff:
-                try:
-                    macro_size = int((request.GET.get('overlap_macro_size') or str(macro_size)).strip())
-                except Exception:
-                    macro_size = macro_size
-                macro_size = max(3, min(10, macro_size))
-                try:
-                    max_sets_total = int((request.GET.get('overlap_max_sets') or str(max_sets_total)).strip())
-                except Exception:
-                    max_sets_total = max_sets_total
-                max_sets_total = max(20, min(400, max_sets_total))
+            if overlap_max_sets_override is not None:
+                max_sets_total = max(20, min(400, int(overlap_max_sets_override)))
+            if overlap_macro_size_override is not None:
+                macro_size = max(3, min(10, int(overlap_macro_size_override)))
 
             tagsets: list[list[int]] = []
             seen: set[tuple[int, ...]] = set()
@@ -1222,6 +1264,8 @@ def statistics_tag_map_data(request: HttpRequest):
             # Seeds: favor high-support tags; generate one core per seed tag
             seeds = sorted(tag_ids, key=lambda t: int(tag_support.get(int(t)) or 0), reverse=True)
             max_seed_cores = max(60, min(200, int(round(110 + 80 * (1.0 - consolidation)))))
+            if overlap_seed_cores_override is not None:
+                max_seed_cores = max(10, min(400, int(overlap_seed_cores_override)))
             for seed in seeds[:max_seed_cores]:
                 seed = int(seed)
                 comp = None
@@ -1267,7 +1311,11 @@ def statistics_tag_map_data(request: HttpRequest):
                 for a, lst in top.items():
                     a = int(a)
                     # Only consider a limited number of edges per node to bound cost
-                    for b, _, _ in (lst or [])[: min(18, len(lst or []))]:
+                    triads_cap = min(18, len(lst or []))
+                    if overlap_triads_per_node_override is not None:
+                        triads_cap = max(1, min(60, int(overlap_triads_per_node_override)))
+                        triads_cap = min(triads_cap, len(lst or []))
+                    for b, _, _ in (lst or [])[:triads_cap]:
                         b = int(b)
                         if a == b:
                             continue
@@ -1432,6 +1480,12 @@ def statistics_tag_map_data(request: HttpRequest):
 
             # kNN fanout per node (mutual kNN to avoid mega hubs exploding everything)
             k = max(3, min(24, int(round(4 + 14 * consolidation))))  # 4..18-ish (capped)
+            if tagsets_min_pair_override is not None:
+                min_pair = max(1, min(50, int(tagsets_min_pair_override)))
+            if tagsets_edge_threshold_override is not None:
+                edge_threshold = max(0.0, min(1.0, float(tagsets_edge_threshold_override)))
+            if tagsets_k_override is not None:
+                k = max(1, min(80, int(tagsets_k_override)))
 
             eps = 1e-12
             neigh: dict[int, list[tuple[int, float, int]]] = defaultdict(list)  # tag -> [(other, npmi, cooc)]
@@ -1491,6 +1545,8 @@ def statistics_tag_map_data(request: HttpRequest):
 
         # Limit number of sectors: low consolidation => allow more sectors.
         max_sets = max(6, min(80, int(round(12 + 48 * (1.0 - consolidation)))))  # 60..12
+        if tagsets_max_sets_override is not None:
+            max_sets = max(2, min(200, int(tagsets_max_sets_override)))
         components = components[: max_sets * 3]
 
         # ---- Assign each beatmap to exactly one component (avoid double-counting) ----
@@ -1538,6 +1594,8 @@ def statistics_tag_map_data(request: HttpRequest):
         # ---- Build response ----
         # Fewer consolidation => smaller "label" tag lists; higher => show more "sector identity".
         max_set_size = max(4, min(14, int(round(6 + 6 * consolidation))))  # 6..12-ish (capped)
+        if tagsets_max_set_size_override is not None:
+            max_set_size = max(2, min(30, int(tagsets_max_set_size_override)))
 
         sets = []
         next_id = 0

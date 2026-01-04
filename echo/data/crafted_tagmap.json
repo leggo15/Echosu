@@ -20,7 +20,7 @@
         { "id": "awkward aim", "tags": ["wide angles", "awkward aim", "flow aim", "snap aim", "linear aim", "aim consistency", "uncomfortable", "aim control",  "anti-aim"] },
         { "id": "hybrid", "tags": ["aim", "streams", "hybrid", "jumps", "large jumps", "consistency", "bursts", "triples"] },
         { "id": "geometric", "tags": ["geometric", "linear aim", "square jumps", "symetrical"] },
-        { "id": "tech", "tags": ["tech"] },
+        { "id": "tech", "tags": ["tech", "slider tech", "circle tech"] },
         { "id": "reading", "tags": ["reading", "dense", "low ar gimmick", "overlapping patterns", "complex patterns", "complex rhythms", "yokes like"] },
         { "id": "finger control", "tags": ["finger control", "complex rhythms", "fast", "alternating"] },
         { "id": "aim consistency", "tags": ["cross screen jumps", "aim consistency", "gds like"] },
@@ -31,8 +31,7 @@
         { "id": "stamina", "tags": ["stamina", "stamina killer", "bursts", "streams", "triples", "finger control", "deathstream"] },
         { "id": "micro aim", "tags": ["micro aim", "micro 1-2", "short jumps", "fast jumps"] },
         { "id": "2b", "tags": ["2b"] },
-        { "id": "unique", "tags": ["unique", "conceptual", "avant-garde", "weird"] },
-        { "id": "gimmick", "tags": ["spinner gimmick", "repeating patterns", "squares gimmick", "grid mapping", "slider gimmick", "repeat slider gimmick", "double gimmick", "reading gimmick"] },
+        { "id": "gimmick", "tags": ["gimmick", "avant-garde", "unique"] },
         { "id": "slider tech", "tags": ["large sliders", "fast sliders", "slider tech", "hard tech", "slider spam", "variable slider velocity", "notch slider", "slider snap", "repeat sliders"] },
         { "id": "mechanical tech", "tags": ["mechtech", "mechanical tech", "hybrid tech", "circle tech"] },
         { "id": "control", "tags": ["aim control", "finger control", "whp"] }

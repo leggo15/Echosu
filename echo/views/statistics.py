@@ -1082,8 +1082,10 @@ def statistics_tag_map_data(request: HttpRequest):
                 if not sector_tag_ids:
                     return JsonResponse({'sets': []})
 
-                # Membership rule:
-                # A beatmap belongs to a sector if >= 50% of the beatmap's tags are contained in the sector.
+                # Membership rule (Crafted Map):
+                # A beatmap belongs to a sector if EITHER:
+                #  - >= 50% of the beatmap's tags are contained in the sector  (map-centric)
+                #  - >= 50% of the sector's tags are contained in the beatmap (sector-centric)
                 # Multiple-sector membership is allowed.
                 threshold = 0.50
 
@@ -1152,13 +1154,22 @@ def statistics_tag_map_data(request: HttpRequest):
                         total = int(bm_total_tags.get(int(bm_id)) or 0)
                         if total <= 0:
                             continue
+                        bm_set = (bm_crafted_tags.get(int(bm_id)) or set())
                         overlap = 0
-                        for t in (bm_crafted_tags.get(int(bm_id)) or set()):
+                        for t in bm_set:
                             if t in sector_set:
                                 overlap += 1
                         if overlap <= 0:
                             continue
-                        if (float(overlap) / float(total)) >= threshold:
+                        # map-centric: overlap / total tags on map
+                        cond_map = (float(overlap) / float(total)) >= threshold
+                        # sector-centric: overlap / total tags in sector
+                        denom_sector = float(len(sector_set) or 0)
+                        cond_sector = False
+                        if denom_sector > 0:
+                            cond_sector = (float(overlap) / denom_sector) >= threshold
+
+                        if cond_map or cond_sector:
                             chosen.append(int(bm_id))
                             for m in (mapper_by_bm.get(int(bm_id)) or ['(unknown)']):
                                 if m:

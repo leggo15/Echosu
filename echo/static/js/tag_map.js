@@ -288,7 +288,6 @@
       var rEnter = rects.enter().append('g').attr('class', 'mapper');
       rEnter.append('rect').attr('class', 'mapper-rect');
       rEnter.append('text').attr('class', 'mapper-text');
-      rEnter.append('title');
       rects = rEnter.merge(rects);
       rects.attr('data-mapper', function (d) { return d.data.name; });
 
@@ -381,8 +380,6 @@
             if (wR < 6 || hR < 6) d3.select(this).text('');
           } catch (e) { }
         });
-
-      rects.select('title').text(function (d) { return d.data.name + ' (' + d.data.count + ')'; });
     });
 
     // Apply selection highlight (persists across reload/resize)
@@ -766,9 +763,7 @@
         if (!m) return null;
         var token = m[2] || '';
         var tokenStart = cursor - token.length;
-        var prefix = '';
         if (token[0] === '.' || token[0] === '-') {
-          prefix = token[0];
           token = token.slice(1);
           tokenStart += 1;
         }
@@ -780,7 +775,7 @@
         }
         var q = token.trim();
         if (!q) return null;
-        return { fullText: text, cursor: cursor, tokenStart: tokenStart, prefix: prefix, inQuote: inQuote, tokenQuery: q };
+        return { fullText: text, cursor: cursor, tokenStart: tokenStart, inQuote: inQuote, tokenQuery: q };
       }
 
       function renderResults(ctx, data) {
@@ -807,7 +802,8 @@
         if (!ctx) return;
         var needsQuote = /\s/.test(tagName);
         var replacementCore = needsQuote ? ('"' + tagName.replace(/"/g, '') + '"') : tagName;
-        var replacement = ctx.prefix + replacementCore;
+        // Custom tagset does not use '.' / '-' operators; always insert the plain tag.
+        var replacement = replacementCore;
         var before = ctx.fullText.slice(0, ctx.tokenStart);
         var after = ctx.fullText.slice(ctx.cursor);
         var newText = before + replacement + after;

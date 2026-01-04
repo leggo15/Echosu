@@ -917,6 +917,24 @@ def statistics_tag_map_data(request: HttpRequest):
             max_mappers = 60
         max_mappers = max(10, min(200, max_mappers))
 
+        def _split_mappers(raw: str | None) -> list[str]:
+            """Split comma-separated mapper strings into individual mapper names."""
+            try:
+                s = (raw or '').strip()
+            except Exception:
+                s = ''
+            if not s:
+                return ['(unknown)']
+            parts = []
+            for p in s.split(','):
+                try:
+                    pp = (p or '').strip()
+                except Exception:
+                    pp = ''
+                if pp:
+                    parts.append(pp)
+            return parts or ['(unknown)']
+
         # ---- Base corpus (tag applications) ----
         # Exclude explicit negatives and "legacy" rows where user is null but not marked prediction.
         ta = (
@@ -942,37 +960,29 @@ def statistics_tag_map_data(request: HttpRequest):
             return JsonResponse({'sets': []})
 
         # ---- Custom tagset (exact intersection) ----
-        # Accepts search-like token formatting:
-        #   .aim .bursts "sharp angles"
-        # Also supports exclusion with '-' prefix:
-        #   .aim .bursts -farm
+        # Plain tag tokens only (quoted tags supported).
+        # Example: aim bursts "sharp angles"
         if custom_tagset_raw:
             try:
                 include_names: list[str] = []
-                exclude_names: list[str] = []
+                # We intentionally do NOT support '.' / '-' operators here.
+                # We still strip a leading '.' or '-' if the user types it, treating it as part of the tag token.
                 pattern = r'[-.]?"[^"]+"|[-.]?[^"\s]+'
                 for match in re.findall(pattern, custom_tagset_raw):
                     token = (match or '').strip()
                     if not token:
                         continue
-                    prefix = ''
                     if token[0] in '.-':
-                        prefix = token[0]
                         token = token[1:]
                     token = token.strip().strip('"').strip("'").strip().lower()
                     if not token:
                         continue
-                    if prefix == '-':
-                        exclude_names.append(token)
-                    else:
-                        include_names.append(token)
+                    include_names.append(token)
 
                 include_names = [t for t in include_names if t]
-                exclude_names = [t for t in exclude_names if t]
 
                 # Resolve to tag IDs for this mode
                 include_tags = list(Tag.objects.filter(mode=mode, name__in=include_names).values_list('id', flat=True))
-                exclude_tags = list(Tag.objects.filter(mode=mode, name__in=exclude_names).values_list('id', flat=True))
 
                 if include_tags:
                     # Build beatmap set intersection for include tags
@@ -996,20 +1006,6 @@ def statistics_tag_map_data(request: HttpRequest):
                     else:
                         inter = set()
 
-                    # Exclude tags (if provided)
-                    if inter and exclude_tags:
-                        ex_union: set[int] = set()
-                        for tid in exclude_tags:
-                            ex_union.update(
-                                set(
-                                    ta.filter(tag_id=int(tid))
-                                    .values_list('beatmap_id', flat=True)
-                                    .distinct()
-                                )
-                            )
-                        if ex_union:
-                            inter.difference_update(ex_union)
-
                     bm_ids = list(inter)
                 else:
                     # No include tags => nothing meaningful to compute
@@ -1018,17 +1014,17 @@ def statistics_tag_map_data(request: HttpRequest):
                 if not bm_ids:
                     return JsonResponse({'sets': []})
 
-                mapper_by_bm: dict[int, str] = {}
+                mapper_by_bm: dict[int, list[str]] = {}
                 for row in Beatmap.objects.filter(id__in=bm_ids).values('id', 'listed_owner', 'creator'):
                     bm_pk = int(row.get('id'))
-                    mapper = (row.get('listed_owner') or row.get('creator') or '').strip()
-                    mapper_by_bm[bm_pk] = mapper or '(unknown)'
+                    mapper_field = row.get('listed_owner') or row.get('creator') or ''
+                    mapper_by_bm[bm_pk] = _split_mappers(mapper_field)
 
                 m_ctr: Counter[str] = Counter()
                 for bid in bm_ids:
-                    m = mapper_by_bm.get(int(bid))
-                    if m:
-                        m_ctr[m] += 1
+                    for m in (mapper_by_bm.get(int(bid)) or ['(unknown)']):
+                        if m:
+                            m_ctr[m] += 1
 
                 tags_out = include_names[:]  # display as typed (normalized)
                 sets = [{
@@ -1097,11 +1093,11 @@ def statistics_tag_map_data(request: HttpRequest):
 
             # Mapper lookup for all beatmaps once
             bm_ids_all = list(bm_tags.keys())
-            mapper_by_bm: dict[int, str] = {}
+            mapper_by_bm: dict[int, list[str]] = {}
             for row in Beatmap.objects.filter(id__in=bm_ids_all).values('id', 'listed_owner', 'creator'):
                 bm_pk = int(row.get('id'))
-                mapper = (row.get('listed_owner') or row.get('creator') or '').strip()
-                mapper_by_bm[bm_pk] = mapper or '(unknown)'
+                mapper_field = row.get('listed_owner') or row.get('creator') or ''
+                mapper_by_bm[bm_pk] = _split_mappers(mapper_field)
 
             # Thresholds tuned similarly to tagsets.
             # For overlap mode we want *many* candidate relationships so we can build lots of 3–10 tag sets.
@@ -1291,9 +1287,9 @@ def statistics_tag_map_data(request: HttpRequest):
 
                 m_ctr: Counter[str] = Counter()
                 for bid in inter_ids:
-                    m = mapper_by_bm.get(int(bid))
-                    if m:
-                        m_ctr[m] += 1
+                    for m in (mapper_by_bm.get(int(bid)) or ['(unknown)']):
+                        if m:
+                            m_ctr[m] += 1
                 top_mappers = [{'name': n, 'count': int(c)} for n, c in m_ctr.most_common(max_mappers)]
 
                 tags_out = []
@@ -1323,19 +1319,20 @@ def statistics_tag_map_data(request: HttpRequest):
             if not bm_ids_all:
                 return JsonResponse({'sets': []})
 
-            mapper_by_bm: dict[int, str] = {}
+            mapper_by_bm: dict[int, list[str]] = {}
             for row in Beatmap.objects.filter(id__in=bm_ids_all).values('id', 'listed_owner', 'creator'):
                 bm_pk = int(row.get('id'))
-                mapper = (row.get('listed_owner') or row.get('creator') or '').strip()
-                mapper_by_bm[bm_pk] = mapper or '(unknown)'
+                mapper_field = row.get('listed_owner') or row.get('creator') or ''
+                mapper_by_bm[bm_pk] = _split_mappers(mapper_field)
 
             tag_map_counts: Counter[int] = Counter()
             mapper_counts_by_tag: dict[int, Counter[str]] = defaultdict(Counter)
             for bm_id, tags in bm_tags.items():
-                mapper = mapper_by_bm.get(int(bm_id)) or '(unknown)'
                 for tid in set(tags or []):
                     tag_map_counts[int(tid)] += 1
-                    mapper_counts_by_tag[int(tid)][mapper] += 1
+                    for mapper in (mapper_by_bm.get(int(bm_id)) or ['(unknown)']):
+                        if mapper:
+                            mapper_counts_by_tag[int(tid)][mapper] += 1
 
             sets = []
             next_id = 0
@@ -1497,11 +1494,11 @@ def statistics_tag_map_data(request: HttpRequest):
         if not all_assigned_ids:
             return JsonResponse({'sets': []})
 
-        mapper_by_bm: dict[int, str] = {}
+        mapper_by_bm: dict[int, list[str]] = {}
         for row in Beatmap.objects.filter(id__in=all_assigned_ids).values('id', 'listed_owner', 'creator'):
             bm_pk = int(row.get('id'))
-            mapper = (row.get('listed_owner') or row.get('creator') or '').strip()
-            mapper_by_bm[bm_pk] = mapper or '(unknown)'
+            mapper_field = row.get('listed_owner') or row.get('creator') or ''
+            mapper_by_bm[bm_pk] = _split_mappers(mapper_field)
 
         # ---- Build response ----
         # Fewer consolidation => smaller "label" tag lists; higher => show more "sector identity".
@@ -1525,9 +1522,9 @@ def statistics_tag_map_data(request: HttpRequest):
             # Top mappers within this sector
             m_ctr: Counter[str] = Counter()
             for bm_id in bm_ids:
-                m = mapper_by_bm.get(int(bm_id))
-                if m:
-                    m_ctr[m] += 1
+                for m in (mapper_by_bm.get(int(bm_id)) or ['(unknown)']):
+                    if m:
+                        m_ctr[m] += 1
             top_mappers = [{'name': name, 'count': int(cnt)} for name, cnt in m_ctr.most_common(max_mappers)]
 
             sets.append({

@@ -2,7 +2,14 @@
   "description": "Manually crafted tag-map sectors. Used by statistics_tag_map_data view=crafted.",
   "schema": {
     "modes": {
-      "std": [
+      "std": [],
+      "taiko": [],
+      "catch": [],
+      "mania": []
+    }
+  },
+  "modes": {
+    "std": [
         { "id": "aim farm", "tags": ["aim", "farm", "jumps", "no-bursts", "no-triples", "sharp angles", "aimslop", "comfortable", "simple rhythm", "large jumps", "aim diff spike"] },
         { "id": "aim", "tags": ["aim", "large jumps", "cross screen jumps", "aim consistency", "large jumps"] },
         { "id": "stream farm", "tags": ["streams", "farm", "no-jumps", "flow", "streamslop", "bursts", "stamina", "stream diff spike"] },
@@ -26,16 +33,9 @@
         { "id": "unique", "tags": ["unique", "conceptual", "avant-garde", "weird"] },
         { "id": "gimmick", "tags": ["spinner gimmick", "repeating patterns", "squares gimmick", "grid mapping", "slider gimmick", "repeat slider gimmick", "double gimmick", "reading gimmick"] },
         { "id": "slider tech", "tags": ["large sliders", "fast sliders", "slider tech", "hard tech", "slider spam", "variable slider velocity", "notch slider", "slider snap", "repeat sliders"] },
-        { "id": "Mechanical tech", "tags": ["mechtech", "mechanical tech", "hybrid tech", "circle tech"] },
+        { "id": "mechanical tech", "tags": ["mechtech", "mechanical tech", "hybrid tech", "circle tech"] },
         { "id": "control", "tags": ["aim control", "finger control", "whp"] }
       ],
-      "taiko": [],
-      "catch": [],
-      "mania": []
-    }
-  },
-  "modes": {
-    "std": [],
     "taiko": [],
     "catch": [],
     "mania": []

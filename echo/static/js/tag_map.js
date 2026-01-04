@@ -359,8 +359,16 @@
         });
 
       rects.select('text.mapper-text')
-        .attr('x', 4)
-        .attr('y', 14)
+        .attr('x', function (d) {
+          var wR = Math.max(0, d.x1 - d.x0);
+          return wR / 2;
+        })
+        .attr('y', function (d) {
+          var hR = Math.max(0, d.y1 - d.y0);
+          return hR / 2;
+        })
+        .attr('text-anchor', 'middle')
+        .attr('dominant-baseline', 'middle')
         .attr('fill', 'rgba(0,0,0,0.80)')
         .attr('font-weight', 800)
         .attr('font-size', function (d) {

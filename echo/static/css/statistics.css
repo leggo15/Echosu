@@ -309,6 +309,7 @@
 }
 .tagmap-mapwrap {
   position: relative;
+  min-height: 1080px;
 }
 .tagmap-fullscreen-btn {
   position: absolute;
@@ -359,7 +360,6 @@
 
 .tagmap-container {
   width: 100%;
-  /* Dynamic sizing, but keep a consistent overall shape (16:9) */
   aspect-ratio: 16 / 9;
   height: auto;
   min-height: 520px;

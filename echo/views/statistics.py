@@ -976,6 +976,24 @@ def statistics_tag_map_data(request: HttpRequest):
         overlap_seed_cores_override = _opt_int('overlap_seed_cores')
         overlap_triads_per_node_override = _opt_int('overlap_triads_per_node')
 
+        def _split_mappers(raw: str | None) -> list[str]:
+            """Split comma-separated mapper strings into individual mapper names."""
+            try:
+                s = (raw or '').strip()
+            except Exception:
+                s = ''
+            if not s:
+                return ['(unknown)']
+            parts = []
+            for p in s.split(','):
+                try:
+                    pp = (p or '').strip()
+                except Exception:
+                    pp = ''
+                if pp:
+                    parts.append(pp)
+            return parts or ['(unknown)']
+
         # ---- Crafted Map (manual sectors) ----
         if view == 'crafted':
             try:
@@ -984,11 +1002,17 @@ def statistics_tag_map_data(request: HttpRequest):
                 crafted_path = os.path.normpath(crafted_path)
                 with open(crafted_path, 'r', encoding='utf-8') as f:
                     cfg = json.load(f) or {}
-                mode_cfg = {}
+                # Accept either top-level `modes` (preferred) or `schema.modes` (backwards-compatible with earlier examples).
+                mode_cfg = []
                 try:
                     mode_cfg = (cfg.get('modes') or {}).get(mode) or []
                 except Exception:
                     mode_cfg = []
+                if not mode_cfg:
+                    try:
+                        mode_cfg = ((cfg.get('schema') or {}).get('modes') or {}).get(mode) or []
+                    except Exception:
+                        mode_cfg = []
                 if not isinstance(mode_cfg, list):
                     mode_cfg = []
 
@@ -1029,72 +1053,94 @@ def statistics_tag_map_data(request: HttpRequest):
                 if not sector_tag_ids:
                     return JsonResponse({'sets': []})
 
-                # Build beatmap -> picked tag set (only tags used by crafted sectors)
+                # Crafted membership rule:
+                # A beatmap belongs to a sector if at least 50% of the beatmap's tags are contained in the sector.
+                # Multiple-sector membership is allowed.
+                threshold = 0.50
+
                 all_ids = sorted({tid for lst in sector_tag_ids for tid in lst})
-                bm_tags: dict[int, set[int]] = defaultdict(set)
-                for bm_id, tag_id in (
+                if not all_ids:
+                    return JsonResponse({'sets': []})
+
+                # Candidate beatmaps: any beatmap that has at least one crafted-sector tag.
+                candidate_bm_ids = list(
                     ta.filter(tag_id__in=all_ids)
+                    .values_list('beatmap_id', flat=True)
+                    .distinct()
+                )
+                if not candidate_bm_ids:
+                    return JsonResponse({'sets': []})
+
+                # Total tag count per beatmap (denominator)
+                bm_total_tags: dict[int, int] = {
+                    int(r['beatmap_id']): int(r['cnt'])
+                    for r in (
+                        ta.filter(beatmap_id__in=candidate_bm_ids)
+                        .values('beatmap_id')
+                        .annotate(cnt=Count('tag_id', distinct=True))
+                    )
+                }
+
+                # Crafted-tag set per beatmap (numerator intersection computed against this)
+                bm_crafted_tags: dict[int, set[int]] = defaultdict(set)
+                tag_to_bm: dict[int, set[int]] = defaultdict(set)
+                for bm_id, tag_id in (
+                    ta.filter(beatmap_id__in=candidate_bm_ids, tag_id__in=all_ids)
                     .values_list('beatmap_id', 'tag_id')
                     .distinct()
                     .iterator(chunk_size=5000)
                 ):
-                    try:
-                        bm_tags[int(bm_id)].add(int(tag_id))
-                    except Exception:
-                        continue
+                    bmid = int(bm_id)
+                    tid = int(tag_id)
+                    bm_crafted_tags[bmid].add(tid)
+                    tag_to_bm[tid].add(bmid)
 
-                if not bm_tags:
-                    return JsonResponse({'sets': []})
-
-                # Support for scoring (rarer tags count more for disjoint assignment)
-                tag_support: dict[int, int] = {
-                    int(r['tag_id']): int(r['cnt'])
-                    for r in ta.filter(tag_id__in=all_ids)
-                    .values('tag_id')
-                    .annotate(cnt=Count('beatmap_id', distinct=True))
-                }
-                inv_log_support: dict[int, float] = {}
-                for tid in all_ids:
-                    cnt = tag_support.get(int(tid), 1)
-                    inv_log_support[int(tid)] = 1.0 / max(1e-6, math.log(2.0 + float(cnt)))
-
-                # Assign each beatmap to best matching crafted sector (disjoint sectors)
-                sector_bm_ids: dict[int, list[int]] = defaultdict(list)
-                for bm_id, tset in bm_tags.items():
-                    best = None
-                    best_score = None
-                    for si, tids in enumerate(sector_tag_ids):
-                        if all(int(t) in tset for t in tids):
-                            score = sum(inv_log_support.get(int(t), 1.0) for t in tids)
-                            # tie-breaker: more tags wins
-                            if best_score is None or score > best_score or (score == best_score and len(tids) > len(sector_tag_ids[best])):
-                                best = si
-                                best_score = score
-                    if best is not None:
-                        sector_bm_ids[int(best)].append(int(bm_id))
-
-                if not sector_bm_ids:
+                if not bm_crafted_tags:
                     return JsonResponse({'sets': []})
 
                 # Mapper lookup (supports comma-separated mappers)
-                bm_ids_all = [bid for ids in sector_bm_ids.values() for bid in ids]
                 mapper_by_bm: dict[int, list[str]] = {}
-                for row in Beatmap.objects.filter(id__in=bm_ids_all).values('id', 'listed_owner', 'creator'):
+                for row in Beatmap.objects.filter(id__in=candidate_bm_ids).values('id', 'listed_owner', 'creator'):
                     bm_pk = int(row.get('id'))
                     mapper_field = row.get('listed_owner') or row.get('creator') or ''
                     mapper_by_bm[bm_pk] = _split_mappers(mapper_field)
 
                 sets = []
-                for si, bm_ids in sector_bm_ids.items():
+                for si, tids in enumerate(sector_tag_ids):
+                    sector_set = set(int(t) for t in tids)
+                    if not sector_set:
+                        continue
+                    # Candidates for this sector: union of beatmaps that have any tag in the sector.
+                    cand_ids: set[int] = set()
+                    for t in sector_set:
+                        cand_ids.update(tag_to_bm.get(int(t)) or set())
+                    if not cand_ids:
+                        continue
+
+                    chosen: list[int] = []
                     m_ctr: Counter[str] = Counter()
-                    for bid in bm_ids:
-                        for m in (mapper_by_bm.get(int(bid)) or ['(unknown)']):
-                            if m:
-                                m_ctr[m] += 1
+                    for bm_id in cand_ids:
+                        total = int(bm_total_tags.get(int(bm_id)) or 0)
+                        if total <= 0:
+                            continue
+                        overlap = 0
+                        for t in (bm_crafted_tags.get(int(bm_id)) or set()):
+                            if t in sector_set:
+                                overlap += 1
+                        if overlap <= 0:
+                            continue
+                        if (float(overlap) / float(total)) >= threshold:
+                            chosen.append(int(bm_id))
+                            for m in (mapper_by_bm.get(int(bm_id)) or ['(unknown)']):
+                                if m:
+                                    m_ctr[m] += 1
+
+                    if not chosen:
+                        continue
                     sets.append({
                         'id': int(si),
                         'tags': sector_tag_names[int(si)],
-                        'map_count': int(len(bm_ids)),
+                        'map_count': int(len(chosen)),
                         'top_mappers': [{'name': n, 'count': int(c)} for n, c in m_ctr.most_common(max_mappers)],
                     })
 
@@ -1102,24 +1148,6 @@ def statistics_tag_map_data(request: HttpRequest):
                 return JsonResponse({'sets': sets})
             except Exception:
                 return JsonResponse({'sets': []})
-
-        def _split_mappers(raw: str | None) -> list[str]:
-            """Split comma-separated mapper strings into individual mapper names."""
-            try:
-                s = (raw or '').strip()
-            except Exception:
-                s = ''
-            if not s:
-                return ['(unknown)']
-            parts = []
-            for p in s.split(','):
-                try:
-                    pp = (p or '').strip()
-                except Exception:
-                    pp = ''
-                if pp:
-                    parts.append(pp)
-            return parts or ['(unknown)']
 
         # ---- Base corpus (tag applications) ----
         # Exclude explicit negatives and "legacy" rows where user is null but not marked prediction.

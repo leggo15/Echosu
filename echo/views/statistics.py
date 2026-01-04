@@ -1087,7 +1087,7 @@ def statistics_tag_map_data(request: HttpRequest):
                 #  - >= 50% of the beatmap's tags are contained in the sector  (map-centric)
                 #  - >= 50% of the sector's tags are contained in the beatmap (sector-centric)
                 # Multiple-sector membership is allowed.
-                threshold = 0.50
+                threshold = 0.60
 
                 all_ids = sorted({tid for lst in sector_tag_ids for tid in lst})
                 if not all_ids:

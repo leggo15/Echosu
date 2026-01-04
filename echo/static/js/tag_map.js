@@ -314,7 +314,7 @@
               (nd.label ? ('<div style="opacity:0.85; margin-top:6px;">Sector:</div><div style="opacity:0.95;">' + safeText(nd.label) + '</div>') : '') +
               '<div style="opacity:0.85; margin-top:6px;">Tagset:</div>' +
               '<div style="opacity:0.95;">' + safeText((nd.tags || []).join(', ')) + '</div>' +
-              '<div style="opacity:0.75; margin-top:6px;">Click to open search results</div>';
+              '<div style="opacity:0.75; margin-top:6px;">Double click to open search results</div>';
           } catch (e) { }
         })
         .on('mousemove', function (ev) {

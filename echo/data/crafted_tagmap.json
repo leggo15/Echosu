@@ -17,7 +17,6 @@
         { "id": "streams", "tags": ["streams", "flow", "spaced streams", "variable streams", "consistency", "deathstreams", "burst sliders", "cut streams"] },
         { "id": "alternating", "tags": ["alternating", "alt", "finger control", "flow aim", "anti-aim"] },
         { "id": "awkward aim", "tags": ["wide angles", "awkward aim", "flow aim", "snap aim", "linear aim", "aim consistency", "uncomfortable", "aim control"] },
-        { "id": "hybrid farm", "tags": ["aim", "streams", "hybrid", "farm", "jumps", "sharp angles", "comfortable", "large jumps", "consistency", "bursts", "triples"] },
         { "id": "hybrid", "tags": ["aim", "streams", "hybrid", "jumps", "large jumps", "consistency", "bursts", "triples"] },
         { "id": "geometric", "tags": ["geometric", "linear aim", "square jumps", "symetrical"] },
         { "id": "tech", "tags": ["tech"] },

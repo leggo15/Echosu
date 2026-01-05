@@ -26,6 +26,32 @@ DEBUG = _get_bool('DEBUG', default=True)
 DEBUG_PORT = int(os.getenv('DEBUG_PORT', '8000'))
 BASE_URL = f"127.0.0.1" if DEBUG else "echosu.com"
 
+# Cache
+# We use a dedicated shared cache for hourly-active uniqueness keys.
+# FileBasedCache works across multiple worker processes on the same machine,
+# without introducing any new services or DB writes.
+HOURLY_ACTIVE_CACHE_DIR = str(BASE_DIR / 'cache' / 'hourly_active')
+try:
+    os.makedirs(HOURLY_ACTIVE_CACHE_DIR, exist_ok=True)
+except Exception:
+    # If the directory can't be created (permissions), Django will error on first use;
+    # better to fail loudly then silently miscount.
+    pass
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'echo-default',
+    },
+    'hourly_active': {
+        'BACKEND': 'django.core.cache.backends.filebased.FileBasedCache',
+        'LOCATION': HOURLY_ACTIVE_CACHE_DIR,
+        'TIMEOUT': 60 * 60 * 30,  # 30h
+        'OPTIONS': {
+            'MAX_ENTRIES': 200000,
+        },
+    },
+}
+
 # Allow override via .env (JSON list or comma-separated)
 _allowed_hosts_env = os.getenv('ALLOWED_HOSTS')
 def _parse_allowed_hosts(raw: str):

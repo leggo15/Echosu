@@ -5,7 +5,7 @@ from .models import APIRequestLog, CustomToken, HourlyActiveUserCount
 from django.conf import settings
 import uuid
 import hashlib
-from django.core.cache import cache
+from django.core.cache import caches
 from django.utils import timezone
 from django.db.models import F
 
@@ -103,6 +103,7 @@ class HourlyActiveUserCountMiddleware(MiddlewareMixin):
 
     def process_request(self, request):
         try:
+            cache = caches['hourly_active']
             user = getattr(request, 'user', None)
             if not getattr(user, 'is_authenticated', False):
                 return None

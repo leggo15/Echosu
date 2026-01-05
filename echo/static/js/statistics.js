@@ -502,7 +502,11 @@
                           var t = Number(total[idx] || 0);
                           var s2 = Number(staffData[idx] || 0);
                           var n2 = Number(nonStaffData[idx] || 0);
-                          return 'Total unique: ' + t + ' (logged-in: ' + (s2 + n2) + ', staff: ' + s2 + ')';
+                          var a2 = Math.max(0, t - (s2 + n2));
+                          return 'Total unique: ' + t +
+                            ' (staff: ' + s2 +
+                            ', non-staff: ' + n2 +
+                            ', anonymous/other: ' + a2 + ')';
                         } catch (e) { return ''; }
                       }
                     }

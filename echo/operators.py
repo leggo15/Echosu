@@ -29,6 +29,13 @@ def handle_attribute_queries(context, search_terms):
 
     for term in search_terms:
         t = (term or '').strip()
+        # Accept common "reversed" comparison operators typed by users:
+        # - DT=>450  -> DT>=450
+        # - DT=<550  -> DT<=550
+        # Keep this normalization early so all downstream handlers see a canonical form.
+        if '=>' in t or '=< ' in t or '=<'.strip() in t:
+            # Note: no whitespace is expected inside tokens, but keep the replacement simple/safe.
+            t = t.replace('=>', '>=').replace('=<', '<=')
         
         # Detect Acc and Miss parameters for PP calculation
         acc_match = re.match(r'^\s*acc=(\d+(?:\.\d+)?)\s*$', t, re.IGNORECASE)
@@ -271,6 +278,10 @@ def handle_attribute_equal_query(beatmaps, term):
 #----------#
 
 def handle_attribute_comparison_query(beatmaps, term):
+    # Normalize common "reversed" operator variants first (DT=>450, DT=<550, etc.)
+    if '=>' in (term or '') or '=<'.strip() in (term or ''):
+        term = (term or '').replace('=>', '>=').replace('=<', '<=')
+
     match = re.match(r'(AR|CS|BPM|OD|HP|DRAIN|LENGTH|COUNT|FAV|PP|NM|HD|HR|DT|HT|EZ|FL|YEAR)(>=|<=|>|<)(\d+(\.\d+)?)', term, re.IGNORECASE)
     if match:
         attribute, operator, value, _ = match.groups()

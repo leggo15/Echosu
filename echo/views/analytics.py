@@ -9,6 +9,10 @@ from django.utils.timezone import now
 from django.views.decorators.csrf import csrf_exempt
 
 from django.db.models import F
+from django.conf import settings
+
+import hmac
+import hashlib
 
 from ..models import AnalyticsSearchEvent, AnalyticsClickEvent, Beatmap
 
@@ -16,6 +20,29 @@ from ..models import AnalyticsSearchEvent, AnalyticsClickEvent, Beatmap
 def _get_client_id(request: HttpRequest) -> str | None:
 	# Anonymous client identifier set by middleware; not tied to a user account
 	return request.COOKIES.get('analytics_id')
+
+def _hash_user_id(user_id: int | str | None) -> str | None:
+	"""
+	Return a stable, non-reversible identifier for an authenticated user.
+	We HMAC the user id using SECRET_KEY so it can't be reversed without server secret.
+	"""
+	try:
+		if user_id is None:
+			return None
+		uid = str(int(user_id)).strip()
+		if not uid:
+			return None
+	except Exception:
+		return None
+	try:
+		secret = str(getattr(settings, 'SECRET_KEY', '') or '')
+	except Exception:
+		secret = ''
+	if not secret:
+		# Should never happen in real deployments; fail closed (treat as anonymous).
+		return None
+	msg = ('echo-analytics:uid:' + uid).encode('utf-8')
+	return hmac.new(secret.encode('utf-8'), msg, hashlib.sha256).hexdigest()
 
 
 @require_POST
@@ -63,8 +90,21 @@ def log_search_event(request: HttpRequest):
 			flags = {}
 		flags['mode'] = search_mode
 
+	user = getattr(request, 'user', None)
+	logged_in_user_id = None
+	is_staff = False
+	try:
+		if getattr(user, 'is_authenticated', False):
+			logged_in_user_id = _hash_user_id(getattr(user, 'id', None))
+			is_staff = bool(getattr(user, 'is_staff', False))
+	except Exception:
+		logged_in_user_id = None
+		is_staff = False
+
 	se = AnalyticsSearchEvent.objects.create(
 		client_id=client_id,
+		logged_in_user_id=logged_in_user_id,
+		is_staff=is_staff,
 		query=query,
 		tags=tags,
 		results_count=results_count,
@@ -104,8 +144,21 @@ def log_click_event(request: HttpRequest):
 	search_event_id = payload.get('search_event_id') or None
 	meta = payload.get('meta') if isinstance(payload.get('meta'), (dict, list)) else None
 
+	user = getattr(request, 'user', None)
+	logged_in_user_id = None
+	is_staff = False
+	try:
+		if getattr(user, 'is_authenticated', False):
+			logged_in_user_id = _hash_user_id(getattr(user, 'id', None))
+			is_staff = bool(getattr(user, 'is_staff', False))
+	except Exception:
+		logged_in_user_id = None
+		is_staff = False
+
 	AnalyticsClickEvent.objects.create(
 		client_id=client_id,
+		logged_in_user_id=logged_in_user_id,
+		is_staff=is_staff,
 		action=action,
 		beatmap_id=beatmap_id,
 		search_event_id=search_event_id,

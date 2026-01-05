@@ -22,7 +22,7 @@ from django.utils import timezone
 
 # Local
 from ..models import Beatmap, Tag, TagApplication, SavedSearch, UserProfile
-from ..models import AnalyticsSearchEvent, AnalyticsClickEvent, HourlyActiveUserCount
+from ..models import AnalyticsSearchEvent, AnalyticsClickEvent
 from collections import Counter
 from .auth import api
 from .shared import format_length_hms
@@ -1967,6 +1967,29 @@ def _safe_client_id(v) -> str | None:
         return None
 
 
+def _safe_user_hash(v) -> str | None:
+    try:
+        s = (v or '').strip()
+        return s or None
+    except Exception:
+        return None
+
+
+def _identity_key(client_id: str | None, user_hash: str | None, is_staff: bool) -> tuple[str, str] | None:
+    """
+    Identity key used for unique-user counting:
+    - authenticated users are keyed by their hashed user id
+    - anonymous users are keyed by their client_id cookie
+    """
+    uh = _safe_user_hash(user_hash)
+    if uh:
+        return ('staff' if is_staff else 'user', uh)
+    cid = _safe_client_id(client_id)
+    if cid:
+        return ('anon', cid)
+    return None
+
+
 def _compute_followup_ids_for_searches(search_rows: list[dict], action_names: list[str]) -> set[str]:
     """Return set of search_event_id strings that have at least one followup click with matching client_id."""
     try:
@@ -2094,85 +2117,73 @@ def statistics_admin_data(request: HttpRequest):
         hour_labels: list[str] = []
         hour_search_counts: list[int] = []
         hour_unique_counts: list[int] = []
-        hour_logged_in_counts: list[int] = []
+        hour_staff_counts: list[int] = []
+        hour_nonstaff_counts: list[int] = []
 
-        # Prefetch logged-in active counts for the last 24 buckets (fast path).
-        start_24h_prefetch = _hour_floor(now - timezone.timedelta(hours=23))
-        end_24h_prefetch = start_24h_prefetch + timezone.timedelta(hours=24)
-        logged_map: dict[str, dict[str, int]] = {}
+        start_24h = _hour_floor(now - timezone.timedelta(hours=23))
+        end_24h = start_24h + timezone.timedelta(hours=24)
+        for i in range(24):
+            hour_labels.append((_hour_floor(start_24h + timezone.timedelta(hours=i))).strftime('%H:%M'))
+
+        # Searches per hour: use the existing bucket helper (fast + consistent with followup logic)
         try:
-            for r in (
-                HourlyActiveUserCount.objects
-                .filter(hour__gte=start_24h_prefetch, hour__lt=end_24h_prefetch)
-                .values('hour', 'count', 'staff_count', 'nonstaff_count')
-            ):
-                h = r.get('hour')
-                c = r.get('count') or 0
-                sc = r.get('staff_count') or 0
-                nsc = r.get('nonstaff_count') or 0
-                if h:
-                    logged_map[str(_hour_floor(h))] = {
-                        'count': int(c),
-                        'staff': int(sc),
-                        'nonstaff': int(nsc),
-                    }
+            hour_search_rows = list(
+                AnalyticsSearchEvent.objects
+                .filter(created_at__gte=start_24h, created_at__lt=end_24h)
+                .exclude(query__isnull=True)
+                .exclude(query__exact='')
+                .values('event_id', 'client_id', 'created_at')
+            )
+            h_counts, _, _ = _bucket_series(hour_search_rows, start_24h, 3600, 24, set())
+            hour_search_counts = [int(v) for v in h_counts]
         except Exception:
-            logged_map = {}
+            hour_search_counts = [0] * 24
+
+        # Unique identities per hour across search + click (hashed-user OR client_id)
+        hour_staff_sets = [set() for _ in range(24)]
+        hour_nonstaff_sets = [set() for _ in range(24)]
+        hour_anon_sets = [set() for _ in range(24)]
+        try:
+            hour_search_id_rows = list(
+                AnalyticsSearchEvent.objects
+                .filter(created_at__gte=start_24h, created_at__lt=end_24h)
+                .values('client_id', 'created_at', 'logged_in_user_id', 'is_staff')
+            )
+            hour_click_id_rows = list(
+                AnalyticsClickEvent.objects
+                .filter(created_at__gte=start_24h, created_at__lt=end_24h)
+                .values('client_id', 'created_at', 'logged_in_user_id', 'is_staff')
+            )
+            for r in hour_search_id_rows + hour_click_id_rows:
+                try:
+                    created = r.get('created_at')
+                    if not created:
+                        continue
+                    idx = int((created - start_24h).total_seconds() // 3600)
+                    if idx < 0 or idx >= 24:
+                        continue
+                    ident = _identity_key(r.get('client_id'), r.get('logged_in_user_id'), bool(r.get('is_staff')))
+                    if not ident:
+                        continue
+                    kind, key = ident
+                    if kind == 'staff':
+                        hour_staff_sets[idx].add(key)
+                    elif kind == 'user':
+                        hour_nonstaff_sets[idx].add(key)
+                    else:
+                        hour_anon_sets[idx].add(key)
+                except Exception:
+                    continue
+        except Exception:
+            pass
 
         for i in range(24):
-            start = _hour_floor(now - timezone.timedelta(hours=(23 - i)))
-            end = start + timezone.timedelta(hours=1)
-            hour_labels.append(start.strftime('%H:%M'))
-            # Searches
-            try:
-                c = (
-                    AnalyticsSearchEvent.objects
-                    .filter(created_at__gte=start, created_at__lt=end)
-                    .exclude(query__isnull=True)
-                    .exclude(query__exact='')
-                    .count()
-                )
-            except Exception:
-                c = 0
-            hour_search_counts.append(int(c))
-            # Unique users across search + click
-            try:
-                s_ids = set(
-                    AnalyticsSearchEvent.objects
-                    .filter(created_at__gte=start, created_at__lt=end)
-                    .values_list('client_id', flat=True)
-                    .distinct()
-                )
-                c_ids = set(
-                    AnalyticsClickEvent.objects
-                    .filter(created_at__gte=start, created_at__lt=end)
-                    .values_list('client_id', flat=True)
-                    .distinct()
-                )
-                uniq = len({i for i in (s_ids | c_ids) if i})
-            except Exception:
-                uniq = 0
-            hour_unique_counts.append(int(uniq))
-            try:
-                rec = logged_map.get(str(start)) or {}
-                hour_logged_in_counts.append(int(rec.get('count', 0)))
-            except Exception:
-                hour_logged_in_counts.append(0)
-
-        # Optional breakdown for the uniques chart overlay (hour view only)
-        hour_logged_in_staff_counts: list[int] = []
-        hour_logged_in_nonstaff_counts: list[int] = []
-        for i in range(24):
-            start = _hour_floor(now - timezone.timedelta(hours=(23 - i)))
-            rec = logged_map.get(str(start)) or {}
-            try:
-                hour_logged_in_staff_counts.append(int(rec.get('staff', 0)))
-            except Exception:
-                hour_logged_in_staff_counts.append(0)
-            try:
-                hour_logged_in_nonstaff_counts.append(int(rec.get('nonstaff', 0)))
-            except Exception:
-                hour_logged_in_nonstaff_counts.append(0)
+            sc = len(hour_staff_sets[i])
+            nc = len(hour_nonstaff_sets[i])
+            ac = len(hour_anon_sets[i])
+            hour_staff_counts.append(int(sc))
+            hour_nonstaff_counts.append(int(nc))
+            hour_unique_counts.append(int(sc + nc + ac))
 
         # Download % per hour (last 24h)
         hour_dl_followups: list[int] = [0] * 24
@@ -2198,6 +2209,8 @@ def statistics_admin_data(request: HttpRequest):
         day_labels: list[str] = []
         day_search_counts: list[int] = []
         day_unique_counts: list[int] = []
+        day_staff_counts: list[int] = []
+        day_nonstaff_counts: list[int] = []
         for i in range(30):
             start = _day_floor(now - timezone.timedelta(days=(29 - i)))
             end = start + timezone.timedelta(days=1)
@@ -2213,23 +2226,57 @@ def statistics_admin_data(request: HttpRequest):
             except Exception:
                 c = 0
             day_search_counts.append(int(c))
-            try:
-                s_ids = set(
-                    AnalyticsSearchEvent.objects
-                    .filter(created_at__gte=start, created_at__lt=end)
-                    .values_list('client_id', flat=True)
-                    .distinct()
-                )
-                c_ids = set(
-                    AnalyticsClickEvent.objects
-                    .filter(created_at__gte=start, created_at__lt=end)
-                    .values_list('client_id', flat=True)
-                    .distinct()
-                )
-                uniq = len({i for i in (s_ids | c_ids) if i})
-            except Exception:
-                uniq = 0
-            day_unique_counts.append(int(uniq))
+            # Filled below via bucketed identity sets
+
+        # Unique identities per day across search + click (hashed-user OR client_id)
+        try:
+            start_30d = _day_floor(now - timezone.timedelta(days=29))
+            end_30d = start_30d + timezone.timedelta(days=30)
+            day_staff_sets = [set() for _ in range(30)]
+            day_nonstaff_sets = [set() for _ in range(30)]
+            day_anon_sets = [set() for _ in range(30)]
+            day_search_id_rows = list(
+                AnalyticsSearchEvent.objects
+                .filter(created_at__gte=start_30d, created_at__lt=end_30d)
+                .values('client_id', 'created_at', 'logged_in_user_id', 'is_staff')
+            )
+            day_click_id_rows = list(
+                AnalyticsClickEvent.objects
+                .filter(created_at__gte=start_30d, created_at__lt=end_30d)
+                .values('client_id', 'created_at', 'logged_in_user_id', 'is_staff')
+            )
+            for r in day_search_id_rows + day_click_id_rows:
+                try:
+                    created = r.get('created_at')
+                    if not created:
+                        continue
+                    idx = int((created - start_30d).total_seconds() // (24 * 3600))
+                    if idx < 0 or idx >= 30:
+                        continue
+                    ident = _identity_key(r.get('client_id'), r.get('logged_in_user_id'), bool(r.get('is_staff')))
+                    if not ident:
+                        continue
+                    kind, key = ident
+                    if kind == 'staff':
+                        day_staff_sets[idx].add(key)
+                    elif kind == 'user':
+                        day_nonstaff_sets[idx].add(key)
+                    else:
+                        day_anon_sets[idx].add(key)
+                except Exception:
+                    continue
+            for i in range(30):
+                sc = len(day_staff_sets[i])
+                nc = len(day_nonstaff_sets[i])
+                ac = len(day_anon_sets[i])
+                day_staff_counts.append(int(sc))
+                day_nonstaff_counts.append(int(nc))
+                day_unique_counts.append(int(sc + nc + ac))
+        except Exception:
+            # Fallback: keep arrays aligned
+            day_unique_counts = [0] * 30
+            day_staff_counts = [0] * 30
+            day_nonstaff_counts = [0] * 30
 
         # Download % per day (last 30d)
         day_dl_followups: list[int] = [0] * 30
@@ -2255,6 +2302,8 @@ def statistics_admin_data(request: HttpRequest):
         week_labels: list[str] = []
         week_search_counts: list[int] = []
         week_unique_counts: list[int] = []
+        week_staff_counts: list[int] = []
+        week_nonstaff_counts: list[int] = []
         week_dl_followups: list[int] = [0] * 52
         week_dl_pct: list[float] = [0.0] * 52
         start_52w = _week_floor(now) - timezone.timedelta(weeks=51)
@@ -2265,36 +2314,50 @@ def statistics_admin_data(request: HttpRequest):
                 .filter(created_at__gte=start_52w, created_at__lt=end_52w)
                 .exclude(query__isnull=True)
                 .exclude(query__exact='')
-                .values('event_id', 'client_id', 'created_at')
+                .values('event_id', 'client_id', 'created_at', 'logged_in_user_id', 'is_staff')
             )
             week_followup_ids = _compute_followup_ids_for_searches(week_search_rows, download_actions)
             w_counts, w_f, w_pct = _bucket_series(week_search_rows, start_52w, 7 * 24 * 3600, 52, week_followup_ids)
             week_dl_followups = [int(v) for v in w_f]
             week_dl_pct = [float(v) for v in w_pct]
 
-            # Unique users per week: union of search + click client_id in that week bucket
+            # Unique identities per week: union of hashed-user OR client_id in that week bucket
             week_click_rows = list(
                 AnalyticsClickEvent.objects
                 .filter(created_at__gte=start_52w, created_at__lt=end_52w)
-                .values('client_id', 'created_at')
+                .values('client_id', 'created_at', 'logged_in_user_id', 'is_staff')
             )
-            week_client_sets = [set() for _ in range(52)]
+            week_staff_sets = [set() for _ in range(52)]
+            week_nonstaff_sets = [set() for _ in range(52)]
+            week_anon_sets = [set() for _ in range(52)]
             for r in week_search_rows:
                 try:
                     idx = int((r['created_at'] - start_52w).total_seconds() // (7 * 24 * 3600))
                     if 0 <= idx < 52:
-                        cid = _safe_client_id(r.get('client_id'))
-                        if cid:
-                            week_client_sets[idx].add(cid)
+                        ident = _identity_key(r.get('client_id'), r.get('logged_in_user_id'), bool(r.get('is_staff')))
+                        if ident:
+                            kind, key = ident
+                            if kind == 'staff':
+                                week_staff_sets[idx].add(key)
+                            elif kind == 'user':
+                                week_nonstaff_sets[idx].add(key)
+                            else:
+                                week_anon_sets[idx].add(key)
                 except Exception:
                     continue
             for r in week_click_rows:
                 try:
                     idx = int((r['created_at'] - start_52w).total_seconds() // (7 * 24 * 3600))
                     if 0 <= idx < 52:
-                        cid = _safe_client_id(r.get('client_id'))
-                        if cid:
-                            week_client_sets[idx].add(cid)
+                        ident = _identity_key(r.get('client_id'), r.get('logged_in_user_id'), bool(r.get('is_staff')))
+                        if ident:
+                            kind, key = ident
+                            if kind == 'staff':
+                                week_staff_sets[idx].add(key)
+                            elif kind == 'user':
+                                week_nonstaff_sets[idx].add(key)
+                            else:
+                                week_anon_sets[idx].add(key)
                 except Exception:
                     continue
 
@@ -2302,16 +2365,25 @@ def statistics_admin_data(request: HttpRequest):
                 wk_start = start_52w + timezone.timedelta(weeks=i)
                 week_labels.append(wk_start.strftime('%Y-%m-%d'))
                 week_search_counts.append(int(w_counts[i]))
-                week_unique_counts.append(int(len(week_client_sets[i])))
+                sc = len(week_staff_sets[i])
+                nc = len(week_nonstaff_sets[i])
+                ac = len(week_anon_sets[i])
+                week_staff_counts.append(int(sc))
+                week_nonstaff_counts.append(int(nc))
+                week_unique_counts.append(int(sc + nc + ac))
         except Exception:
             week_labels = [(start_52w + timezone.timedelta(weeks=i)).strftime('%Y-%m-%d') for i in range(52)]
             week_search_counts = [0] * 52
             week_unique_counts = [0] * 52
+            week_staff_counts = [0] * 52
+            week_nonstaff_counts = [0] * 52
 
         # All-time (up to 52 buckets)
         all_labels: list[str] = []
         all_search_counts: list[int] = []
         all_unique_counts: list[int] = []
+        all_staff_counts: list[int] = []
+        all_nonstaff_counts: list[int] = []
         all_dl_followups: list[int] = []
         all_dl_pct: list[float] = []
         try:
@@ -2331,7 +2403,7 @@ def statistics_admin_data(request: HttpRequest):
                     .filter(created_at__gte=all_start, created_at__lt=all_end)
                     .exclude(query__isnull=True)
                     .exclude(query__exact='')
-                    .values('event_id', 'client_id', 'created_at')
+                    .values('event_id', 'client_id', 'created_at', 'logged_in_user_id', 'is_staff')
                 )
                 all_followup_ids = _compute_followup_ids_for_searches(all_search_rows, download_actions)
                 a_counts, a_f, a_pct = _bucket_series(all_search_rows, all_start, bucket_sec, bucket_count, all_followup_ids)
@@ -2341,34 +2413,54 @@ def statistics_admin_data(request: HttpRequest):
                 all_click_rows = list(
                     AnalyticsClickEvent.objects
                     .filter(created_at__gte=all_start, created_at__lt=all_end)
-                    .values('client_id', 'created_at')
+                    .values('client_id', 'created_at', 'logged_in_user_id', 'is_staff')
                 )
-                all_client_sets = [set() for _ in range(bucket_count)]
+                all_staff_sets = [set() for _ in range(bucket_count)]
+                all_nonstaff_sets = [set() for _ in range(bucket_count)]
+                all_anon_sets = [set() for _ in range(bucket_count)]
                 for r in all_search_rows:
                     try:
                         idx = int((r['created_at'] - all_start).total_seconds() // bucket_sec)
                         if 0 <= idx < bucket_count:
-                            cid = _safe_client_id(r.get('client_id'))
-                            if cid:
-                                all_client_sets[idx].add(cid)
+                            ident = _identity_key(r.get('client_id'), r.get('logged_in_user_id'), bool(r.get('is_staff')))
+                            if ident:
+                                kind, key = ident
+                                if kind == 'staff':
+                                    all_staff_sets[idx].add(key)
+                                elif kind == 'user':
+                                    all_nonstaff_sets[idx].add(key)
+                                else:
+                                    all_anon_sets[idx].add(key)
                     except Exception:
                         continue
                 for r in all_click_rows:
                     try:
                         idx = int((r['created_at'] - all_start).total_seconds() // bucket_sec)
                         if 0 <= idx < bucket_count:
-                            cid = _safe_client_id(r.get('client_id'))
-                            if cid:
-                                all_client_sets[idx].add(cid)
+                            ident = _identity_key(r.get('client_id'), r.get('logged_in_user_id'), bool(r.get('is_staff')))
+                            if ident:
+                                kind, key = ident
+                                if kind == 'staff':
+                                    all_staff_sets[idx].add(key)
+                                elif kind == 'user':
+                                    all_nonstaff_sets[idx].add(key)
+                                else:
+                                    all_anon_sets[idx].add(key)
                     except Exception:
                         continue
                 for i in range(bucket_count):
                     bstart = all_start + timezone.timedelta(seconds=bucket_sec * i)
                     all_labels.append(bstart.strftime('%Y-%m-%d'))
                     all_search_counts.append(int(a_counts[i]))
-                    all_unique_counts.append(int(len(all_client_sets[i])))
+                    sc = len(all_staff_sets[i])
+                    nc = len(all_nonstaff_sets[i])
+                    ac = len(all_anon_sets[i])
+                    all_staff_counts.append(int(sc))
+                    all_nonstaff_counts.append(int(nc))
+                    all_unique_counts.append(int(sc + nc + ac))
             except Exception:
                 all_labels, all_search_counts, all_unique_counts, all_dl_followups, all_dl_pct = [], [], [], [], []
+                all_staff_counts, all_nonstaff_counts = [], []
 
         # Average clicks per action per day (last 30 days)
         clicks_since = _day_floor(now) - timezone.timedelta(days=29)
@@ -2454,13 +2546,27 @@ def statistics_admin_data(request: HttpRequest):
                 'hour': {
                     'labels': hour_labels,
                     'counts': hour_unique_counts,
-                    'logged_in_counts': hour_logged_in_counts,
-                    'logged_in_staff_counts': hour_logged_in_staff_counts,
-                    'logged_in_nonstaff_counts': hour_logged_in_nonstaff_counts,
+                    'logged_in_staff_counts': hour_staff_counts,
+                    'logged_in_nonstaff_counts': hour_nonstaff_counts,
                 },
-                'day': { 'labels': day_labels, 'counts': day_unique_counts },
-                'year': { 'labels': week_labels, 'counts': week_unique_counts },
-                'all': { 'labels': all_labels, 'counts': all_unique_counts },
+                'day': {
+                    'labels': day_labels,
+                    'counts': day_unique_counts,
+                    'logged_in_staff_counts': day_staff_counts,
+                    'logged_in_nonstaff_counts': day_nonstaff_counts,
+                },
+                'year': {
+                    'labels': week_labels,
+                    'counts': week_unique_counts,
+                    'logged_in_staff_counts': week_staff_counts,
+                    'logged_in_nonstaff_counts': week_nonstaff_counts,
+                },
+                'all': {
+                    'labels': all_labels,
+                    'counts': all_unique_counts,
+                    'logged_in_staff_counts': all_staff_counts,
+                    'logged_in_nonstaff_counts': all_nonstaff_counts,
+                },
             },
             'download_conversion': {
                 'label': 'Search→Direct/View conversion (all time)',

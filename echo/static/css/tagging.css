@@ -48,12 +48,20 @@ html:not([data-theme="dark"]) .applied-tags .tag-group { border-color: var(--bor
 .description-author { position: absolute; background-color: rgba(60, 60, 60, 0.0); color: #fff; padding: 0 0; border-radius: 4px; opacity: 0; transition: opacity 0.2s ease-in-out; z-index: 1001; pointer-events: none; font-size: 14px; font-style: italic; }
 
 /* Tag card help icon + hover tooltip (reuses the beatmap_detail graph tooltip style, but scoped to tag cards) */
+.tag-card .applied-tags { position: relative; }
 .tag-card .tagcard-info-wrap {
   display: inline-flex;
   align-items: center;
   margin-left: 6px;
   position: relative;
   vertical-align: middle;
+}
+/* Float the icon to the far right without affecting tag layout */
+.tag-card .applied-tags .tagcard-info-wrap {
+  position: absolute;
+  right: -60px;
+  top: -55px;
+  margin-left: 0;
 }
 .tag-card .tagcard-info {
   width: 18px;
@@ -78,7 +86,8 @@ html:not([data-theme="dark"]) .applied-tags .tag-group { border-color: var(--bor
 .tag-card .tagcard-tooltip {
   position: absolute;
   top: 24px;
-  left: 0;
+  right: 0;
+  left: auto;
   background: rgba(0,0,0,0.85);
   color: #fff;
   border: 1px solid rgba(255,255,255,0.10);

@@ -524,6 +524,10 @@ class AnalyticsSearchEvent(models.Model):
     """
     event_id = models.UUIDField(default=uuid.uuid4, editable=False, db_index=True)
     client_id = models.CharField(max_length=64, null=True, blank=True, db_index=True)
+    # If authenticated, store a stable, non-reversible hash of the user id (HMAC).
+    logged_in_user_id = models.CharField(max_length=64, null=True, blank=True, db_index=True)
+    # Convenience flag for staff users (only meaningful when logged_in_user_id is present).
+    is_staff = models.BooleanField(default=False, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     query = models.TextField(blank=True, default='')
     tags = models.JSONField(null=True, blank=True)
@@ -536,6 +540,8 @@ class AnalyticsSearchEvent(models.Model):
         indexes = [
             models.Index(fields=['created_at']),
             models.Index(fields=['client_id', 'created_at']),
+            models.Index(fields=['logged_in_user_id', 'created_at']),
+            models.Index(fields=['is_staff', 'created_at']),
             models.Index(fields=['sort', 'created_at']),
             models.Index(fields=['predicted_mode', 'created_at']),
         ]
@@ -550,6 +556,8 @@ class AnalyticsClickEvent(models.Model):
     - Optionally references a prior AnalyticsSearchEvent via its UUID (event_id).
     """
     client_id = models.CharField(max_length=64, null=True, blank=True, db_index=True)
+    logged_in_user_id = models.CharField(max_length=64, null=True, blank=True, db_index=True)
+    is_staff = models.BooleanField(default=False, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     action = models.CharField(max_length=64, db_index=True)
     beatmap_id = models.CharField(max_length=64, null=True, blank=True, db_index=True)
@@ -560,6 +568,8 @@ class AnalyticsClickEvent(models.Model):
         indexes = [
             models.Index(fields=['created_at']),
             models.Index(fields=['client_id', 'created_at']),
+            models.Index(fields=['logged_in_user_id', 'created_at']),
+            models.Index(fields=['is_staff', 'created_at']),
             models.Index(fields=['action', 'created_at']),
         ]
 
@@ -567,29 +577,5 @@ class AnalyticsClickEvent(models.Model):
         return f"Click({self.action}) at {self.created_at.isoformat()}"
 
 
-# ----------------------------- Authenticated Activity (Aggregated) ----------------------------- #
-class HourlyActiveUserCount(models.Model):
-    """
-    Hourly aggregate of authenticated user activity.
-    Stores ONLY the count per hour (no user ids / usernames).
-    Uniqueness is enforced in middleware via a cache key per (hour, user_id),
-    but only the aggregate count is persisted.
-    """
-    hour = models.DateTimeField(unique=True, db_index=True)
-    # Total active authenticated users for this hour (derived from staff/nonstaff; kept for convenience)
-    count = models.PositiveIntegerField(default=0)
-    # Breakdown
-    staff_count = models.PositiveIntegerField(default=0)
-    nonstaff_count = models.PositiveIntegerField(default=0)
-    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
-    updated_at = models.DateTimeField(auto_now=True, db_index=True)
-
-    class Meta:
-        indexes = [
-            models.Index(fields=['hour']),
-            models.Index(fields=['updated_at']),
-        ]
-        ordering = ['-hour']
-
-    def __str__(self):
-        return f"HourlyActiveUserCount({self.hour.isoformat()}): {self.count} (staff={self.staff_count}, nonstaff={self.nonstaff_count})"
+## NOTE: Hourly active authenticated aggregates were removed in favor of per-event
+## hashed identity on AnalyticsSearchEvent/AnalyticsClickEvent.

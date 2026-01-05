@@ -193,12 +193,55 @@
       
       var $targetApplied = $targetCard.find('.applied-tags');
       if (!$targetApplied.length) return;
+
+      // Preserve any author-edited tooltip copy already present in the DOM (from the template).
+      // We rebuild `.applied-tags` dynamically, so without this we'd overwrite custom text.
+      var preservedHelpHtml = '';
+      var preservedBtnText = '';
+      try {
+        var $existingHelp = $targetApplied.find('.tagcard-tooltip').first();
+        if ($existingHelp && $existingHelp.length) {
+          preservedHelpHtml = String($existingHelp.html() || '');
+        }
+        var $existingBtn = $targetApplied.find('.tagcard-info').first();
+        if ($existingBtn && $existingBtn.length) {
+          preservedBtnText = String($existingBtn.text() || '');
+        }
+      } catch (e) { preservedHelpHtml = ''; preservedBtnText = ''; }
+      preservedHelpHtml = (preservedHelpHtml || '').trim();
+      preservedBtnText = (preservedBtnText || '').trim();
       
       $('.tooltip, .description-author').remove();
       var mode = (window.TAG_CATEGORY_DISPLAY || 'color');
       var wantGrouping = !!window.GROUP_RELATED_TAGS;
       $targetApplied.empty();
-      if (mode !== 'lists') { $targetApplied.append('Tags: '); }
+      // Header (kept in JS because we rebuild this container dynamically)
+      (function appendTagsHeader(){
+        var tipId = 'tagCardHelp-' + String(beatmapId || '');
+        var $label = $('<span class="tagcard-tags-label"></span>');
+        $label.append(document.createTextNode('Tags:'));
+        var $wrap = $('<span class="tagcard-info-wrap" aria-label="Tag help"></span>');
+        var btnText = preservedBtnText || 'i';
+        var $btn = $('<button class="tagcard-info" type="button" title="About tags" aria-describedby="' + tipId + '"></button>').text(btnText);
+        var $tip = $('<div class="tagcard-tooltip" id="' + tipId + '" role="tooltip"></div>');
+        if (preservedHelpHtml) {
+          $tip.html(preservedHelpHtml);
+        } else {
+          // Fallback copy
+          $tip.append('<div style="font-weight:700; margin-bottom:4px;">How tags work</div>');
+          if (isAuthenticated) {
+            $tip.append('<div>• Click a tag to add/remove it.</div>');
+            $tip.append('<div>• Teal = you applied it. Grey = you haven’t.</div>');
+          } else {
+            $tip.append('<div>• Log in to apply/remove tags.</div>');
+          }
+          $tip.append('<div>• Hover a tag to see its description.</div>');
+          $tip.append('<div>• Numbers in parentheses are total uses across all users.</div>');
+        }
+        $wrap.append($btn).append($tip);
+        $label.append(document.createTextNode(' ')).append($wrap).append(document.createTextNode(' '));
+        $targetApplied.append($label);
+      })();
       // Split positives and negatives if provided
       var negatives = [];
       var positives = [];

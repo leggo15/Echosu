@@ -1,13 +1,10 @@
 from django.utils.deprecation import MiddlewareMixin
 from django.contrib.auth.models import AnonymousUser
 from rest_framework.authtoken.models import Token as DRFToken
-from .models import APIRequestLog, CustomToken, HourlyActiveUserCount
+from .models import APIRequestLog, CustomToken
 from django.conf import settings
 import uuid
 import hashlib
-from django.core.cache import caches
-from django.utils import timezone
-from django.db.models import F
 
 class APILoggingMiddleware(MiddlewareMixin):
     def _resolve_user_from_authorization(self, request):
@@ -83,59 +80,5 @@ class AnonymousAnalyticsMiddleware(MiddlewareMixin):
         return response
 
 
-class HourlyActiveUserCountMiddleware(MiddlewareMixin):
-    """
-    Track hourly active authenticated users WITHOUT persisting identities.
-
-    Mechanism:
-    - For each authenticated request, we `cache.add()` a key for (hour, user_id).
-      This keeps uniqueness without writing user ids to DB.
-    - If the key is new, we increment HourlyActiveUserCount(hour).count.
-    """
-    CACHE_TTL_SECONDS = 60 * 60 * 30  # 30h; covers late events + clock drift
-
-    @staticmethod
-    def _hour_floor(dt):
-        try:
-            return dt.replace(minute=0, second=0, microsecond=0, tzinfo=dt.tzinfo)
-        except Exception:
-            return dt
-
-    def process_request(self, request):
-        try:
-            cache = caches['hourly_active']
-            user = getattr(request, 'user', None)
-            if not getattr(user, 'is_authenticated', False):
-                return None
-            uid = getattr(user, 'id', None)
-            if not uid:
-                return None
-            is_staff = bool(getattr(user, 'is_staff', False))
-            hour = self._hour_floor(timezone.now())
-            key = f"hau:{int(hour.timestamp())}:{int(uid)}"
-            first_seen = False
-            try:
-                first_seen = bool(cache.add(key, 1, timeout=self.CACHE_TTL_SECONDS))
-            except Exception:
-                first_seen = False
-            if not first_seen:
-                return None
-            if is_staff:
-                defaults = {'count': 1, 'staff_count': 1, 'nonstaff_count': 0}
-                obj, created = HourlyActiveUserCount.objects.get_or_create(hour=hour, defaults=defaults)
-                if not created:
-                    HourlyActiveUserCount.objects.filter(pk=obj.pk).update(
-                        count=F('count') + 1,
-                        staff_count=F('staff_count') + 1,
-                    )
-            else:
-                defaults = {'count': 1, 'staff_count': 0, 'nonstaff_count': 1}
-                obj, created = HourlyActiveUserCount.objects.get_or_create(hour=hour, defaults=defaults)
-                if not created:
-                    HourlyActiveUserCount.objects.filter(pk=obj.pk).update(
-                        count=F('count') + 1,
-                        nonstaff_count=F('nonstaff_count') + 1,
-                    )
-        except Exception:
-            pass
-        return None
+## NOTE: HourlyActiveUserCountMiddleware removed. Admin uniques breakdown now derives from
+## per-event hashed identity stored on AnalyticsSearchEvent/AnalyticsClickEvent.

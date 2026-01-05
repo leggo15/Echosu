@@ -482,8 +482,8 @@
               data: {
                 labels: labels,
                 datasets: [
-                  { label: 'Logged-in (staff)', data: staffData, backgroundColor: 'rgba(155, 89, 182, 0.70)', stack: 'u' },
-                  { label: 'Logged-in (non-staff)', data: nonStaffData, backgroundColor: 'rgba(155, 89, 182, 0.40)', stack: 'u' },
+                  { label: 'Logged-in (staff)', data: staffData, backgroundColor: 'rgba(219, 64, 219, 0.65)', stack: 'u' },
+                  { label: 'Logged-in (non-staff)', data: nonStaffData, backgroundColor: 'rgba(155, 89, 182, 0.55)', stack: 'u' },
                   { label: 'Anonymous/other', data: anonData, backgroundColor: 'rgba(255, 159, 64, 0.50)', stack: 'u' }
                 ]
               },

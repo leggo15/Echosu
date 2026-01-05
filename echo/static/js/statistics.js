@@ -440,22 +440,40 @@
       // Uniques chart: optionally stacked with logged-in counts (hour view only)
       (function () {
         var logged = u.logged_in_counts || null;
+        var loggedStaff = u.logged_in_staff_counts || null;
+        var loggedNonStaff = u.logged_in_nonstaff_counts || null;
         var labels = u.labels || [];
         var total = u.counts || [];
+        var hasBreakdown =
+          Array.isArray(loggedStaff) && Array.isArray(loggedNonStaff) &&
+          loggedStaff.length === total.length && loggedNonStaff.length === total.length &&
+          loggedStaff.length === labels.length;
         var hasLogged = Array.isArray(logged) && logged.length === total.length && logged.length === labels.length;
-        if (hasLogged) {
-          var loggedData = logged.map(function (v, i) {
+
+        if (hasBreakdown) {
+          var staffData = loggedStaff.map(function (v, i) {
             var t = Number(total[i] || 0);
-            var x = Number(v || 0);
-            return Math.max(0, Math.min(t, x));
+            return Math.max(0, Math.min(t, Number(v || 0)));
+          });
+          var nonStaffData = loggedNonStaff.map(function (v, i) {
+            var t = Number(total[i] || 0);
+            return Math.max(0, Math.min(t, Number(v || 0)));
+          });
+          // Clamp combined logged-in to total
+          var loggedTotal = staffData.map(function (_, i) { return staffData[i] + nonStaffData[i]; });
+          loggedTotal = loggedTotal.map(function (v, i) { return Math.min(Number(total[i] || 0), v); });
+          // If staff+nonstaff exceeds total, reduce nonstaff first.
+          nonStaffData = nonStaffData.map(function (v, i) {
+            var t = Number(total[i] || 0);
+            var s = Number(staffData[i] || 0);
+            return Math.max(0, Math.min(v, t - s));
           });
           var anonData = total.map(function (v, i) {
             var t = Number(v || 0);
-            var x = Number(loggedData[i] || 0);
-            return Math.max(0, t - x);
+            return Math.max(0, t - (Number(staffData[i] || 0) + Number(nonStaffData[i] || 0)));
           });
-          // Recreate if needed (different dataset structure)
-          if (!adminCharts.uniques || (adminCharts.uniques.data && adminCharts.uniques.data.datasets && adminCharts.uniques.data.datasets.length !== 2)) {
+
+          if (!adminCharts.uniques || (adminCharts.uniques.data && adminCharts.uniques.data.datasets && adminCharts.uniques.data.datasets.length !== 3)) {
             try { if (adminCharts.uniques) adminCharts.uniques.destroy(); } catch (e) {}
             var ctx = document.getElementById('adminUniquesChart');
             if (!ctx) return;
@@ -464,7 +482,8 @@
               data: {
                 labels: labels,
                 datasets: [
-                  { label: 'Logged-in active', data: loggedData, backgroundColor: 'rgba(155, 89, 182, 0.55)', stack: 'u' },
+                  { label: 'Logged-in (staff)', data: staffData, backgroundColor: 'rgba(155, 89, 182, 0.70)', stack: 'u' },
+                  { label: 'Logged-in (non-staff)', data: nonStaffData, backgroundColor: 'rgba(155, 89, 182, 0.40)', stack: 'u' },
                   { label: 'Anonymous/other', data: anonData, backgroundColor: 'rgba(255, 159, 64, 0.50)', stack: 'u' }
                 ]
               },
@@ -481,8 +500,9 @@
                           if (!items || !items.length) return '';
                           var idx = items[0].dataIndex;
                           var t = Number(total[idx] || 0);
-                          var l = Number(loggedData[idx] || 0);
-                          return 'Total unique: ' + t + ' (logged-in: ' + l + ')';
+                          var s2 = Number(staffData[idx] || 0);
+                          var n2 = Number(nonStaffData[idx] || 0);
+                          return 'Total unique: ' + t + ' (logged-in: ' + (s2 + n2) + ', staff: ' + s2 + ')';
                         } catch (e) { return ''; }
                       }
                     }
@@ -492,8 +512,39 @@
             });
           } else {
             adminCharts.uniques.data.labels = labels;
-            adminCharts.uniques.data.datasets[0].data = loggedData;
-            adminCharts.uniques.data.datasets[1].data = anonData;
+            adminCharts.uniques.data.datasets[0].data = staffData;
+            adminCharts.uniques.data.datasets[1].data = nonStaffData;
+            adminCharts.uniques.data.datasets[2].data = anonData;
+            adminCharts.uniques.update();
+          }
+        } else if (hasLogged) {
+          // Backwards-compatible: just one logged-in segment + remainder
+          var loggedData2 = logged.map(function (v, i) {
+            var t = Number(total[i] || 0);
+            var x = Number(v || 0);
+            return Math.max(0, Math.min(t, x));
+          });
+          var anonData2 = total.map(function (v, i) {
+            var t = Number(v || 0);
+            var x = Number(loggedData2[i] || 0);
+            return Math.max(0, t - x);
+          });
+          if (!adminCharts.uniques || (adminCharts.uniques.data && adminCharts.uniques.data.datasets && adminCharts.uniques.data.datasets.length !== 2)) {
+            try { if (adminCharts.uniques) adminCharts.uniques.destroy(); } catch (e) {}
+            var ctx2 = document.getElementById('adminUniquesChart');
+            if (!ctx2) return;
+            adminCharts.uniques = new Chart(ctx2.getContext('2d'), {
+              type: 'bar',
+              data: { labels: labels, datasets: [
+                { label: 'Logged-in active', data: loggedData2, backgroundColor: 'rgba(155, 89, 182, 0.55)', stack: 'u' },
+                { label: 'Anonymous/other', data: anonData2, backgroundColor: 'rgba(255, 159, 64, 0.50)', stack: 'u' }
+              ]},
+              options: { responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true, ticks: { precision: 0 } } } }
+            });
+          } else {
+            adminCharts.uniques.data.labels = labels;
+            adminCharts.uniques.data.datasets[0].data = loggedData2;
+            adminCharts.uniques.data.datasets[1].data = anonData2;
             adminCharts.uniques.update();
           }
         } else {

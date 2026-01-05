@@ -576,7 +576,11 @@ class HourlyActiveUserCount(models.Model):
     but only the aggregate count is persisted.
     """
     hour = models.DateTimeField(unique=True, db_index=True)
+    # Total active authenticated users for this hour (derived from staff/nonstaff; kept for convenience)
     count = models.PositiveIntegerField(default=0)
+    # Breakdown
+    staff_count = models.PositiveIntegerField(default=0)
+    nonstaff_count = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True, db_index=True)
 
@@ -588,4 +592,4 @@ class HourlyActiveUserCount(models.Model):
         ordering = ['-hour']
 
     def __str__(self):
-        return f"HourlyActiveUserCount({self.hour.isoformat()}): {self.count}"
+        return f"HourlyActiveUserCount({self.hour.isoformat()}): {self.count} (staff={self.staff_count}, nonstaff={self.nonstaff_count})"

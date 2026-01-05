@@ -109,6 +109,7 @@ class HourlyActiveUserCountMiddleware(MiddlewareMixin):
             uid = getattr(user, 'id', None)
             if not uid:
                 return None
+            is_staff = bool(getattr(user, 'is_staff', False))
             hour = self._hour_floor(timezone.now())
             key = f"hau:{int(hour.timestamp())}:{int(uid)}"
             first_seen = False
@@ -118,9 +119,22 @@ class HourlyActiveUserCountMiddleware(MiddlewareMixin):
                 first_seen = False
             if not first_seen:
                 return None
-            obj, created = HourlyActiveUserCount.objects.get_or_create(hour=hour, defaults={'count': 1})
-            if not created:
-                HourlyActiveUserCount.objects.filter(pk=obj.pk).update(count=F('count') + 1)
+            if is_staff:
+                defaults = {'count': 1, 'staff_count': 1, 'nonstaff_count': 0}
+                obj, created = HourlyActiveUserCount.objects.get_or_create(hour=hour, defaults=defaults)
+                if not created:
+                    HourlyActiveUserCount.objects.filter(pk=obj.pk).update(
+                        count=F('count') + 1,
+                        staff_count=F('staff_count') + 1,
+                    )
+            else:
+                defaults = {'count': 1, 'staff_count': 0, 'nonstaff_count': 1}
+                obj, created = HourlyActiveUserCount.objects.get_or_create(hour=hour, defaults=defaults)
+                if not created:
+                    HourlyActiveUserCount.objects.filter(pk=obj.pk).update(
+                        count=F('count') + 1,
+                        nonstaff_count=F('nonstaff_count') + 1,
+                    )
         except Exception:
             pass
         return None

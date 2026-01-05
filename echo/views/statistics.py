@@ -2099,17 +2099,23 @@ def statistics_admin_data(request: HttpRequest):
         # Prefetch logged-in active counts for the last 24 buckets (fast path).
         start_24h_prefetch = _hour_floor(now - timezone.timedelta(hours=23))
         end_24h_prefetch = start_24h_prefetch + timezone.timedelta(hours=24)
-        logged_map: dict[str, int] = {}
+        logged_map: dict[str, dict[str, int]] = {}
         try:
             for r in (
                 HourlyActiveUserCount.objects
                 .filter(hour__gte=start_24h_prefetch, hour__lt=end_24h_prefetch)
-                .values('hour', 'count')
+                .values('hour', 'count', 'staff_count', 'nonstaff_count')
             ):
                 h = r.get('hour')
                 c = r.get('count') or 0
+                sc = r.get('staff_count') or 0
+                nsc = r.get('nonstaff_count') or 0
                 if h:
-                    logged_map[str(_hour_floor(h))] = int(c)
+                    logged_map[str(_hour_floor(h))] = {
+                        'count': int(c),
+                        'staff': int(sc),
+                        'nonstaff': int(nsc),
+                    }
         except Exception:
             logged_map = {}
 
@@ -2148,9 +2154,25 @@ def statistics_admin_data(request: HttpRequest):
                 uniq = 0
             hour_unique_counts.append(int(uniq))
             try:
-                hour_logged_in_counts.append(int(logged_map.get(str(start), 0)))
+                rec = logged_map.get(str(start)) or {}
+                hour_logged_in_counts.append(int(rec.get('count', 0)))
             except Exception:
                 hour_logged_in_counts.append(0)
+
+        # Optional breakdown for the uniques chart overlay (hour view only)
+        hour_logged_in_staff_counts: list[int] = []
+        hour_logged_in_nonstaff_counts: list[int] = []
+        for i in range(24):
+            start = _hour_floor(now - timezone.timedelta(hours=(23 - i)))
+            rec = logged_map.get(str(start)) or {}
+            try:
+                hour_logged_in_staff_counts.append(int(rec.get('staff', 0)))
+            except Exception:
+                hour_logged_in_staff_counts.append(0)
+            try:
+                hour_logged_in_nonstaff_counts.append(int(rec.get('nonstaff', 0)))
+            except Exception:
+                hour_logged_in_nonstaff_counts.append(0)
 
         # Download % per hour (last 24h)
         hour_dl_followups: list[int] = [0] * 24
@@ -2429,7 +2451,13 @@ def statistics_admin_data(request: HttpRequest):
                 'all': { 'labels': all_labels, 'counts': all_search_counts, 'dl_followups': all_dl_followups, 'dl_pct': all_dl_pct },
             },
             'uniques': {
-                'hour': { 'labels': hour_labels, 'counts': hour_unique_counts, 'logged_in_counts': hour_logged_in_counts },
+                'hour': {
+                    'labels': hour_labels,
+                    'counts': hour_unique_counts,
+                    'logged_in_counts': hour_logged_in_counts,
+                    'logged_in_staff_counts': hour_logged_in_staff_counts,
+                    'logged_in_nonstaff_counts': hour_logged_in_nonstaff_counts,
+                },
                 'day': { 'labels': day_labels, 'counts': day_unique_counts },
                 'year': { 'labels': week_labels, 'counts': week_unique_counts },
                 'all': { 'labels': all_labels, 'counts': all_unique_counts },

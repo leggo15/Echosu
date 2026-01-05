@@ -309,7 +309,6 @@
 }
 .tagmap-mapwrap {
   position: relative;
-  min-height: 1080px;
 }
 .tagmap-fullscreen-btn {
   position: absolute;
@@ -347,7 +346,7 @@
 }
 #tagMapPanel:fullscreen .tagmap-mapwrap {
   flex: 1 1 auto;
-  min-height: 720;
+  min-height: 480;
   display: flex;
   flex-direction: column;
 }

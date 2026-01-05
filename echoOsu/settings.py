@@ -81,6 +81,8 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    # Aggregate hourly authenticated activity (count only; no user identities stored)
+    'echo.middleware.HourlyActiveUserCountMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'echo.middleware.APILoggingMiddleware',

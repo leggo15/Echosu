@@ -22,7 +22,7 @@ from django.utils import timezone
 
 # Local
 from ..models import Beatmap, Tag, TagApplication, SavedSearch, UserProfile
-from ..models import AnalyticsSearchEvent, AnalyticsClickEvent
+from ..models import AnalyticsSearchEvent, AnalyticsClickEvent, HourlyActiveUserCount
 from collections import Counter
 from .auth import api
 from .shared import format_length_hms
@@ -2094,6 +2094,25 @@ def statistics_admin_data(request: HttpRequest):
         hour_labels: list[str] = []
         hour_search_counts: list[int] = []
         hour_unique_counts: list[int] = []
+        hour_logged_in_counts: list[int] = []
+
+        # Prefetch logged-in active counts for the last 24 buckets (fast path).
+        start_24h_prefetch = _hour_floor(now - timezone.timedelta(hours=23))
+        end_24h_prefetch = start_24h_prefetch + timezone.timedelta(hours=24)
+        logged_map: dict[str, int] = {}
+        try:
+            for r in (
+                HourlyActiveUserCount.objects
+                .filter(hour__gte=start_24h_prefetch, hour__lt=end_24h_prefetch)
+                .values('hour', 'count')
+            ):
+                h = r.get('hour')
+                c = r.get('count') or 0
+                if h:
+                    logged_map[str(_hour_floor(h))] = int(c)
+        except Exception:
+            logged_map = {}
+
         for i in range(24):
             start = _hour_floor(now - timezone.timedelta(hours=(23 - i)))
             end = start + timezone.timedelta(hours=1)
@@ -2128,6 +2147,10 @@ def statistics_admin_data(request: HttpRequest):
             except Exception:
                 uniq = 0
             hour_unique_counts.append(int(uniq))
+            try:
+                hour_logged_in_counts.append(int(logged_map.get(str(start), 0)))
+            except Exception:
+                hour_logged_in_counts.append(0)
 
         # Download % per hour (last 24h)
         hour_dl_followups: list[int] = [0] * 24
@@ -2406,7 +2429,7 @@ def statistics_admin_data(request: HttpRequest):
                 'all': { 'labels': all_labels, 'counts': all_search_counts, 'dl_followups': all_dl_followups, 'dl_pct': all_dl_pct },
             },
             'uniques': {
-                'hour': { 'labels': hour_labels, 'counts': hour_unique_counts },
+                'hour': { 'labels': hour_labels, 'counts': hour_unique_counts, 'logged_in_counts': hour_logged_in_counts },
                 'day': { 'labels': day_labels, 'counts': day_unique_counts },
                 'year': { 'labels': week_labels, 'counts': week_unique_counts },
                 'all': { 'labels': all_labels, 'counts': all_unique_counts },

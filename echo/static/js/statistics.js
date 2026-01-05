@@ -437,13 +437,77 @@
         }
         adminCharts.searches.update();
       }
-      if (!adminCharts.uniques) {
-        adminCharts.uniques = renderBar('adminUniquesChart', u.labels, u.counts, 'Unique users', 'rgba(255, 159, 64, 0.5)');
-      } else {
-        adminCharts.uniques.data.labels = u.labels || [];
-        adminCharts.uniques.data.datasets[0].data = u.counts || [];
-        adminCharts.uniques.update();
-      }
+      // Uniques chart: optionally stacked with logged-in counts (hour view only)
+      (function () {
+        var logged = u.logged_in_counts || null;
+        var labels = u.labels || [];
+        var total = u.counts || [];
+        var hasLogged = Array.isArray(logged) && logged.length === total.length && logged.length === labels.length;
+        if (hasLogged) {
+          var loggedData = logged.map(function (v, i) {
+            var t = Number(total[i] || 0);
+            var x = Number(v || 0);
+            return Math.max(0, Math.min(t, x));
+          });
+          var anonData = total.map(function (v, i) {
+            var t = Number(v || 0);
+            var x = Number(loggedData[i] || 0);
+            return Math.max(0, t - x);
+          });
+          // Recreate if needed (different dataset structure)
+          if (!adminCharts.uniques || (adminCharts.uniques.data && adminCharts.uniques.data.datasets && adminCharts.uniques.data.datasets.length !== 2)) {
+            try { if (adminCharts.uniques) adminCharts.uniques.destroy(); } catch (e) {}
+            var ctx = document.getElementById('adminUniquesChart');
+            if (!ctx) return;
+            adminCharts.uniques = new Chart(ctx.getContext('2d'), {
+              type: 'bar',
+              data: {
+                labels: labels,
+                datasets: [
+                  { label: 'Logged-in active', data: loggedData, backgroundColor: 'rgba(155, 89, 182, 0.55)', stack: 'u' },
+                  { label: 'Anonymous/other', data: anonData, backgroundColor: 'rgba(255, 159, 64, 0.50)', stack: 'u' }
+                ]
+              },
+              options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true, ticks: { precision: 0 } } },
+                plugins: {
+                  legend: { position: 'top' },
+                  tooltip: {
+                    callbacks: {
+                      footer: function(items){
+                        try {
+                          if (!items || !items.length) return '';
+                          var idx = items[0].dataIndex;
+                          var t = Number(total[idx] || 0);
+                          var l = Number(loggedData[idx] || 0);
+                          return 'Total unique: ' + t + ' (logged-in: ' + l + ')';
+                        } catch (e) { return ''; }
+                      }
+                    }
+                  }
+                }
+              }
+            });
+          } else {
+            adminCharts.uniques.data.labels = labels;
+            adminCharts.uniques.data.datasets[0].data = loggedData;
+            adminCharts.uniques.data.datasets[1].data = anonData;
+            adminCharts.uniques.update();
+          }
+        } else {
+          // Fallback: single dataset
+          if (!adminCharts.uniques || (adminCharts.uniques.data && adminCharts.uniques.data.datasets && adminCharts.uniques.data.datasets.length !== 1)) {
+            try { if (adminCharts.uniques) adminCharts.uniques.destroy(); } catch (e) {}
+            adminCharts.uniques = renderBar('adminUniquesChart', labels, total, 'Unique users', 'rgba(255, 159, 64, 0.5)');
+          } else {
+            adminCharts.uniques.data.labels = labels || [];
+            adminCharts.uniques.data.datasets[0].data = total || [];
+            adminCharts.uniques.update();
+          }
+        }
+      })();
       // Per-button tiles: last used + total uses in last 30 days
       var container = document.getElementById('adminAvgClicksOverview');
       if (container) {

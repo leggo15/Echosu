@@ -520,7 +520,6 @@ class SavedSearch(models.Model):
 class AnalyticsSearchEvent(models.Model):
     """
     Anonymous search event used for usage analytics.
-    - Does NOT store user id or username.
     - Links events by a random client_id cookie that is not associated with accounts.
     """
     event_id = models.UUIDField(default=uuid.uuid4, editable=False, db_index=True)
@@ -548,7 +547,6 @@ class AnalyticsSearchEvent(models.Model):
 class AnalyticsClickEvent(models.Model):
     """
     Anonymous UI interaction within search results.
-    - Does NOT store user id or username.
     - Optionally references a prior AnalyticsSearchEvent via its UUID (event_id).
     """
     client_id = models.CharField(max_length=64, null=True, blank=True, db_index=True)
@@ -567,3 +565,27 @@ class AnalyticsClickEvent(models.Model):
 
     def __str__(self):
         return f"Click({self.action}) at {self.created_at.isoformat()}"
+
+
+# ----------------------------- Authenticated Activity (Aggregated) ----------------------------- #
+class HourlyActiveUserCount(models.Model):
+    """
+    Hourly aggregate of authenticated user activity.
+    Stores ONLY the count per hour (no user ids / usernames).
+    Uniqueness is enforced in middleware via a cache key per (hour, user_id),
+    but only the aggregate count is persisted.
+    """
+    hour = models.DateTimeField(unique=True, db_index=True)
+    count = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True, db_index=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['hour']),
+            models.Index(fields=['updated_at']),
+        ]
+        ordering = ['-hour']
+
+    def __str__(self):
+        return f"HourlyActiveUserCount({self.hour.isoformat()}): {self.count}"

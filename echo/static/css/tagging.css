@@ -47,6 +47,61 @@ html:not([data-theme="dark"]) .applied-tags .tag-group { border-color: var(--bor
 .tooltip { position: absolute; background-color: rgba(60, 60, 60, 0.9); color: #fff; padding: 6px 8px 10px 8px; border-radius: 4px; white-space: nowrap; z-index: 1000; font-size: 14px; pointer-events: none; opacity: 0; transition: opacity 0.2s ease-in-out; }
 .description-author { position: absolute; background-color: rgba(60, 60, 60, 0.0); color: #fff; padding: 0 0; border-radius: 4px; opacity: 0; transition: opacity 0.2s ease-in-out; z-index: 1001; pointer-events: none; font-size: 14px; font-style: italic; }
 
+/* Tag card help icon + hover tooltip (reuses the beatmap_detail graph tooltip style, but scoped to tag cards) */
+.tag-card .tagcard-info-wrap {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  position: relative;
+  vertical-align: middle;
+}
+.tag-card .tagcard-info {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #1b1f24;
+  color: #eaeef2;
+  border: 1px solid rgba(255,255,255,0.30);
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  line-height: 1;
+  cursor: help;
+}
+.tag-card .tagcard-info:hover,
+.tag-card .tagcard-info:focus {
+  border-color: #0d6efd;
+  outline: none;
+}
+.tag-card .tagcard-tooltip {
+  position: absolute;
+  top: 24px;
+  left: 0;
+  background: rgba(0,0,0,0.85);
+  color: #fff;
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 12px;
+  width: 280px;
+  max-width: calc(100vw - 24px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+  opacity: 0;
+  transform: translateY(-4px);
+  pointer-events: none;
+  transition: opacity .12s ease, transform .12s ease;
+  z-index: 20;
+}
+.tag-card .tagcard-info-wrap:hover .tagcard-tooltip,
+.tag-card .tagcard-info:focus + .tagcard-tooltip,
+.tag-card .tagcard-info:focus-visible + .tagcard-tooltip {
+  opacity: 1;
+  transform: translateY(0);
+}
+.tag-card .tagcard-tooltip div + div { color: #ddd; margin-top: 4px; }
+
 /* Alternating card backgrounds for lists */
 .tag-card { background: var(--card-odd); border-radius: 10px; }
 .tag-card--alt { background: var(--card-even); }

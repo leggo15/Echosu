@@ -220,7 +220,20 @@
             {% endif %}
           </div>
           <div class="applied-tags" role="list" aria-label="Applied tags">
-            Tags:
+            <span class="tagcard-tags-label">
+              Tags:
+              <span class="tagcard-info-wrap" aria-label="Tag help">
+                <button class="tagcard-info" type="button" title="About tags" aria-describedby="tagCardHelp-{{ beatmap.beatmap_id }}">!</button>
+                <div class="tagcard-tooltip" id="tagCardHelp-{{ beatmap.beatmap_id }}" role="tooltip">
+                  <div style="font-weight:700; margin-bottom:4px;">How tags work</div>
+                  <div>• Click a tag to add/remove it (when logged in).</div>
+                  <div>• Teal = you applied it. Grey = you haven’t.</div>
+                  <div>• Hover a tag to see its description.</div>
+                  <div>• Numbers in parentheses are total uses who've applied the tag.</div>
+                  <div>• The tag display can be further customized in the settings.</div>
+                </div>
+              </span>
+            </span>
             {% if beatmap.tags_with_counts %}
               {% for tag_info in beatmap.tags_with_counts %}
                 <span class="tag {% if tag_info.is_applied_by_user %}tag-applied{% else %}tag-unapplied{% endif %}"

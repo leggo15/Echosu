@@ -19,7 +19,7 @@ from echo.views.tags      import (
 from echo.views.userSettings  import (
     settings, confirm_data_deletion, delete_user_data,
 )
-from echo.views.pages      import error_page_view, custom_404_view
+from echo.views.pages      import error_page_view, custom_404_view, google_site_verification
 from echo.views.statistics import statistics, statistics_player_data, statistics_latest_maps
 from echo.views.statistics import statistics_latest_searches, statistics_latest_events, statistics_admin_data, statistics_admin_tag
 from echo.views.statistics import statistics_tag_map_data
@@ -45,6 +45,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     # Make search the default home page while keeping the URL name 'home'
     path('', search_results, name='home'),
+    path('google6293f4a951499d4d.html', google_site_verification, name='google_site_verification'),
     path('about/', about, name='about'),
     path('error/', error_page_view, name='error_page'),
     path('callback', osu_callback, name='osu_callback'),

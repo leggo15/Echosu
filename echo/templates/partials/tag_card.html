@@ -104,7 +104,15 @@
         {% if show_pp_nm or show_pp_hd or show_pp_hr or show_pp_dt or show_pp_ht or show_pp_ez or show_pp_fl %}
         <div class="pp-mods" aria-label="PP by mod">
           {% if show_pp_nm %}
-          <div class="pp-pill pp-nm" title="No Mod"><span class="pp-mod">NM</span><span class="pp-val">{{ nm|floatformat:"0" }}</span></div>
+          <div class="pp-pill pp-nm" title="No Mod">
+            <span class="pp-mod">NM</span>
+            <span class="pp-val">
+              {{ nm|floatformat:"0" }}
+              {% if beatmap.pp_overweight_delta and beatmap.pp_overweight_delta > 0 %}
+                <span style="opacity:0.82; font-weight:800;">(+{{ beatmap.pp_overweight_delta|floatformat:"0" }})</span>
+              {% endif %}
+            </span>
+          </div>
           {% endif %}
           <div class="pp-grid">
             {% if show_pp_hd %}<div class="pp-pill pp-mini pp-hd" title="Hidden"><span class="pp-mod">HD</span><span class="pp-val">{{ hd|floatformat:"0" }}</span></div>{% endif %}

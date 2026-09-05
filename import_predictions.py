@@ -39,6 +39,7 @@ def fetch_and_create_beatmap(map_id):
             "total_length": getattr(bm, "total_length", None),
             "playcount": getattr(bm, "playcount", None),
             "favourite_count": getattr(getattr(bm._beatmapset, "favourite_count", 0), "__int__", lambda: 0)(),
+            "last_updated": getattr(bm, "last_updated", None),
         }
     )
     # Regardless of created or fetched, update with details
@@ -73,6 +74,8 @@ def fetch_and_create_beatmap(map_id):
         beatmap.playcount = bm.playcount
         beatmap.favourite_count = getattr(beatmapset, 'favourite_count', 0)
         beatmap.mode = mode_mapping.get(str(bm.mode), 'unknown')
+        # osu! API exposes last update timestamp per difficulty
+        beatmap.last_updated = getattr(bm, 'last_updated', None)
 
         # Save!
         beatmap.save()
@@ -104,6 +107,10 @@ def import_predictions_with_beatmap_creation():
 
             for tag_name, confidence in preds.items():
                 tag, _ = Tag.objects.get_or_create(name=tag_name)
+                # Skip predictions if a true negative exists for this tag/map
+                if TagApplication.objects.filter(tag=tag, beatmap=beatmap, true_negative=True).exists():
+                    TagApplication.objects.filter(tag=tag, beatmap=beatmap, user__isnull=True, is_prediction=True).delete()
+                    continue
                 app, was_created = TagApplication.objects.get_or_create(
                     tag=tag,
                     beatmap=beatmap,

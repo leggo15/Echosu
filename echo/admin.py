@@ -11,10 +11,11 @@ from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.utils import timezone
 
-from .models import Beatmap, UserProfile, Tag, TagApplication, TagDescriptionHistory, TagRelation
+from .models import Beatmap, UserProfile, Tag, TagApplication, TagDescriptionHistory, TagRelation, PpWeightIndex
 from .models import APIRequestLog, AnalyticsSearchEvent, AnalyticsClickEvent
 from .views.beatmap import update_beatmap_info
 from .views.api import admin_flush_all_predictions
+from .helpers.pp_weight_index import rebuild_pp_weight_index
 
 @admin.register(Beatmap)
 class BeatmapAdmin(admin.ModelAdmin):
@@ -28,6 +29,7 @@ class BeatmapAdmin(admin.ModelAdmin):
             path('refresh-all/', self.admin_site.admin_view(self.refresh_all_view), name='echo_beatmap_refresh_all'),
             path('refresh-predicted/', self.admin_site.admin_view(self.refresh_predicted_view), name='echo_beatmap_refresh_predicted'),
             path('flush-all-predictions/', self.admin_site.admin_view(self.flush_all_predictions_view), name='echo_flush_all_predictions'),
+            path('rebuild-pp-weight-index/', self.admin_site.admin_view(self.rebuild_pp_weight_index_view), name='echo_rebuild_pp_weight_index'),
         ]
         return custom + urls
 
@@ -149,6 +151,26 @@ class BeatmapAdmin(admin.ModelAdmin):
             self.message_user(request, 'Failed to flush predictions.', level=messages.ERROR)
         return redirect('..')
 
+    def rebuild_pp_weight_index_view(self, request: HttpRequest):
+        if not request.user.is_staff:
+            self.message_user(request, 'Permission denied.', level=messages.ERROR)
+            return redirect('..')
+
+        def _worker():
+            try:
+                rebuild_pp_weight_index(degree=4)
+            except Exception:
+                # Keep background job resilient; admin can try again.
+                pass
+
+        t = threading.Thread(target=_worker, daemon=True)
+        t.start()
+        self.message_user(
+            request,
+            'PP weight index rebuild started in background (fits from all maps). Refresh later to see updated values.',
+        )
+        return redirect('..')
+
 @admin.register(UserProfile)
 class UserProfileAdmin(admin.ModelAdmin):
     list_display = ('get_username', 'osu_id', 'banned', 'get_date_joined', 'get_last_login')
@@ -216,3 +238,10 @@ class AnalyticsClickEventAdmin(admin.ModelAdmin):
     list_filter = ('action', 'created_at')
     date_hierarchy = 'created_at'
     readonly_fields = ('client_id', 'created_at', 'action', 'beatmap_id', 'search_event_id', 'meta')
+
+
+@admin.register(PpWeightIndex)
+class PpWeightIndexAdmin(admin.ModelAdmin):
+    list_display = ('mode', 'degree', 'source_count', 'rmse_pp', 'updated_at')
+    list_filter = ('mode', 'degree')
+    readonly_fields = ('created_at', 'updated_at', 'source_count', 'star_min', 'star_max', 'rmse_pp')

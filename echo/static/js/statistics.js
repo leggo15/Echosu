@@ -482,8 +482,8 @@
               data: {
                 labels: labels,
                 datasets: [
-                  { label: 'Logged-in (staff)', data: staffData, backgroundColor: 'rgba(219, 64, 219, 0.65)', stack: 'u' },
-                  { label: 'Logged-in (non-staff)', data: nonStaffData, backgroundColor: 'rgba(155, 89, 182, 0.55)', stack: 'u' },
+                  { label: 'Logged-in (staff)', data: staffData, backgroundColor: 'rgba(99, 54, 2, 0.5)', stack: 'u' },
+                  { label: 'Logged-in (non-staff)', data: nonStaffData, backgroundColor: 'rgba(174, 100, 26, 0.5)', stack: 'u' },
                   { label: 'Anonymous/other', data: anonData, backgroundColor: 'rgba(255, 159, 64, 0.50)', stack: 'u' }
                 ]
               },
@@ -911,6 +911,8 @@ function initGlobalCharts(globalCfg) {
     var data = (globalCfg && globalCfg.starCounts) || [];
     var human = (globalCfg && globalCfg.humanCounts) || [];
     var pred = (globalCfg && globalCfg.predCounts) || [];
+    var pwStars = (globalCfg && globalCfg.ppWeightStars) || [];
+    var pwCurves = (globalCfg && globalCfg.ppWeightCurves) || {};
     var c1 = document.getElementById('globalStarChart');
     if (c1 && labels.length) {
       var maxY = 0; try { maxY = Math.max.apply(null, (data || []).map(function(v){ return Number(v) || 0; })); } catch(e) {}
@@ -939,6 +941,45 @@ function initGlobalCharts(globalCfg) {
           plugins: { legend: { position: 'top' } }
         }
       });
+    }
+
+    // PP weight index curve(s): expected NM PP vs stars
+    var c3 = document.getElementById('ppWeightIndexChart');
+    if (c3 && pwStars && pwStars.length) {
+      var datasets = [];
+      function addLine(label, key, color) {
+        var arr = (pwCurves && pwCurves[key]) || [];
+        if (!arr || !arr.length) return;
+        datasets.push({
+          label: label,
+          data: arr,
+          borderColor: color,
+          backgroundColor: color,
+          borderWidth: 2,
+          pointRadius: 0,
+          tension: 0.25
+        });
+      }
+      addLine('osu!', 'osu', 'rgba(59, 130, 246, 1)');
+      addLine('taiko', 'taiko', 'rgba(16, 185, 129, 1)');
+      addLine('catch', 'fruits', 'rgba(245, 158, 11, 1)');
+      addLine('mania', 'mania', 'rgba(244, 63, 94, 1)');
+
+      if (datasets.length) {
+        new Chart(c3.getContext('2d'), {
+          type: 'line',
+          data: { labels: pwStars, datasets: datasets },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+              x: { title: { display: true, text: 'Stars' } },
+              y: { title: { display: true, text: 'Expected NM PP' }, beginAtZero: true }
+            },
+            plugins: { legend: { position: 'top' } }
+          }
+        });
+      }
     }
   } catch (e) {}
 }

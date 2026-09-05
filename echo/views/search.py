@@ -50,7 +50,7 @@ from urllib.parse import urlencode
 # ---------------------------------------------------------------------------
 # Local application imports
 # ---------------------------------------------------------------------------
-from ..models import Beatmap, Tag, TagApplication, UserProfile, SavedSearch, ManiaKeyOption
+from ..models import Beatmap, Tag, TagApplication, UserProfile, SavedSearch, ManiaKeyOption, PpWeightIndex
 from .auth import api
 from .shared import (
     compute_attribute_windows,
@@ -273,6 +273,22 @@ def search_results(request):
         return display
 
     def annotate_and_order_beatmaps(qs, include_tags, exact_tags, sort, predicted_mode):
+        def _expected_pp_expr_from_coeffs(coeffs):
+            """
+            Build a SQL expression for expected_pp(stars) using Horner's method:
+              (((c_d)*s + c_{d-1})*s + ... ) + c0
+            """
+            if not coeffs:
+                return None
+            stars_expr = F('difficulty_rating')
+            expr = Value(0.0, output_field=FloatField())
+            for c in reversed(coeffs):
+                expr = ExpressionWrapper(
+                    expr * stars_expr + Value(float(c)),
+                    output_field=FloatField(),
+                )
+            return expr
+
         # Use a single filtered relation for positive tag applications to reduce join cost
         qs = qs.annotate(ta_pos=FilteredRelation('tagapplication', condition=Q(tagapplication__true_negative=False)))
 
@@ -378,6 +394,22 @@ def search_results(request):
                 .order_by('-tag_weight')
             )
             
+        elif sort == 'overweightness':
+            # Order by (pp_nomod - expected_pp(stars)) descending.
+            # Requires a stored PP weight index for this mode; otherwise fall back to popularity.
+            coeffs = []
+            try:
+                coeffs = list(getattr(pp_index_for_mode, 'coefficients', []) or [])
+            except Exception:
+                coeffs = []
+            expected_expr = _expected_pp_expr_from_coeffs(coeffs)
+            if expected_expr is not None:
+                qs = qs.filter(pp_nomod__isnull=False, difficulty_rating__isnull=False).annotate(
+                    expected_pp=expected_expr,
+                    overweightness=ExpressionWrapper(F('pp_nomod') - expected_expr, output_field=FloatField()),
+                ).order_by('-overweightness')
+                return qs
+
         else:
             from django.db.models import FloatField, ExpressionWrapper
             import datetime
@@ -468,6 +500,12 @@ def search_results(request):
     }
     mapped_mode = MODE_MAPPING.get(selected_mode, 'osu')
     normalized_mode = Tag.normalize_mode(mapped_mode)
+
+    # Load stored PP weight equation (per-mode) once; used for overweightness sort and (+Δ) display.
+    try:
+        pp_index_for_mode = PpWeightIndex.for_mode(mapped_mode)
+    except Exception:
+        pp_index_for_mode = None
 
     beatmaps = Beatmap.objects.filter(mode__iexact=mapped_mode)
     beatmaps = beatmaps.filter(difficulty_rating__gte=star_min)
@@ -584,7 +622,7 @@ def search_results(request):
     include_like_tags = sorted(set(include_tags or []) | set(required_tags or []))
     exact_tags = identify_exact_match_tags(include_like_tags, parsed_terms)
 
-    if sort not in ['tag_weight', 'popularity']:
+    if sort not in ['tag_weight', 'popularity', 'overweightness']:
         if not request.user.is_authenticated:
             # For unauthenticated users, prefer tag_weight by default
             sort = 'tag_weight'
@@ -637,7 +675,29 @@ def search_results(request):
                 popularity=F('base_popularity') / F('years_since_update'),
             )
         )
-        beatmaps = beatmaps.order_by('-' + sort) if sort in ['tag_weight', 'popularity'] else beatmaps.order_by('-favourite_count', '-playcount')
+        if sort == 'overweightness':
+            # Mirror overweightness ordering for no-tag searches too.
+            coeffs = []
+            try:
+                coeffs = list(getattr(pp_index_for_mode, 'coefficients', []) or [])
+            except Exception:
+                coeffs = []
+            if coeffs:
+                stars_expr = F('difficulty_rating')
+                expected_expr = Value(0.0, output_field=FloatField())
+                for c in reversed(coeffs):
+                    expected_expr = ExpressionWrapper(
+                        expected_expr * stars_expr + Value(float(c)),
+                        output_field=FloatField(),
+                    )
+                beatmaps = beatmaps.filter(pp_nomod__isnull=False, difficulty_rating__isnull=False).annotate(
+                    expected_pp=expected_expr,
+                    overweightness=ExpressionWrapper(F('pp_nomod') - expected_expr, output_field=FloatField()),
+                ).order_by('-overweightness')
+            else:
+                beatmaps = beatmaps.order_by('-popularity')
+        else:
+            beatmaps = beatmaps.order_by('-' + sort) if sort in ['tag_weight', 'popularity'] else beatmaps.order_by('-favourite_count', '-playcount')
 
     # Save toggle into request so downstream helpers can read it via thread locals
     # Expose predicted_mode via context only
@@ -675,6 +735,14 @@ def search_results(request):
                 bm.tag_weight_threshold_marker = False
         else:
             bm.tag_weight_threshold_marker = False
+
+        # PP overweight delta for tag cards: (+Δ) next to NM PP when above expected curve
+        try:
+            if pp_index_for_mode and getattr(pp_index_for_mode, 'coefficients', None):
+                delta = pp_index_for_mode.overweight_delta(bm.difficulty_rating, bm.pp_nomod)
+                bm.pp_overweight_delta = delta
+        except Exception:
+            bm.pp_overweight_delta = None
 
     # Record search history in session for authenticated users (simple, per-browser)
     # Ignore empty queries

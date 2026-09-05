@@ -41,6 +41,9 @@
       <h3>Star Range: Human vs Predicted-only</h3>
       <div class="chart-container"><canvas id="globalHumanPredChart"></canvas></div>
 
+      <h3>PP Weight Index (Expected NM PP vs Stars)</h3>
+      <div class="chart-container"><canvas id="ppWeightIndexChart"></canvas></div>
+
       <div class="my-top-mappers" style="margin-top:16px;">
         <h3>Most-tagged mappers (human-applied)</h3>
         {% if global_top_mappers %}
@@ -542,6 +545,8 @@
   {{ global_star_hist_counts|default:'[]'|json_script:'globalStarCounts' }}
   {{ global_human_star_counts|default:'[]'|json_script:'globalHumanCounts' }}
   {{ global_pred_star_counts|default:'[]'|json_script:'globalPredCounts' }}
+  {{ pp_weight_stars|default:'[]'|json_script:'ppWeightStars' }}
+  {{ pp_weight_curves|default:'{}'|json_script:'ppWeightCurves' }}
   {{ my_star_hist_labels|default:'[]'|json_script:'myStarLabels' }}
   {{ my_star_hist_counts|default:'[]'|json_script:'myStarCounts' }}
   <script>
@@ -565,6 +570,13 @@
             humanCounts: ghc ? JSON.parse(ghc.textContent) : [],
             predCounts: gpc ? JSON.parse(gpc.textContent) : []
           };
+        }
+        var pws = document.getElementById('ppWeightStars');
+        var pwc = document.getElementById('ppWeightCurves');
+        if (pws && pwc) {
+          cfg.global = cfg.global || {};
+          cfg.global.ppWeightStars = JSON.parse(pws.textContent || '[]');
+          cfg.global.ppWeightCurves = JSON.parse(pwc.textContent || '{}');
         }
         el = document.getElementById('myStarLabels'); var msl = el ? JSON.parse(el.textContent) : [];
         el = document.getElementById('myStarCounts'); var msc = el ? JSON.parse(el.textContent) : [];

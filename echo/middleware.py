@@ -5,6 +5,7 @@ from .models import APIRequestLog, CustomToken
 from django.conf import settings
 import uuid
 import hashlib
+from .analytics_filters import analytics_client_id, is_automated_user_agent
 
 class APILoggingMiddleware(MiddlewareMixin):
     def _resolve_user_from_authorization(self, request):
@@ -64,7 +65,9 @@ class AnonymousAnalyticsMiddleware(MiddlewareMixin):
 
     def process_response(self, request, response):
         try:
-            if self.COOKIE_NAME not in request.COOKIES:
+            if is_automated_user_agent(request.headers.get('User-Agent')):
+                return response
+            if not analytics_client_id(request):
                 cid = str(uuid.uuid4())
                 secure = not getattr(settings, 'DEBUG', False)
                 response.set_cookie(

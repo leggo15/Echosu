@@ -15,11 +15,12 @@ import hmac
 import hashlib
 
 from ..models import AnalyticsSearchEvent, AnalyticsClickEvent, Beatmap
+from ..analytics_filters import analytics_client_id, filter_analytics
 
 
 def _get_client_id(request: HttpRequest) -> str | None:
 	# Anonymous client identifier set by middleware; not tied to a user account
-	return request.COOKIES.get('analytics_id')
+	return analytics_client_id(request)
 
 def _hash_user_id(user_id: int | str | None) -> str | None:
 	"""
@@ -46,6 +47,7 @@ def _hash_user_id(user_id: int | str | None) -> str | None:
 
 
 @require_POST
+@filter_analytics
 def log_search_event(request: HttpRequest):
 	"""
 	Log an anonymous search event.
@@ -116,6 +118,7 @@ def log_search_event(request: HttpRequest):
 
 
 @require_POST
+@filter_analytics
 def log_click_event(request: HttpRequest):
 	"""
 	Log an anonymous click/interaction event within the search results feed.
@@ -175,6 +178,7 @@ def log_click_event(request: HttpRequest):
 
 
 @require_POST
+@filter_analytics
 def log_impressions(request: HttpRequest):
 	"""
 	Increment Beatmap.shown_in_search for a batch of beatmap ids that were visible on a search results page.
@@ -216,4 +220,3 @@ def log_impressions(request: HttpRequest):
 	except Exception:
 		updated = 0
 	return JsonResponse({'ok': True, 'updated': int(updated)})
-

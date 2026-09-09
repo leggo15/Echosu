@@ -85,6 +85,25 @@ Google decides which pages to index and which titles/snippets to show.
 Run the SEO regression tests with `python scripts/test_seo.py`. This uses a temporary
 test database and stubs the osu! client to avoid network calls during app startup.
 
+### Analytics filtering
+
+Search, click and impression endpoints discard requests from known crawlers,
+preview bots, monitoring tools and identifiable scripting clients. Public pages
+stay accessible to crawlers. Anonymous analytics require the UUID cookie issued
+by the site; authenticated visitors can still be counted by their account hash.
+The browser skips analytics when `navigator.webdriver` reports automation, and
+waits for a hidden/prerendered search page to become visible before counting it.
+Search analytics initialize once per page.
+
+This reduces identifiable bot traffic; bots that imitate ordinary browsers may
+still be counted. Searches measure views of non-empty search results (including
+tag pages), and anonymous uniques estimate browsers rather than people. Historical
+events have no stored user agent or automation classification, so their bot share
+cannot be reliably reconstructed. No historical data is deleted or rewritten.
+
+Run the analytics and SEO regression tests with `python scripts/test_analytics.py`.
+Browser tracking tests use Node.js: `node --test echo/tests/analytics_browser.test.cjs`.
+
 ### Thanks / Acknowledgements
 
 * osu! team for the public API

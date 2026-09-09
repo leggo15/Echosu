@@ -1,4 +1,5 @@
 (function(){
+  var initialized = false;
   function getCookie(name){
     var value = '; ' + document.cookie;
     var parts = value.split('; ' + name + '=');
@@ -13,6 +14,7 @@
     return getCookie('csrftoken') || getCookie('CSRF-TOKEN') || '';
   }
   async function postJson(url, body){
+    if (!window.echoAnalytics || !window.echoAnalytics.allowed()) return { ok: false };
     var headers = {'Accept':'application/json','Content-Type':'application/json'};
     var csrf = getCsrf();
     if (csrf) headers['X-CSRFToken'] = csrf;
@@ -59,11 +61,13 @@
     return null;
   }
 
-  async function init(){
+  async function trackSearch(){
+    if (initialized) return;
+    initialized = true;
     var ctx = parseAnalyticsContext();
     if (!ctx) return;
-    // Only count analytics (and impressions) when the user actually typed a search query.
-    // (Do not count filter-only browsing.)
+    // Count views of non-empty search results, including shared URLs and tag pages.
+    // Filter-only browsing remains excluded.
     var queryText = (ctx.query || '').trim();
     if (!queryText) return;
 
@@ -151,6 +155,7 @@
     });
   }
 
-  window.initSearchAnalytics = init;
+  window.initSearchAnalytics = function(){
+    if (window.echoAnalytics) window.echoAnalytics.whenVisible(trackSearch);
+  };
 })();
-

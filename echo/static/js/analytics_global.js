@@ -15,6 +15,7 @@
   }
 
   async function postClick(action, beatmapId, meta){
+    if (!window.echoAnalytics || !window.echoAnalytics.allowed()) return;
     var headers = {'Accept':'application/json','Content-Type':'application/json'};
     var csrf = getCsrf();
     if (csrf) headers['X-CSRFToken'] = csrf;
@@ -151,5 +152,4 @@
     init();
   }
 })();
-
 

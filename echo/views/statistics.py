@@ -21,7 +21,7 @@ from django.template.loader import render_to_string
 from django.utils import timezone
 
 # Local
-from ..models import Beatmap, Tag, TagApplication, SavedSearch, UserProfile, PpWeightIndex
+from ..models import Beatmap, Tag, TagApplication, SavedSearch, UserProfile
 from ..models import AnalyticsSearchEvent, AnalyticsClickEvent
 from collections import Counter
 from .auth import api
@@ -739,26 +739,6 @@ def statistics(request: HttpRequest):
     except Exception:
         pass
 
-    # -------------------- PP Weight Index (Expected PP vs Stars) --------------------
-    pp_weight_stars = []
-    pp_weight_curves = {}
-    try:
-        # 0.0..15.0 in 0.1 star increments
-        pp_weight_stars = [round(i * 0.1, 1) for i in range(0, 151)]
-        for mode in [PpWeightIndex.MODE_OSU, PpWeightIndex.MODE_TAIKO, PpWeightIndex.MODE_CATCH, PpWeightIndex.MODE_MANIA]:
-            idx = PpWeightIndex.for_mode(mode)
-            if not idx or not getattr(idx, 'coefficients', None):
-                pp_weight_curves[mode] = []
-                continue
-            ys = []
-            for s in pp_weight_stars:
-                v = idx.expected_pp(s)
-                ys.append(round(float(v), 3) if v is not None else None)
-            pp_weight_curves[mode] = ys
-    except Exception:
-        pp_weight_stars = []
-        pp_weight_curves = {}
-
     # Render template
     return render(
         request,
@@ -775,8 +755,6 @@ def statistics(request: HttpRequest):
             'global_human_star_counts': global_human_star_counts,
             'global_pred_star_counts': global_pred_star_counts,
             'global_top_mappers': global_top_mappers,
-            'pp_weight_stars': pp_weight_stars,
-            'pp_weight_curves': pp_weight_curves,
             'input_user': user_query,
             'resolved_user_id': osu_id,
             'resolved_username': username,
@@ -2848,5 +2826,4 @@ def statistics_admin_tag(request: HttpRequest):
         })
     except Exception:
         return JsonResponse({})
-
 

@@ -198,7 +198,6 @@
                     <select name="sort" id="sort" onchange="document.getElementById('main-sort').value=this.value; document.querySelector('form.beatmap-form').submit();">
                         <option value="tag_weight" {% if sort == 'tag_weight' %}selected{% endif %}>Tag Weight</option>
                         <option value="popularity" {% if sort == 'popularity' %}selected{% endif %}>Popularity</option>
-                        <option value="overweightness" {% if sort == 'overweightness' %}selected{% endif %}>Overweightness</option>
                     </select>
                 </div>
                 {% if mania_key_options %}

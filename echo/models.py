@@ -3,7 +3,6 @@ from django.conf import settings
 from django.db.models import Count
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 import uuid
-import math
 
 class Genre(models.Model):
     name = models.CharField(max_length=255, unique=True)
@@ -73,90 +72,6 @@ class Beatmap(models.Model):
 
     def __str__(self):
         return self.beatmap_id or "Unknown id"
-
-
-class PpWeightIndex(models.Model):
-    """
-    Stores a single PP-vs-star "expected PP" equation (no buckets) for a given mode.
-
-    We store a polynomial model:
-      expected_pp(stars) = c0 + c1*s + c2*s^2 + ... + cd*s^d
-
-    Coefficients are fitted from *all* maps in the DB for that mode that have
-    (difficulty_rating, pp_nomod) present.
-    """
-    MODE_OSU = 'osu'
-    MODE_TAIKO = 'taiko'
-    MODE_CATCH = 'fruits'
-    MODE_MANIA = 'mania'
-    MODE_CHOICES = [
-        (MODE_OSU, 'osu!'),
-        (MODE_TAIKO, 'Taiko'),
-        (MODE_CATCH, 'Catch'),
-        (MODE_MANIA, 'Mania'),
-    ]
-
-    # One row per mode (replaced on rebuild)
-    mode = models.CharField(max_length=16, choices=MODE_CHOICES, unique=True, db_index=True)
-
-    # Polynomial degree and coefficients (c0..cd)
-    degree = models.PositiveSmallIntegerField(default=4)
-    coefficients = models.JSONField(default=list, blank=True)  # list[float]
-
-    # Diagnostics (optional, but useful in admin)
-    source_count = models.PositiveIntegerField(default=0)
-    star_min = models.FloatField(null=True, blank=True)
-    star_max = models.FloatField(null=True, blank=True)
-    rmse_pp = models.FloatField(null=True, blank=True)
-
-    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
-    updated_at = models.DateTimeField(auto_now=True, db_index=True)
-
-    class Meta:
-        indexes = [
-            models.Index(fields=['mode', 'updated_at']),
-        ]
-
-    def __str__(self):
-        return f'PpWeightIndex({self.mode}, deg={self.degree}, n={self.source_count})'
-
-    @classmethod
-    def for_mode(cls, mode_value: str | None):
-        if not mode_value:
-            return None
-        return cls.objects.filter(mode=str(mode_value).strip().lower()).first()
-
-    def expected_pp(self, stars: float | None) -> float | None:
-        """Evaluate expected PP at `stars` using Horner's method."""
-        if stars is None:
-            return None
-        try:
-            x = float(stars)
-        except Exception:
-            return None
-        coeffs = self.coefficients or []
-        if not coeffs:
-            return None
-        # Horner: (((cd)*x + c_{d-1})*x + ...) + c0
-        y = 0.0
-        for c in reversed(coeffs):
-            try:
-                y = y * x + float(c)
-            except Exception:
-                return None
-        if math.isnan(y) or math.isinf(y):
-            return None
-        return y
-
-    def overweight_delta(self, stars: float | None, pp_nomod: float | None) -> float | None:
-        """Return pp_nomod - expected_pp(stars)."""
-        exp_pp = self.expected_pp(stars)
-        if exp_pp is None or pp_nomod is None:
-            return None
-        try:
-            return float(pp_nomod) - float(exp_pp)
-        except Exception:
-            return None
 
 
 class ManiaKeyOption(models.Model):

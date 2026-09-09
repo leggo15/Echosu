@@ -27,8 +27,8 @@ from ossapi.mod import Mod
 # Django imports
 # ---------------------------------------------------------------------------
 from django.contrib.auth.models import User  # noqa: F401  (used indirectly)
-from django.core.paginator import Paginator
-from django.http import JsonResponse
+from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+from django.http import JsonResponse, Http404
 from django.template.loader import render_to_string
 from django.db.models import (
     Q,
@@ -66,6 +66,7 @@ from ..operators import (
     build_phrase_q,
 )
 from ..utils import QueryContext
+from ..seo import SEARCH_MODES, search_metadata
 # -------------------------- Search History Actions -------------------------- #
 
 from django.views.decorators.http import require_POST
@@ -140,7 +141,7 @@ def delete_saved_search(request):
 
 # ----------------------------- Search Views ----------------------------- #
 
-def search_results(request):
+def search_results(request, landing_tag=None):
     '''Main search endpoint returning paginated beatmap results.'''
 
     # -------------------------------------------------------------
@@ -432,12 +433,12 @@ def search_results(request):
     # -------------------------------------------------------------
     # Query parameter handling begins here.
     # -------------------------------------------------------------
-    query = request.GET.get('query', '').strip()
+    query = ('.' + _json.dumps(landing_tag.name, ensure_ascii=False)) if landing_tag else request.GET.get('query', '').strip()
 
     # Normalize commas in query input:
     # - If any quotes are present, just remove commas (treat existing quoted phrases as-is)
     # - If no quotes present but commas exist, split on commas and quote each token
-    if ',' in query:
+    if not landing_tag and ',' in query:
         if '"' in query or "'" in query:
             # Remove commas, keep spacing readable
             query = re.sub(r'\s*,\s*', ' ', query)
@@ -453,6 +454,8 @@ def search_results(request):
         except Exception:
             user_default_mode = 'osu'
     selected_mode = (request.GET.get('mode') or user_default_mode or 'osu').strip().lower()
+    if landing_tag:
+        selected_mode = SEARCH_MODES[landing_tag.mode]
     star_min_raw = (request.GET.get('star_min', '0') or '0').strip()
     star_max_raw = (request.GET.get('star_max', '10') or '10').strip()
     star_min = star_min_raw
@@ -535,7 +538,7 @@ def search_results(request):
                 default_user_keys = getattr(request.user.settings, 'default_mania_keys', 'any') or 'any'
             except Exception:
                 default_user_keys = 'any'
-        selected_keys = requested_keys or default_user_keys
+        selected_keys = 'any' if landing_tag else (requested_keys or default_user_keys)
         if selected_keys not in mania_value_strings and selected_keys != 'any':
             selected_keys = 'any'
         if selected_keys != 'any':
@@ -615,12 +618,20 @@ def search_results(request):
         simple_phrase = derive_simple_phrase(parsed_terms)
         if simple_phrase:
             phrase_terms.append(simple_phrase)
-    beatmaps, include_tags, required_tags, pp_calc_params = build_query_conditions(beatmaps, search_term_values, predicted_mode, phrase_terms)
+    if landing_tag:
+        # Resolve by ID, bypassing query operators and ambiguous/overlapping tag names.
+        matching_maps = TagApplication.objects.filter(tag=landing_tag, true_negative=False).values('beatmap_id')
+        beatmaps = beatmaps.filter(pk__in=matching_maps)
+        include_tags, required_tags, pp_calc_params = [landing_tag.name], [], {}
+    else:
+        beatmaps, include_tags, required_tags, pp_calc_params = build_query_conditions(beatmaps, search_term_values, predicted_mode, phrase_terms)
 
     stemmed_terms = process_search_terms(parsed_terms)
     # Combine include + required tags for weighting and exact-match purposes
     include_like_tags = sorted(set(include_tags or []) | set(required_tags or []))
     exact_tags = identify_exact_match_tags(include_like_tags, parsed_terms)
+    if landing_tag:
+        exact_tags = {landing_tag.name}
 
     if sort not in ['tag_weight', 'popularity', 'overweightness']:
         if not request.user.is_authenticated:
@@ -704,10 +715,18 @@ def search_results(request):
 
     # Lightweight queryset hints to avoid unnecessary payloads/N+1s
     beatmaps = beatmaps.prefetch_related('genres')
+    if landing_tag:
+        beatmaps = beatmaps.order_by(*beatmaps.query.order_by, 'pk')
 
     # Server-side paginate to a modest page size to reduce template rendering cost
     paginator = Paginator(beatmaps, 10)
-    page_obj = paginator.get_page(request.GET.get('page'))
+    if landing_tag:
+        try:
+            page_obj = paginator.page(request.GET.get('page', '1'))
+        except (EmptyPage, PageNotAnInteger):
+            raise Http404('This tag results page does not exist.')
+    else:
+        page_obj = paginator.get_page(request.GET.get('page'))
 
 
 
@@ -827,6 +846,7 @@ def search_results(request):
         request,
         'search_results.html',
         {
+            **search_metadata(request, query, page_obj, landing_tag),
             'beatmaps': page_obj,
             'query': query,
             'active_mode': selected_mode,

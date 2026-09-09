@@ -64,6 +64,27 @@ resp.raise_for_status()
 print(resp.json())
 ```
 
+### Search engine discovery
+
+Public pages include server-rendered titles, descriptions and canonical URLs. Set
+`SITE_URL` to the public HTTPS origin (default: `https://www.echosu.com`) so canonical
+links and sitemaps agree even behind a reverse proxy.
+
+Each tag has a landing page at `/tags/<id>/<slug>/`, linked from the Tag Library.
+It uses the existing search UI with the exact tag and its game mode selected, shows
+the tag description and matching beatmaps in HTML, and supports pagination. IDs
+keep identical names in different modes and colliding slugs distinct; old slugs
+redirect to the current URL. Empty tags are marked `noindex` and omitted from the
+tag sitemap. Regular searches and filter combinations are also marked `noindex`.
+
+After deployment, submit `/sitemap.xml` in Google Search Console and inspect a tag
+URL. `/robots.txt` also advertises this sitemap. The sitemap updates from the
+database automatically; no migration or manually generated tag pages are needed.
+Google decides which pages to index and which titles/snippets to show.
+
+Run the SEO regression tests with `python scripts/test_seo.py`. This uses a temporary
+test database and stubs the osu! client to avoid network calls during app startup.
+
 ### Thanks / Acknowledgements
 
 * osu! team for the public API

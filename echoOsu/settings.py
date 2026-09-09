@@ -25,6 +25,7 @@ DEBUG = _get_bool('DEBUG', default=True)
 
 DEBUG_PORT = int(os.getenv('DEBUG_PORT', '8000'))
 BASE_URL = f"127.0.0.1" if DEBUG else "echosu.com"
+SITE_URL = os.getenv('SITE_URL', 'https://www.echosu.com').rstrip('/')
 
 # Allow override via .env (JSON list or comma-separated)
 _allowed_hosts_env = os.getenv('ALLOWED_HOSTS')
@@ -68,6 +69,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django.contrib.sitemaps',
     'echo',
     'storages',
     'rest_framework',
@@ -106,6 +108,7 @@ TEMPLATES = [
                 'django.contrib.messages.context_processors.messages',
                 'echo.context_processors.add_user_profile_to_context',
                 'echo.context_processors.osu_oauth_url',
+                'echo.seo.page_metadata',
             ],
         },
     },

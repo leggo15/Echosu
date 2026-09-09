@@ -1,7 +1,6 @@
 {% extends 'base.html' %}
 {% load static %}
 
-{% block title %}Search Results{% endblock %}
 {% block body_class %}page-search-results{% endblock %}
 
 {% block head_css %}
@@ -11,6 +10,13 @@
 {% endblock %}
 
 {% block content %}
+    {% if landing_tag %}
+      <section class="tag-search-intro" aria-labelledby="tag-search-heading">
+        <h1 id="tag-search-heading">{{ search_heading }}</h1>
+        {% if landing_tag.description %}<p>{{ landing_tag.description }}</p>{% endif %}
+        <p>Browse {{ results_total }} matching beatmap{{ results_total|pluralize }}. Refine your search below, or <a href="{% url 'tag_library' %}">explore more tags</a>.</p>
+      </section>
+    {% endif %}
     <meta name="csrf-token" content="{{ csrf_token }}">
 
         <h2 class="collapsible-description-header" aria-expanded="false" aria-controls="add-beatmap-content" role="button" tabindex="0">
@@ -246,8 +252,13 @@
     <div class="pagination">
         <span class="step-links">
             {% if beatmaps.has_previous %}
+              {% if landing_tag %}
+                <a href="{{ landing_tag.get_absolute_url }}">&laquo; first</a>
+                <a href="{% if beatmaps.previous_page_number == 1 %}{{ landing_tag.get_absolute_url }}{% else %}?page={{ beatmaps.previous_page_number }}{% endif %}">previous</a>
+              {% else %}
                 <a href="?query={{ query|urlencode }}&mode={{ active_mode }}&star_min={{ star_min }}&star_max={{ star_max }}&sort={{ sort }}{% if status_ranked %}&status_ranked=ranked{% endif %}{% if status_loved %}&status_loved=loved{% endif %}{% if status_unranked %}&status_unranked=unranked{% endif %}&include_predicted={{ request.GET.include_predicted }}&exclude_player={{ request.GET.exclude_player }}{% if selected_keys and selected_keys != 'any' %}&keys={{ selected_keys }}{% endif %}&page=1">&laquo; first</a>
                 <a href="?query={{ query|urlencode }}&mode={{ active_mode }}&star_min={{ star_min }}&star_max={{ star_max }}&sort={{ sort }}{% if status_ranked %}&status_ranked=ranked{% endif %}{% if status_loved %}&status_loved=loved{% endif %}{% if status_unranked %}&status_unranked=unranked{% endif %}&include_predicted={{ request.GET.include_predicted }}&exclude_player={{ request.GET.exclude_player }}{% if selected_keys and selected_keys != 'any' %}&keys={{ selected_keys }}{% endif %}&page={{ beatmaps.previous_page_number }}">previous</a>
+              {% endif %}
             {% endif %}
 
             <span class="current">
@@ -255,8 +266,13 @@
             </span>
 
             {% if beatmaps.has_next %}
+              {% if landing_tag %}
+                <a href="?page={{ beatmaps.next_page_number }}">next</a>
+                <a href="?page={{ beatmaps.paginator.num_pages }}">last &raquo;</a>
+              {% else %}
                 <a href="?query={{ query|urlencode }}&mode={{ active_mode }}&star_min={{ star_min }}&star_max={{ star_max }}&sort={{ sort }}{% if status_ranked %}&status_ranked=ranked{% endif %}{% if status_loved %}&status_loved=loved{% endif %}{% if status_unranked %}&status_unranked=unranked{% endif %}&include_predicted={{ request.GET.include_predicted }}&exclude_player={{ request.GET.exclude_player }}{% if selected_keys and selected_keys != 'any' %}&keys={{ selected_keys }}{% endif %}&page={{ beatmaps.next_page_number }}">next</a>
                 <a href="?query={{ query|urlencode }}&mode={{ active_mode }}&star_min={{ star_min }}&star_max={{ star_max }}&sort={{ sort }}{% if status_ranked %}&status_ranked=ranked{% endif %}{% if status_loved %}&status_loved=loved{% endif %}{% if status_unranked %}&status_unranked=unranked{% endif %}&include_predicted={{ request.GET.include_predicted }}&exclude_player={{ request.GET.exclude_player }}{% if selected_keys and selected_keys != 'any' %}&keys={{ selected_keys }}{% endif %}&page={{ beatmaps.paginator.num_pages }}">last &raquo;</a>
+              {% endif %}
             {% endif %}
         </span>
     </div>

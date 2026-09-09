@@ -1,7 +1,6 @@
 {% extends 'base.html' %}
 {% load static %}
 
-{% block title %}Tag Library{% endblock %}
 {% block head_css %}
   <link rel="stylesheet" href="{% static 'css/tag_library.css' %}">
   <style>
@@ -60,7 +59,7 @@
         <div class="top-tags">
             {% for tag in top_tags %}
                 <a 
-                    href="{% url 'search_results' %}?query={{ '"'|add:tag.name|add:'"'|urlencode }}"
+                    href="{{ tag.get_absolute_url }}"
                     class="tag-pill"
                     data-name="{{ tag.name|lower }}"
                     aria-label="Search results for tag {{ tag.name }}"
@@ -89,7 +88,7 @@
     <ul class="tag-list" id="tag-list">
         {% for tag in tags %}
             <li class="tag-item" data-name="{{ tag.name|lower }}">
-                <a href="{% url 'search_results' %}?query={{ '"'|add:tag.name|add:'"'|urlencode }}" 
+                <a href="{{ tag.get_absolute_url }}"
                     class="tag-link" 
                     aria-label="Search results for tag {{ tag.name }}">
                     <span class="tag-name" 

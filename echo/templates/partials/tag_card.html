@@ -2,7 +2,7 @@
 <!-- partials/tag_card.html -->
 <div class="beatmap-card-wrapper" id="beatmap-card-{{ beatmap.beatmap_id }}" data-beatmap-id="{{ beatmap.beatmap_id }}" data-beatmap-mode="{{ beatmap.mode }}">
   <div class="chrome-actions">
-    {% if request.path == '/' or request.path == '/search_results/' %}
+    {% if request.path == '/' or request.path == '/search_results/' or landing_tag %}
       <label class="bulk-select-label">
         <input
           type="checkbox"
@@ -256,7 +256,7 @@
             {% endif %}
           </div>
         </div>
-        {% if request.path == '/' or request.path == '/search_results/' %}
+        {% if request.path == '/' or request.path == '/search_results/' or landing_tag %}
           {% if sort == 'tag_weight' %}
             <i class="weight">[{{ beatmap.tag_weight|default_if_none:0|floatformat:"2" }}]</i>
           {% else %}

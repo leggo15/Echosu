@@ -305,6 +305,16 @@ class Tag(models.Model):
     def __str__(self):
         return self.name
     
+    def get_absolute_url(self):
+        from django.urls import reverse
+        from django.utils.text import slugify
+
+        # The ID keeps names that share a slug (or belong to different modes) distinct.
+        return reverse('tag_search', kwargs={
+            'tag_id': self.pk,
+            'slug': slugify(self.name) or 'tag',
+        })
+
     @classmethod
     def normalize_mode(cls, mode_value: str | None) -> str:
         mapping = {

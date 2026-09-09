@@ -2,6 +2,9 @@ from django.contrib import admin
 from django.contrib.auth.views import LogoutView
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
+from django.contrib.sitemaps.views import sitemap
+from echo.sitemaps import sitemaps
+from echo.views.seo import tag_search, robots_txt, sitemap_index
 
 #  --------  new view imports  --------
 from echo.views.home      import about, tag_library
@@ -45,6 +48,10 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     # Make search the default home page while keeping the URL name 'home'
     path('', search_results, name='home'),
+    path('tags/<int:tag_id>/<slug:slug>/', tag_search, name='tag_search'),
+    path('robots.txt', robots_txt, name='robots_txt'),
+    path('sitemap.xml', sitemap_index, name='sitemap'),
+    path('sitemaps/<str:section>.xml', sitemap, {'sitemaps': sitemaps}, name='sitemap_section'),
     path('google6293f4a951499d4d.html', google_site_verification, name='google_site_verification'),
     path('about/', about, name='about'),
     path('error/', error_page_view, name='error_page'),

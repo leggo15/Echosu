@@ -4,7 +4,10 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{% block title %}Echo osu{% endblock %}</title>
+    <title>{% block title %}{{ page_title|default:'echosu - Find osu! Beatmaps by Tags' }}{% endblock %}</title>
+    <meta name="description" content="{% block description %}{{ page_description|default:'Discover osu! beatmaps with community tags and advanced search filters on echosu.' }}{% endblock %}">
+    <meta name="robots" content="{% block robots %}{{ page_robots|default:'noindex,follow' }}{% endblock %}">
+    {% if canonical_url %}<link rel="canonical" href="{{ canonical_url }}">{% endif %}
     <script>
       (function() {
         try {
@@ -46,5 +49,4 @@
     {% block foot_js %}{% endblock %}
   </body>
   </html>
-
 

@@ -71,8 +71,11 @@ Public pages include server-rendered titles, descriptions and canonical URLs. Se
 links and sitemaps agree even behind a reverse proxy.
 
 Each tag has a landing page at `/tags/<id>/<slug>/`, linked from the Tag Library.
-It uses the existing search UI with the exact tag and its game mode selected, shows
-the tag description and matching beatmaps in HTML, and supports pagination. IDs
+It uses the existing search UI with the exact tag and its game mode selected, renders
+matching beatmaps in HTML, and supports pagination. Tag descriptions stay in the
+HTML head metadata without an extra visible introduction. Tag-page titles and meta
+descriptions use singular-style labels such as "osu! Jump Maps"; stored tag names,
+search queries and canonical URLs keep their original spelling. IDs
 keep identical names in different modes and colliding slugs distinct; old slugs
 redirect to the current URL. Empty tags are marked `noindex` and omitted from the
 tag sitemap. Regular searches and filter combinations are also marked `noindex`.

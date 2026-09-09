@@ -60,6 +60,18 @@ def plain_description(text):
     return Truncator(' '.join(strip_tags(text or '').split())).chars(160)
 
 
+def tag_search_label(name):
+    """Use singular-style tag wording in metadata without changing stored tags."""
+    label = name.strip()
+    # Preserve singular words such as "infamous", "focus" and "cross".
+    word = label.rsplit(' ', 1)[-1].lower()
+    if len(word) <= 1 or not word.endswith('s'):
+        return label
+    if word.endswith(('ss', 'us', 'is', 'ous')) or word in {'news', 'series', 'species'}:
+        return label
+    return label[:-1]
+
+
 def page_metadata(request):
     match = getattr(request, 'resolver_match', None)
     name = match.url_name if match else None
@@ -80,21 +92,21 @@ def page_metadata(request):
 def search_metadata(request, query, page, tag=None):
     suffix = f' - Page {page.number}' if page.number > 1 else ''
     if tag is not None:
-        heading = f'{tag.name.capitalize()} {MODE_LABELS[tag.mode]} Beatmaps'
+        label = tag_search_label(tag.name)
+        title = f'{MODE_LABELS[tag.mode]} {label.title()} Maps'
         description = plain_description(
-            f'Find {tag.name} beatmaps for {MODE_LABELS[tag.mode]} on echosu. '
+            f'Find {MODE_LABELS[tag.mode]} {label} maps on echosu. '
             + (tag.description or 'Browse matching maps and refine your search by difficulty, BPM and more.')
         )
         path = tag.get_absolute_url()
         if page.number > 1:
             path += f'?page={page.number}'
         return {
-            'page_title': f'{heading}{suffix} - echosu',
+            'page_title': f'{title}{suffix} - echosu',
             'page_description': description,
             'page_robots': 'index,follow' if page.paginator.count else 'noindex,follow',
             'canonical_url': absolute_url(path),
             'landing_tag': tag,
-            'search_heading': heading,
         }
 
     # Only the unfiltered first page is a search landing page. Arbitrary searches

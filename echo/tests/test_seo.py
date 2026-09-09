@@ -95,14 +95,16 @@ class SeoTests(TestCase):
     def test_tag_landing_renders_matching_maps_and_search_form_in_html(self):
         response = self.client.get(self.streams.get_absolute_url())
         head = self.head(response)
-        self.assertEqual(head.titles, ['Streams osu! Beatmaps - echosu'])
+        self.assertEqual(head.titles, ['osu! Stream Maps - echosu'])
         self.assertEqual(head.canonicals, ['https://www.echosu.com' + self.streams.get_absolute_url()])
         self.assertEqual(head.robots, ['index,follow'])
         self.assertEqual(response.context['results_total'], 12)
         self.assertEqual(response.context['query'], '."streams"')
         self.assertEqual(response.context['active_mode'], 'osu')
-        self.assertContains(response, '<h1 id="tag-search-heading">Streams osu! Beatmaps</h1>')
-        self.assertContains(response, 'Continuous patterns to practice stream control.')
+        self.assertNotContains(response, 'tag-search-intro')
+        self.assertNotContains(response, 'Refine your search below')
+        self.assertIn('Find osu! stream maps', head.descriptions[0])
+        self.assertIn('Continuous patterns to practice stream control.', head.descriptions[0])
         self.assertContains(response, 'bulk-select-checkbox')
         self.assertContains(response, 'href="?page=2"')
         self.assertNotContains(response, 'beatmap-card-2000')
@@ -151,13 +153,19 @@ class SeoTests(TestCase):
         self.assertEqual(response['Location'], first.get_absolute_url() + '?page=2')
 
     def test_tag_names_are_not_interpreted_as_search_operators(self):
-        for name in ['bpm>=999', '12345', 'a,b', 'a "quoted" tag']:
+        for name in ['bpm>=999', '12345', 'a,b', 'a "quoted" tag', 'jumps', 'spaced streams', 'infamous']:
             with self.subTest(name=name):
                 tag = Tag.objects.create(name=name, description_author=None)
                 TagApplication.objects.create(tag=tag, beatmap=self.unrelated_map, user=self.user)
                 response = self.client.get(tag.get_absolute_url())
                 self.assertEqual(response.context['results_total'], 1)
                 self.assertContains(response, 'beatmap-card-2000')
+                if name in {'jumps', 'spaced streams', 'infamous'}:
+                    label = {'jumps': 'jump', 'spaced streams': 'spaced stream', 'infamous': 'infamous'}[name]
+                    self.assertEqual(self.head(response).titles, [f'osu! {label.title()} Maps - echosu'])
+                    self.assertEqual(response.context['query'], f'."{name}"')
+                    tag.refresh_from_db()
+                    self.assertEqual(tag.name, name)
 
     def test_filtering_a_tag_url_preserves_query_and_mode(self):
         response = self.client.get(self.mania.get_absolute_url(), {'star_min': '4'})

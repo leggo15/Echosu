@@ -444,8 +444,10 @@
   <section class="tab-section" data-section="admin" style="display:none;">
     <div class="stats-section">
       <h2>Admin Analytics</h2>
-      <p>New events exclude identified crawlers and browser automation. Historical events may still include bots.</p>
-      <p>Searches count views of non-empty search results, including tag pages. Anonymous unique users are estimated from browser cookies.</p>
+      <label class="admin-bot-filter" title="Anonymous browsers with only one recorded search or click across all time. Automatic impressions do not count as another interaction; unidentified anonymous events are also included in this label.">
+        <input type="checkbox" id="adminIncludeLikelyBots" {% if request.GET.include_likely_bots == '1' %}checked{% endif %}>
+        Include likely bots
+      </label>
       <div class="my-stats-overview" id="adminDownloadOverview" style="margin-bottom:12px;">
         <!-- Filled dynamically by statistics.js -->
       </div>

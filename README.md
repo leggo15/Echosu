@@ -101,11 +101,26 @@ Search analytics initialize once per page.
 This reduces identifiable bot traffic; bots that imitate ordinary browsers may
 still be counted. Searches measure views of non-empty search results (including
 tag pages), and anonymous uniques estimate browsers rather than people. Historical
-events have no stored user agent or automation classification, so their bot share
-cannot be reliably reconstructed. No historical data is deleted or rewritten.
+events have no stored user agent or automation classification, so known-crawler
+detection cannot be applied to them retrospectively.
+
+Admin analytics and event logs also default to excluding **likely bots**: anonymous
+browser IDs with fewer than two recorded searches/clicks across their entire history.
+Automatic impression events do not count as an interaction, and anonymous events
+without a browser ID are treated as likely bots because they cannot be linked to
+other activity. Logged-in and staff events are always retained. This is a heuristic,
+not proof that a visitor is a bot.
+
+The **Include likely bots** checkbox at the top of Admin Analytics restores these
+events in every chart, conversion metric, tag statistic and event log; Django's
+analytics model lists have the same default and an include filter. The classification
+is calculated from the database when reports are loaded, before date/tag/pagination
+filters, so it applies to historical and future data and updates after a second
+interaction. No historical data is deleted or rewritten, and no migration is needed.
 
 Run the analytics and SEO regression tests with `python scripts/test_analytics.py`.
-Browser tracking tests use Node.js: `node --test echo/tests/analytics_browser.test.cjs`.
+Browser tracking and admin filter tests use Node.js:
+`node --test echo/tests/analytics_browser.test.cjs echo/tests/statistics_browser.test.cjs`.
 
 ### Thanks / Acknowledgements
 

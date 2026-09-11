@@ -192,11 +192,46 @@ class APIRequestLogAdmin(admin.ModelAdmin):
     readonly_fields = ('user', 'method', 'path', 'timestamp')
 
 
+class LikelyBotFilter(admin.SimpleListFilter):
+    title = 'likely bots'
+    parameter_name = 'include_likely_bots'
+
+    def lookups(self, request, model_admin):
+        return [('1', 'Include likely bots')]
+
+    def choices(self, changelist):
+        yield {
+            'selected': self.value() != '1',
+            'query_string': changelist.get_query_string(remove=[self.parameter_name]),
+            'display': 'Exclude likely bots',
+        }
+        yield {
+            'selected': self.value() == '1',
+            'query_string': changelist.get_query_string({self.parameter_name: '1'}),
+            'display': 'Include likely bots',
+        }
+
+    def queryset(self, request, queryset):
+        return queryset if self.value() == '1' else queryset.filter(is_likely_bot=False)
+
+
+class AnalyticsEventAdmin(admin.ModelAdmin):
+    show_full_result_count = False
+
+    def get_queryset(self, request):
+        from .analytics_filters import admin_analytics_events
+        return admin_analytics_events(self.model, include_bots=True)
+
+    @admin.display(description='Traffic')
+    def traffic_classification(self, obj):
+        return 'Likely bot' if obj.is_likely_bot else ''
+
+
 @admin.register(AnalyticsSearchEvent)
-class AnalyticsSearchEventAdmin(admin.ModelAdmin):
-    list_display = ('created_at', 'client_id', 'short_query', 'results_count', 'sort', 'predicted_mode')
+class AnalyticsSearchEventAdmin(AnalyticsEventAdmin):
+    list_display = ('created_at', 'client_id', 'short_query', 'results_count', 'sort', 'predicted_mode', 'traffic_classification')
     search_fields = ('client_id', 'query')
-    list_filter = ('sort', 'predicted_mode', 'created_at')
+    list_filter = (LikelyBotFilter, 'sort', 'predicted_mode', 'created_at')
     date_hierarchy = 'created_at'
     readonly_fields = ('event_id', 'client_id', 'created_at', 'query', 'tags', 'results_count', 'sort', 'predicted_mode', 'flags')
 
@@ -210,9 +245,9 @@ class AnalyticsSearchEventAdmin(admin.ModelAdmin):
 
 
 @admin.register(AnalyticsClickEvent)
-class AnalyticsClickEventAdmin(admin.ModelAdmin):
-    list_display = ('created_at', 'client_id', 'action', 'beatmap_id', 'search_event_id')
+class AnalyticsClickEventAdmin(AnalyticsEventAdmin):
+    list_display = ('created_at', 'client_id', 'action', 'beatmap_id', 'search_event_id', 'traffic_classification')
     search_fields = ('client_id', 'beatmap_id', 'search_event_id', 'action')
-    list_filter = ('action', 'created_at')
+    list_filter = (LikelyBotFilter, 'action', 'created_at')
     date_hierarchy = 'created_at'
     readonly_fields = ('client_id', 'created_at', 'action', 'beatmap_id', 'search_event_id', 'meta')

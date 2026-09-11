@@ -417,6 +417,23 @@
   fill: rgba(255,255,255,0.78) !important;
 }
 
+.admin-bot-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  cursor: pointer;
+}
+
+.likely-bot-label {
+  display: inline-block;
+  padding: 2px 7px;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  color: var(--text-muted, #777);
+}
+
 /* Tagmap heatmap (nested treemap) */
 .tagmap-container svg rect.region {
   shape-rendering: crispEdges;
@@ -436,5 +453,4 @@
 .tagmap-container svg g.mapper.is-dimmed text.mapper-text {
   opacity: 0.15 !important;
 }
-
 

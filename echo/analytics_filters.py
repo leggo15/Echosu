@@ -5,6 +5,7 @@ import re
 from uuid import UUID
 
 from django.http import JsonResponse
+from django.db.models import BooleanField, Case, Exists, OuterRef, Q, Value, When
 
 
 # Match identifiable automated clients, not generic words such as "bot" inside
@@ -55,3 +56,33 @@ def filter_analytics(view):
         return view(request, *args, **kwargs)
 
     return wrapped
+
+
+def include_likely_bots(request):
+    return request.GET.get('include_likely_bots') == '1'
+
+
+def admin_analytics_events(model, *, include_bots=False):
+    """Classify anonymous one-interaction browsers using their entire stored history.
+
+    Compute this at read time so old events and new activity follow the same rule.
+    Capped, indexed existence checks avoid counting a prolific client's entire
+    history for each event. Automatic impressions do not establish engagement.
+    """
+    from .models import AnalyticsClickEvent, AnalyticsSearchEvent
+
+    searches = AnalyticsSearchEvent.objects.filter(client_id=OuterRef('client_id'))
+    clicks = AnalyticsClickEvent.objects.filter(client_id=OuterRef('client_id')).exclude(action='impression')
+    multiple_interactions = (
+        Exists(searches[1:2]) | Exists(clicks[1:2]) | (Exists(searches) & Exists(clicks))
+    )
+    anonymous = (Q(logged_in_user_id__isnull=True) | Q(logged_in_user_id='')) & Q(is_staff=False)
+    # Missing identifiers cannot be linked to other visits; do not pool them into
+    # one apparently active browser. Logged-in events always remain included.
+    missing_identity = Q(client_id__isnull=True) | Q(client_id='')
+    events = model.objects.annotate(is_likely_bot=Case(
+        When(anonymous & (missing_identity | ~multiple_interactions), then=Value(True)),
+        default=Value(False),
+        output_field=BooleanField(),
+    ))
+    return events if include_bots else events.filter(is_likely_bot=False)

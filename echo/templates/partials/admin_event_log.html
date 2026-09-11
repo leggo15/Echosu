@@ -19,9 +19,9 @@
         <span class="event-detail">{{ e.label }}</span>
       {% endif %}
       <span class="event-time">{{ e.created_at|date:"Y-m-d H:i" }}</span>
+      {% if e.is_likely_bot %}<span class="likely-bot-label">Likely bot</span>{% endif %}
     </div>
   </div>
 {% empty %}
   <div class="admin-event-row"><span>No events.</span></div>
 {% endfor %}
-

@@ -111,6 +111,13 @@
   var adminDataCache = null;
   var adminTagCache = null;
 
+  function adminRequestUrl(path){
+    var url = new URL(path, window.location.origin);
+    var params = new URLSearchParams(window.location.search);
+    url.searchParams.set('include_likely_bots', params.get('include_likely_bots') === '1' ? '1' : '0');
+    return url;
+  }
+
   function startLatestPoll() {
     if (latestPollTimer) return;
     function tick(){
@@ -157,7 +164,7 @@
         if (window.__adminEventsPaused) return;
         if (adminLatestBusy) return;
         adminLatestBusy = true;
-        var url = new URL(window.location.origin + '/statistics/latest-events/');
+        var url = adminRequestUrl('/statistics/latest-events/');
         url.searchParams.set('offset', '0');
         url.searchParams.set('limit', '30');
         fetch(url.toString(), { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
@@ -191,7 +198,7 @@
   }
 
   function fetchAdminData(){
-    return fetch('/statistics/admin-data/', { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+    return fetch(adminRequestUrl('/statistics/admin-data/').toString(), { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
       .then(function(r){ return r.json(); })
       .catch(function(){ return null; });
   }
@@ -621,7 +628,7 @@
   }
 
   function fetchAdminTagData(tag, mode){
-    var url = new URL(window.location.origin + '/statistics/admin-tag/');
+    var url = adminRequestUrl('/statistics/admin-tag/');
     url.searchParams.set('tag', tag || '');
     if (mode) { url.searchParams.set('mode', mode); }
     return fetch(url.toString(), { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
@@ -699,6 +706,19 @@
   function initAdmin(){
     if (adminChartsInitialized) return;
     adminChartsInitialized = true;
+    var botToggle = document.getElementById('adminIncludeLikelyBots');
+    if (botToggle) {
+      botToggle.checked = new URLSearchParams(window.location.search).get('include_likely_bots') === '1';
+      botToggle.addEventListener('change', function(){
+        var url = new URL(window.location.href);
+        url.searchParams.set('tab', 'admin');
+        if (botToggle.checked) url.searchParams.set('include_likely_bots', '1');
+        else url.searchParams.delete('include_likely_bots');
+        // Reload all admin views together, clearing metrics, tag caches, polling
+        // and pagination so results from different filter states cannot mix.
+        window.location.href = url.toString();
+      });
+    }
     fetchAdminData().then(function(data){
       if (!data) return;
       adminDataCache = data;
@@ -736,7 +756,7 @@
           moreBtn.disabled = true;
           // Once user asks for more, pause live refresh to avoid replacing appended history.
           window.__adminEventsPaused = true;
-          var url = new URL(window.location.origin + '/statistics/latest-events/');
+          var url = adminRequestUrl('/statistics/latest-events/');
           url.searchParams.set('offset', String(window.__adminEventsOffset || 0));
           url.searchParams.set('limit', '30');
           fetch(url.toString(), { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
@@ -942,4 +962,3 @@ function initGlobalCharts(globalCfg) {
     }
   } catch (e) {}
 }
-

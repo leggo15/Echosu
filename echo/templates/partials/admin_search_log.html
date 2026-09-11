@@ -8,9 +8,9 @@
         {{ e.results_count|default:"?" }}
       </span>
       <span style="margin-left:8px; opacity:0.7;">{{ e.sort|default:"-" }}/{{ e.predicted_mode|default:"-" }}</span>
+      {% if e.is_likely_bot %}<span class="likely-bot-label">Likely bot</span>{% endif %}
     </li>
   {% empty %}
     <li>No searches yet.</li>
   {% endfor %}
 </ul>
-

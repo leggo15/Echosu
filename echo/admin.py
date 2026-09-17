@@ -151,10 +151,19 @@ class BeatmapAdmin(admin.ModelAdmin):
 
 @admin.register(UserProfile)
 class UserProfileAdmin(admin.ModelAdmin):
-    list_display = ('get_username', 'osu_id', 'banned', 'get_date_joined', 'get_last_login')
+    list_display = (
+        'get_username',
+        'osu_id',
+        'banned',
+        'get_date_joined',
+        'get_last_login',
+        'get_rank_at_last_login',
+    )
     search_fields = ('user__username', 'osu_id')
     list_filter = ('banned',)
     list_select_related = ('user',)
+    readonly_fields = ('rank_at_last_login',)
+    change_list_template = 'admin/echo/userprofile/change_list.html'
 
     def get_username(self, obj):
         return obj.user.username
@@ -170,6 +179,54 @@ class UserProfileAdmin(admin.ModelAdmin):
         return obj.user.last_login
     get_last_login.admin_order_field = 'user__last_login'
     get_last_login.short_description = 'Last login'
+
+    def get_rank_at_last_login(self, obj):
+        rank = obj.rank_at_last_login
+        if rank is None:
+            return '—'
+        return f'#{rank:,}'
+    get_rank_at_last_login.admin_order_field = 'rank_at_last_login'
+    get_rank_at_last_login.short_description = 'Rank at last login'
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom = [
+            path(
+                'refresh-ranks/',
+                self.admin_site.admin_view(self.refresh_ranks_view),
+                name='echo_userprofile_refresh_ranks',
+            ),
+        ]
+        return custom + urls
+
+    def refresh_ranks_view(self, request: HttpRequest):
+        from .views.auth import USER_RANK_REFRESH_LOCK_KEY, refresh_all_user_ranks
+
+        if not request.user.is_staff:
+            self.message_user(request, 'Permission denied.', level=messages.ERROR)
+            return redirect('..')
+        if cache.get(USER_RANK_REFRESH_LOCK_KEY):
+            self.message_user(request, 'A rank refresh is already running.', level=messages.WARNING)
+            return redirect('..')
+
+        cache.set(USER_RANK_REFRESH_LOCK_KEY, True, timeout=6 * 60 * 60)
+        user_count = UserProfile.objects.count()
+
+        def _worker():
+            try:
+                refresh_all_user_ranks(delay_s=1)
+            except Exception:
+                pass
+            finally:
+                cache.delete(USER_RANK_REFRESH_LOCK_KEY)
+
+        threading.Thread(target=_worker, daemon=True).start()
+        self.message_user(
+            request,
+            f'Background rank refresh started for {user_count} users. You may close this tab.',
+        )
+        return redirect('..')
+
 class TagRelationInline(admin.TabularInline):
     model = TagRelation
     fk_name = 'child'

@@ -117,6 +117,13 @@ class UserProfile(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, default=get_default_user)
     osu_id = models.CharField(max_length=100, null=False, unique=True, db_index=True)
     profile_pic_url = models.URLField(max_length=1000, null=True, blank=True)
+    rank_at_last_login = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        db_index=True,
+        verbose_name='Rank at last login',
+        help_text='osu! global rank captured from the player API at last login.',
+    )
     banned = models.BooleanField(default=False, db_index=True)
     ban_reason = models.CharField(max_length=255, unique=False, null=False, blank=True)
 

@@ -11,6 +11,7 @@ Django → DRF → local* convention.
 # Standard library imports
 # ---------------------------------------------------------------------------
 import logging
+import time
 
 # ---------------------------------------------------------------------------
 # Third‑party imports
@@ -26,8 +27,10 @@ from django.contrib import messages
 from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
+from django.core.cache import cache
 from django.db import transaction
 from django.shortcuts import redirect, render
+from django.utils import timezone
 
 # ---------------------------------------------------------------------------
 # Django REST framework imports
@@ -99,7 +102,8 @@ def osu_callback(request):
 
 def get_user_data_from_api(access_token):
     """Fetch user data from the osu! API using the access token."""
-    url = "https://osu.ppy.sh/api/v2/me"  # URL to osu API for user data
+    # /me includes identity plus default-mode statistics (global_rank).
+    url = "https://osu.ppy.sh/api/v2/me"
     headers = {
         "Authorization": f"Bearer {access_token}"
     }
@@ -109,6 +113,112 @@ def get_user_data_from_api(access_token):
         return response.json()
     else:
         response.raise_for_status()
+
+
+def _positive_int_or_none(value):
+    if value is None or value is False:
+        return None
+    try:
+        rank = int(value)
+    except (TypeError, ValueError):
+        return None
+    return rank if rank > 0 else None
+
+
+def _get_value(obj, key, default=None):
+    if obj is None:
+        return default
+    if isinstance(obj, dict):
+        return obj.get(key, default)
+    return getattr(obj, key, default)
+
+
+def extract_global_rank(user_data):
+    """Return osu! global rank from an osu user payload or ossapi User, or None if unranked."""
+    if user_data is None:
+        return None
+
+    stats = _get_value(user_data, 'statistics')
+    rank = _positive_int_or_none(_get_value(stats, 'global_rank'))
+    if rank is not None:
+        return rank
+
+    rank = _positive_int_or_none(_get_value(_get_value(stats, 'rank'), 'global'))
+    if rank is not None:
+        return rank
+
+    osu_stats = _get_value(_get_value(user_data, 'statistics_rulesets'), 'osu')
+    return _positive_int_or_none(_get_value(osu_stats, 'global_rank'))
+
+
+def profile_updates_from_osu_data(user_data):
+    return {
+        'profile_pic_url': user_data.get('avatar_url', '') or '',
+        'rank_at_last_login': extract_global_rank(user_data),
+    }
+
+
+USER_RANK_REFRESH_LOCK_KEY = 'echo_userprofile_rank_refresh'
+
+
+def _wait_while_users_interacting():
+    while True:
+        try:
+            cnt = int(cache.get('user_interaction_counter') or 0)
+        except Exception:
+            cnt = 0
+        wait = cnt > 0
+        if not wait:
+            try:
+                pause_until = float(cache.get('user_interaction_pause_until') or 0)
+                wait = pause_until > timezone.now().timestamp()
+            except Exception:
+                wait = False
+        if not wait:
+            break
+        time.sleep(1)
+
+
+def refresh_all_user_ranks(*, delay_s=1.0, wait_for_idle=True, api_client=None):
+    """Fetch current osu! ranks for every UserProfile and store them.
+
+    Returns a dict with updated/unchanged/failed counts.
+    """
+    from ossapi.enums import UserLookupKey
+
+    client = api_client if api_client is not None else api
+    updated = 0
+    unchanged = 0
+    failed = 0
+
+    queryset = UserProfile.objects.exclude(osu_id__isnull=True).exclude(osu_id='')
+    for profile in queryset.iterator(chunk_size=200):
+        if wait_for_idle:
+            _wait_while_users_interacting()
+        try:
+            osu_id = int(str(profile.osu_id).strip())
+        except (TypeError, ValueError):
+            failed += 1
+            continue
+        try:
+            user = client.user(osu_id, key=UserLookupKey.ID)
+            rank = extract_global_rank(user)
+        except Exception as exc:
+            logger.warning('Failed to refresh rank for osu_id=%s: %s', profile.osu_id, exc)
+            failed += 1
+            if delay_s:
+                time.sleep(delay_s)
+            continue
+        if profile.rank_at_last_login != rank:
+            profile.rank_at_last_login = rank
+            profile.save(update_fields=['rank_at_last_login'])
+            updated += 1
+        else:
+            unchanged += 1
+        if delay_s:
+            time.sleep(delay_s)
+
+    return {'updated': updated, 'unchanged': unchanged, 'failed': failed}
 
 
 def save_user_data(access_token, request):
@@ -138,9 +248,10 @@ def save_user_data(access_token, request):
                 user.username = username
                 user.save(update_fields=['username'])
 
-            # Always refresh avatar
-            user_profile.profile_pic_url = user_data.get('avatar_url', '') or ''
-            user_profile.save(update_fields=['profile_pic_url'])
+            osu_updates = profile_updates_from_osu_data(user_data)
+            for field, value in osu_updates.items():
+                setattr(user_profile, field, value)
+            user_profile.save(update_fields=list(osu_updates))
 
         else:
             # First login for this osu_id (or previous data was inconsistent). Prefer reusing an existing user with the same username.
@@ -150,17 +261,21 @@ def save_user_data(access_token, request):
 
             # Attach or create profile with the osu_id
             existing_profile = UserProfile.objects.filter(user=user).first()
+            osu_updates = profile_updates_from_osu_data(user_data)
             if existing_profile:
+                extra_fields = []
                 if existing_profile.osu_id != osu_id:
                     existing_profile.osu_id = osu_id
-                    existing_profile.profile_pic_url = user_data.get('avatar_url', '') or ''
-                    existing_profile.save(update_fields=['osu_id', 'profile_pic_url'])
+                    extra_fields.append('osu_id')
+                for field, value in osu_updates.items():
+                    setattr(existing_profile, field, value)
+                existing_profile.save(update_fields=extra_fields + list(osu_updates))
                 user_profile = existing_profile
             else:
                 user_profile = UserProfile.objects.create(
                     user=user,
                     osu_id=osu_id,
-                    profile_pic_url=user_data.get('avatar_url', '') or ''
+                    **osu_updates,
                 )
 
     # Check if the user is banned
